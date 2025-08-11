@@ -1,0 +1,78 @@
+import React from "react";
+import { Route, Routes, Navigate } from "react-router-dom";
+import { useAuth } from "./contexts/AuthContext";
+
+// Pages
+import Dashboard from "./pages/Dashboard";
+import Students from "./pages/Students";
+import GradeBook from "./pages/GradeBook";
+import Assignments from "./pages/Assignments";
+import Attendance from "./pages/Attendance";
+import Behavior from "./pages/Behavior";
+import Communication from "./pages/Communication";
+import Reports from "./pages/Reports";
+import Settings from "./pages/Settings";
+import Login from "./pages/Login";
+
+// Components
+import Layout from "./components/common/Layout";
+import OfflineIndicator from "./components/common/OfflineIndicator";
+
+const AppRoutes = () => {
+  const { currentUser } = useAuth();
+
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route
+        path="/"
+        element={currentUser ? <Dashboard /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/students"
+        element={currentUser ? <Students /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/gradebook"
+        element={currentUser ? <GradeBook /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/assignments"
+        element={currentUser ? <Assignments /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/attendance"
+        element={currentUser ? <Attendance /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/behavior"
+        element={currentUser ? <Behavior /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/communication"
+        element={currentUser ? <Communication /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/reports"
+        element={currentUser ? <Reports /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/settings"
+        element={currentUser ? <Settings /> : <Navigate to="/login" />}
+      />
+    </Routes>
+  );
+};
+
+function App() {
+  return (
+    <>
+      <OfflineIndicator />
+      <Layout>
+        <AppRoutes />
+      </Layout>
+    </>
+  );
+}
+
+export default App;

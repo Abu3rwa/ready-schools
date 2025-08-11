@@ -1,0 +1,21 @@
+.login-background {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ffffff 0%, #daebff 100%);
+}
+
+.login-paper {
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 15px !important;
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(10px);
+}
+
+.google-signin-button {
+  margin-top: 1.5rem !important;
+}
