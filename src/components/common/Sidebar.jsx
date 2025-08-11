@@ -21,6 +21,7 @@ import {
   Email as EmailIcon,
   Assessment as AssessmentIcon,
   Settings as SettingsIcon,
+  School as SchoolIcon,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -71,6 +72,12 @@ const menuItems = [
     path: "/reports",
     color: "#34495E",
   }, // Wet Asphalt
+  {
+    text: "Standards",
+    icon: <SchoolIcon />,
+    path: "/standards",
+    color: "#8E44AD",
+  }, // Purple
   {
     text: "Settings",
     icon: <SettingsIcon />,
@@ -249,7 +256,7 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
               fontSize: "0.7rem",
             }}
           >
-            Teacher Dashboard v1.0
+            Smile3 v1.0
           </Typography>
         </Box>
       </Box>

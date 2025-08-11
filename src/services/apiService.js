@@ -14,7 +14,7 @@ import { getAuth } from "firebase/auth";
 import { v4 as uuidv4 } from "uuid";
 
 // Helper function to get the current user's ID
-const getCurrentUserId = () => {
+export const getCurrentUserId = () => {
   const auth = getAuth();
   return auth.currentUser ? auth.currentUser.uid : null;
 };

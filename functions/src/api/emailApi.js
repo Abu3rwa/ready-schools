@@ -1,5 +1,6 @@
 import { onRequest, onCall, HttpsError } from "firebase-functions/v2/https";
 import emailService from "../services/emailService.js";
+import { buildDailyUpdateTemplate } from "../templates/dailyUpdateEmail.js";
 import { requireAuth } from "../middleware/auth.js";
 // Lazy load these imports only when needed
 // import { DailyUpdateService } from "../services/dailyUpdateService.js";
@@ -307,18 +308,10 @@ export const sendDailyUpdates = onCall({
             continue;
           }
 
-          const subject = `Daily Update - ${update.studentName}`;
-          // Very basic HTML body as a placeholder; replace with real template if desired
-          const html = `
-            <div>
-              <h2>Daily Update for ${update.studentName}</h2>
-              <p>Date: ${update.date}</p>
-              <p><strong>Attendance:</strong> ${update.attendance?.status || 'Not Recorded'}</p>
-              <p><strong>Overall Grade:</strong> ${typeof update.overallGrade === 'number' ? update.overallGrade : 'N/A'}%</p>
-              <p><strong>New Grades Today:</strong> ${(update.grades || []).length}</p>
-              <p><strong>Activities Today:</strong> ${(update.assignments || []).length}</p>
-            </div>
-          `;
+          // Use the beautiful HTML template instead of basic placeholder
+          const emailTemplate = buildDailyUpdateTemplate(update);
+          const subject = emailTemplate.subject;
+          const html = emailTemplate.html;
 
           console.log(`Attempting to send email to: ${recipients.join(', ')}`);
           try {

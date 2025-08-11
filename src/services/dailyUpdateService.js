@@ -138,9 +138,11 @@ export class FrontendDailyUpdateService {
 
     return {
       students: students.map((student) => ({
-        id: student.id,
+        id: student.id || student.studentId, // fallback to studentId if id missing
         firstName: student.firstName,
         lastName: student.lastName,
+        // Include gender so the Cloud Function can personalize pronouns
+        gender: student.gender || null,
         parentEmail1: student.parentEmail1,
         parentEmail2: student.parentEmail2,
         status: student.status || "active",

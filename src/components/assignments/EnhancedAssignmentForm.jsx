@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import StandardsMapper from "../standards/StandardsMapper";
 import {
   Dialog,
   DialogTitle,
@@ -102,6 +103,7 @@ const EnhancedAssignmentForm = ({
     message: "",
     severity: "success",
   });
+  const [standardsMapperOpen, setStandardsMapperOpen] = useState(false);
 
   useEffect(() => {
     if (assignment) {
@@ -565,6 +567,25 @@ const EnhancedAssignmentForm = ({
                 </Accordion>
               </Grid>
 
+              {/* Standards Mapping */}
+              <Grid item xs={12}>
+                <Accordion>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography variant="h6">Standards Alignment</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Button
+                      variant="outlined"
+                      startIcon={<AssessmentIcon />}
+                      onClick={() => setStandardsMapperOpen(true)}
+                      fullWidth
+                    >
+                      Map Educational Standards
+                    </Button>
+                  </AccordionDetails>
+                </Accordion>
+              </Grid>
+
               {/* Advanced Settings */}
               <Grid item xs={12}>
                 <Accordion>
@@ -723,6 +744,16 @@ const EnhancedAssignmentForm = ({
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Standards Mapper Dialog */}
+      {assignment && (
+        <StandardsMapper
+          open={standardsMapperOpen}
+          onClose={() => setStandardsMapperOpen(false)}
+          assignmentId={assignment.id}
+          assignmentName={assignment.name}
+        />
+      )}
     </>
   );
 };

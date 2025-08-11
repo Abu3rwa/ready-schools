@@ -11,6 +11,7 @@ import Attendance from "./pages/Attendance";
 import Behavior from "./pages/Behavior";
 import Communication from "./pages/Communication";
 import Reports from "./pages/Reports";
+import Standards from "./pages/Standards";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 
@@ -55,6 +56,10 @@ const AppRoutes = () => {
       <Route
         path="/reports"
         element={currentUser ? <Reports /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/standards"
+        element={currentUser ? <Standards /> : <Navigate to="/login" />}
       />
       <Route
         path="/settings"

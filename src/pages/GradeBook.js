@@ -59,6 +59,7 @@ import {
   gradeCalculator,
   generateEnhancedGrade,
   validateGrade,
+  calculateStandardDeviation,
 } from "../utils/gradeCalculations";
 import {
   dataManager,
@@ -81,6 +82,8 @@ import {
   Title,
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
+import { getSubjects as getManagedSubjects } from "../services/subjectsService";
+import { getStandards, getStandardsMappings } from "../services/standardsService";
 
 // Register Chart.js components
 ChartJS.register(
@@ -106,7 +109,21 @@ const GradeBook = () => {
   } = useGrades();
   const { assignments, loading: assignmentsLoading } = useAssignments();
 
-  const subjects = [...new Set(assignments.map((a) => a.subject))].sort();
+  // Subjects for tabs: prefer teacher-managed subjects; fallback to subjects from assignments
+  const [managedSubjects, setManagedSubjects] = useState([]);
+  const [standardsForSubject, setStandardsForSubject] = useState([]);
+  const subjects = useMemo(() => {
+    if (managedSubjects && managedSubjects.length > 0) {
+      const values = managedSubjects.map((s) => {
+        const code = s.code || s.name;
+        if (assignments && assignments.some((a) => a.subject === code)) return code;
+        if (assignments && assignments.some((a) => a.subject === s.name)) return s.name;
+        return code;
+      });
+      return Array.from(new Set(values)).sort();
+    }
+    return Array.from(new Set((assignments || []).map((a) => a.subject))).sort();
+  }, [managedSubjects, assignments]);
 
   // State for UI
   const [subject, setSubject] = useState(subjects[0] || "");
@@ -140,13 +157,38 @@ const GradeBook = () => {
     }
   }, [subjects, subject]);
 
+  // Load teacher-managed subjects
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await getManagedSubjects();
+        setManagedSubjects(list);
+      } catch (e) {
+        setManagedSubjects([]);
+      }
+    })();
+  }, []);
+
+  // Load standards when subject changes
+  useEffect(() => {
+    (async () => {
+      try {
+        const all = await getStandards({ subject });
+        setStandardsForSubject(all || []);
+      } catch (e) {
+        setStandardsForSubject([]);
+      }
+    })();
+  }, [subject]);
+
   // Loading state
   const loading = studentsLoading || gradesLoading || assignmentsLoading;
 
   // Enhanced data processing with filtering and sorting
   const processedData = useMemo(() => {
-    if (!grades || !assignments || !students)
+    if (!grades || !assignments || !students) {
       return { grades: [], assignments: [] };
+    }
 
     // Filter grades by subject
     let filteredGrades = grades.filter((grade) => grade.subject === subject);
@@ -467,8 +509,50 @@ const GradeBook = () => {
 
   // Generate analytics
   const gradeAnalytics = useMemo(() => {
-    return gradeCalculator.generateGradeAnalytics(currentGrades);
-  }, [currentGrades]);
+    if (!subject || !currentGrades || currentGrades.length === 0) {
+      return null;
+    }
+    
+    // Get all grades for the current subject
+    const subjectGrades = currentGrades.filter(grade => 
+      grade.subject === subject && 
+      grade.score !== null && 
+      grade.score !== undefined
+    );
+    
+    if (subjectGrades.length === 0) {
+      return null;
+    }
+    
+    // Calculate percentages from scores and points
+    const percentages = subjectGrades.map(grade => {
+      if (grade.points && grade.points > 0) {
+        return (grade.score / grade.points) * 100;
+      }
+      return 0;
+    }).filter(percent => percent > 0);
+    
+    if (percentages.length === 0) {
+      return null;
+    }
+    
+    const average = percentages.reduce((sum, percent) => sum + percent, 0) / percentages.length;
+    const highest = Math.max(...percentages);
+    const lowest = Math.min(...percentages);
+    const standardDeviation = calculateStandardDeviation(percentages);
+    
+    // Ensure all values are valid numbers before returning
+    if (!isFinite(average) || !isFinite(highest) || !isFinite(lowest) || !isFinite(standardDeviation)) {
+      return null;
+    }
+    
+    return {
+      average: Math.round(average * 100) / 100,
+      highest: Math.round(highest * 100) / 100,
+      lowest: Math.round(lowest * 100) / 100,
+      standardDeviation: Math.round(standardDeviation * 100) / 100
+    };
+  }, [subject, currentGrades]);
 
   // Get student name by ID
   const getStudentName = useCallback(
@@ -645,6 +729,8 @@ const GradeBook = () => {
         onToggleExpanded={handleToggleFilterPanel}
       />
 
+
+
       {/* Enhanced Controls */}
       <Box
         sx={{
@@ -708,7 +794,7 @@ const GradeBook = () => {
           </Button>
         </Box>
 
-        {/* Quick Stats */}
+        {/* Quick Stats incl. Standards count */}
         <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
           <Chip
             label={`${currentGrades.length} Grades`}
@@ -725,6 +811,11 @@ const GradeBook = () => {
             color="info"
             variant="outlined"
           />
+          <Chip
+            label={`${standardsForSubject.length} Standards`}
+            color="default"
+            variant="outlined"
+          />
         </Box>
       </Box>
 
@@ -733,6 +824,7 @@ const GradeBook = () => {
         <Grid container spacing={3}>
           {/* Enhanced Analytics Cards */}
           <Grid item xs={12}>
+            {gradeAnalytics ? (
             <Grid container spacing={2} sx={{ mb: 3 }}>
               <Grid item xs={12} sm={6} md={3}>
                 <Card elevation={2}>
@@ -799,6 +891,22 @@ const GradeBook = () => {
                 </Card>
               </Grid>
             </Grid>
+            ) : (
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12}>
+                  <Card elevation={2}>
+                    <CardContent sx={{ textAlign: "center", py: 4 }}>
+                      <Typography variant="h6" color="textSecondary">
+                        No grade data available for selected subject
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        Select a subject with grades to view analytics
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            )}
           </Grid>
 
           <Grid item xs={12} md={6}>
@@ -957,7 +1065,30 @@ const GradeBook = () => {
 
       {/* Enhanced Table View with Virtualization */}
       {!showCharts && (
-        <Paper elevation={2} sx={{ backgroundColor: 'background.paper', borderRadius: 2 }}>
+        <Paper
+          elevation={2}
+          sx={{
+            backgroundColor: 'background.paper',
+            borderRadius: 2,
+            color: 'text.primary',
+            minHeight: 420,
+            p: 1.5,
+          }}
+        >
+          {currentGrades.length === 0 ? (
+            <Box sx={{ p: 4, textAlign: 'center', color: 'text.primary' }}>
+              <Typography variant="h6" color="text.primary" gutterBottom>
+                No grades found for {subject}
+              </Typography>
+              <Typography variant="body2" color="text.primary">
+                {subjectAssignments.length === 0 
+                  ? 'No assignments available for this subject. Please create assignments first.'
+                  : 'No grades have been entered yet. Use the "Add Grade" button to start entering grades.'
+                }
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ color: 'text.primary' }}>
           <VirtualizedGradeTable
             students={students}
             assignments={subjectAssignments}
@@ -970,6 +1101,8 @@ const GradeBook = () => {
             sortBy={sortBy}
             sortOrder={sortOrder}
           />
+            </Box>
+          )}
         </Paper>
       )}
 

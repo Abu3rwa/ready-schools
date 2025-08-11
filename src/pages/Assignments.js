@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Typography,
@@ -52,6 +52,8 @@ import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
 import EnhancedAssignmentCard from "../components/assignments/EnhancedAssignmentCard";
 import AssignmentTemplates from "../components/assignments/AssignmentTemplates";
 import dayjs from "dayjs";
+import { getSubjects as getManagedSubjects } from "../services/subjectsService";
+import { getStandards, getStandardsMappings } from "../services/standardsService";
 
 const Assignments = () => {
   const {
@@ -76,8 +78,41 @@ const Assignments = () => {
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [managedSubjects, setManagedSubjects] = useState([]);
+  const [standardsBySubject, setStandardsBySubject] = useState({});
+  const [mappedStandardIdsByAssignment, setMappedStandardIdsByAssignment] = useState({});
+
+  // Build subjects options: prefer teacher-managed subjects; fallback to subjects seen in assignments
+  const subjectsOptions = useMemo(() => {
+    if (managedSubjects && managedSubjects.length > 0) {
+      return managedSubjects.map((s) => ({ value: s.code || s.name, label: s.name }));
+    }
+    const uniques = Array.from(new Set(assignments.map((a) => a.subject).filter(Boolean)));
+    return uniques.map((u) => ({ value: u, label: u }));
+  }, [managedSubjects, assignments]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await getManagedSubjects();
+        setManagedSubjects(list);
+        // Preload standards per subject for quick filters/info
+        const allStandards = await getStandards();
+        const bySubject = allStandards.reduce((acc, s) => {
+          const key = s.subject || "General";
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(s);
+          return acc;
+        }, {});
+        setStandardsBySubject(bySubject);
+      } catch (e) {
+        setManagedSubjects([]);
+      }
+    })();
+  }, []);
+
   const [assignmentForm, setAssignmentForm] = useState({
-    subject: "English",
+    subject: "",
     name: "",
     category: "",
     points: "",
@@ -156,7 +191,7 @@ const Assignments = () => {
   // Open add assignment dialog
   const handleOpenAddDialog = () => {
     setAssignmentForm({
-      subject: "English",
+      subject: subjectsOptions[0]?.value || "",
       name: "",
       category: "",
       points: "",
@@ -284,10 +319,9 @@ const Assignments = () => {
     setTabValue(newValue);
     if (newValue === 0) {
       setFilterSubject("All");
-    } else if (newValue === 1) {
-      setFilterSubject("English");
-    } else if (newValue === 2) {
-      setFilterSubject("Social Studies");
+    } else {
+      const idx = newValue - 1;
+      setFilterSubject(subjectsOptions[idx]?.value || "All");
     }
   };
 
@@ -427,10 +461,13 @@ const Assignments = () => {
             value={tabValue}
             onChange={handleTabChange}
             aria-label="assignment tabs"
+            variant="scrollable"
+            scrollButtons="auto"
           >
             <Tab label="All Assignments" />
-            <Tab label="English" />
-            <Tab label="Social Studies" />
+            {subjectsOptions.map((s) => (
+              <Tab key={s.value} label={s.label} />
+            ))}
           </Tabs>
         </Box>
 
@@ -659,7 +696,7 @@ const Assignments = () => {
           <DialogTitle>Add New Assignment</DialogTitle>
           <DialogContent>
             <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12} sm={6}>
+                <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
                   <InputLabel>Subject</InputLabel>
                   <Select
@@ -668,11 +705,19 @@ const Assignments = () => {
                     onChange={handleFormChange}
                     label="Subject"
                   >
-                    <MenuItem value="English">English</MenuItem>
-                    <MenuItem value="Social Studies">Social Studies</MenuItem>
+                    {subjectsOptions.map((s) => (
+                      <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
+                <Grid item xs={12} sm={6}>
+                  <FormHelperText sx={{ mt: -1, mb: 1 }}>
+                    {assignmentForm.subject && standardsBySubject[assignmentForm.subject]
+                      ? `${standardsBySubject[assignmentForm.subject].length} standards available for this subject`
+                      : "No standards found for this subject yet"}
+                  </FormHelperText>
+                </Grid>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth required>
                   <InputLabel>Category</InputLabel>
@@ -778,8 +823,9 @@ const Assignments = () => {
                     onChange={handleFormChange}
                     label="Subject"
                   >
-                    <MenuItem value="English">English</MenuItem>
-                    <MenuItem value="Social Studies">Social Studies</MenuItem>
+                    {subjectsOptions.map((s) => (
+                      <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>

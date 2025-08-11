@@ -80,6 +80,16 @@ const Dashboard = () => {
     [grades]
   );
 
+  // Overall class average across all available grades (dynamic subjects)
+  const classAverage = useMemo(() => {
+    const valid = (grades || []).filter(
+      (g) => typeof g.score === "number" && typeof g.points === "number" && g.points > 0
+    );
+    if (valid.length === 0) return 0;
+    const sum = valid.reduce((acc, g) => acc + (g.score / g.points) * 100, 0);
+    return Math.round(sum / valid.length);
+  }, [grades]);
+
   const [classAverages, setClassAverages] = useState({
     english: 0,
     socialStudies: 0,
@@ -107,24 +117,21 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!loading) {
-      // Calculate class averages
-      if (englishGrades.length > 0) {
-        const englishTotal = englishGrades.reduce(
-          (sum, grade) => sum + (grade.score / grade.points) * 100,
-          0
-        );
-        const englishAvg = englishTotal / englishGrades.length;
-
-        const socialTotal = socialStudiesGrades.reduce(
-          (sum, grade) => sum + (grade.score / grade.points) * 100,
-          0
-        );
-        const socialAvg = socialTotal / socialStudiesGrades.length;
-
-        setClassAverages({
-          english: Math.round(englishAvg),
-          socialStudies: Math.round(socialAvg),
-        });
+      // Optional: keep legacy per-subject averages if needed for other widgets
+      if (englishGrades.length > 0 || socialStudiesGrades.length > 0) {
+        const englishAvg =
+          englishGrades.length > 0
+            ?
+              englishGrades.reduce((sum, grade) => sum + (grade.score / grade.points) * 100, 0) /
+              englishGrades.length
+            : 0;
+        const socialAvg =
+          socialStudiesGrades.length > 0
+            ?
+              socialStudiesGrades.reduce((sum, grade) => sum + (grade.score / grade.points) * 100, 0) /
+              socialStudiesGrades.length
+            : 0;
+        setClassAverages({ english: Math.round(englishAvg), socialStudies: Math.round(socialAvg) });
       }
 
       // Calculate attendance statistics
@@ -231,69 +238,39 @@ const Dashboard = () => {
   ]);
 
   // Prepare chart data
-  const gradeDistributionData = {
-    labels: [
-      "A (90-100%)",
-      "B (80-89%)",
-      "C (70-79%)",
-      "D (60-69%)",
-      "F (Below 60%)",
-    ],
-    datasets: [
-      {
-        label: "English",
-        data: [
-          englishGrades.filter((g) => (g.score / g.points) * 100 >= 90).length,
-          englishGrades.filter(
-            (g) =>
-              (g.score / g.points) * 100 >= 80 &&
-              (g.score / g.points) * 100 < 90
-          ).length,
-          englishGrades.filter(
-            (g) =>
-              (g.score / g.points) * 100 >= 70 &&
-              (g.score / g.points) * 100 < 80
-          ).length,
-          englishGrades.filter(
-            (g) =>
-              (g.score / g.points) * 100 >= 60 &&
-              (g.score / g.points) * 100 < 70
-          ).length,
-          englishGrades.filter((g) => (g.score / g.points) * 100 < 60).length,
-        ],
-        backgroundColor: "rgba(54, 162, 235, 0.5)",
-        borderColor: "rgba(54, 162, 235, 1)",
-        borderWidth: 1,
-      },
-      {
-        label: "Social Studies",
-        data: [
-          socialStudiesGrades.filter((g) => (g.score / g.points) * 100 >= 90)
-            .length,
-          socialStudiesGrades.filter(
-            (g) =>
-              (g.score / g.points) * 100 >= 80 &&
-              (g.score / g.points) * 100 < 90
-          ).length,
-          socialStudiesGrades.filter(
-            (g) =>
-              (g.score / g.points) * 100 >= 70 &&
-              (g.score / g.points) * 100 < 80
-          ).length,
-          socialStudiesGrades.filter(
-            (g) =>
-              (g.score / g.points) * 100 >= 60 &&
-              (g.score / g.points) * 100 < 70
-          ).length,
-          socialStudiesGrades.filter((g) => (g.score / g.points) * 100 < 60)
-            .length,
-        ],
-        backgroundColor: "rgba(255, 99, 132, 0.5)",
-        borderColor: "rgba(255, 99, 132, 1)",
-        borderWidth: 1,
-      },
-    ],
-  };
+  // Grade distribution across all subjects
+  const gradeDistributionData = useMemo(() => {
+    const all = (grades || []).filter(
+      (g) => typeof g.score === "number" && typeof g.points === "number" && g.points > 0
+    );
+    const bins = [0, 0, 0, 0, 0]; // A, B, C, D, F
+    for (const g of all) {
+      const pct = (g.score / g.points) * 100;
+      if (pct >= 90) bins[0]++;
+      else if (pct >= 80) bins[1]++;
+      else if (pct >= 70) bins[2]++;
+      else if (pct >= 60) bins[3]++;
+      else bins[4]++;
+    }
+    return {
+      labels: [
+        "A (90-100%)",
+        "B (80-89%)",
+        "C (70-79%)",
+        "D (60-69%)",
+        "F (Below 60%)",
+      ],
+      datasets: [
+        {
+          label: "All Subjects",
+          data: bins,
+          backgroundColor: "rgba(25, 118, 210, 0.5)", // MUI primary
+          borderColor: "rgba(25, 118, 210, 1)",
+          borderWidth: 1,
+        },
+      ],
+    };
+  }, [grades]);
 
   const attendanceChartData = {
     labels: ["Present", "Absent", "Tardy"],
@@ -410,9 +387,7 @@ const Dashboard = () => {
                 Class Average
               </Typography>
               <Typography variant="h5" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
-                {Math.round(
-                  (classAverages.english + classAverages.socialStudies) / 2
-                )}
+                {classAverage}
                 %
               </Typography>
             </Box>

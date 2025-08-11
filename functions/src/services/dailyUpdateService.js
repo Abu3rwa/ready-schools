@@ -66,10 +66,19 @@ export class DailyUpdateService {
     const parentEmails = this.getParentEmails(student);
     const parentName = this.getParentName(student);
 
+    // Debug logging for gender data
+    console.log('Student gender data:', {
+      studentId: student.id,
+      studentName: `${student.firstName} ${student.lastName}`,
+      rawGender: student.gender,
+      genderType: typeof student.gender,
+      processedGender: student.gender || null
+    });
+
     return {
       studentId,
       studentName: `${student.firstName} ${student.lastName}`,
-      studentGender: student.gender || "Other", // Add gender information
+      studentGender: student.gender || null, // Add gender information - allow null for proper fallback
       parentEmails,
       parentName,
       date: dateString,

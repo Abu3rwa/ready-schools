@@ -333,3 +333,20 @@ export const generateEnhancedGrade = (gradeData) =>
   gradeCalculator.generateEnhancedGrade(gradeData);
 export const validateGrade = (gradeData) =>
   gradeCalculator.validateGrade(gradeData);
+
+// Add standalone standard deviation function
+export const calculateStandardDeviation = (grades) => {
+  if (!grades || grades.length === 0) return 0;
+  
+  const validGrades = grades.filter(grade => 
+    grade !== null && grade !== undefined && !isNaN(grade)
+  );
+  
+  if (validGrades.length === 0) return 0;
+  
+  const average = validGrades.reduce((sum, grade) => sum + grade, 0) / validGrades.length;
+  const variance = validGrades.reduce((acc, val) => acc + Math.pow(val - average, 2), 0) / validGrades.length;
+  const standardDeviation = Math.sqrt(variance);
+  
+  return Math.round(standardDeviation * 100) / 100;
+};
