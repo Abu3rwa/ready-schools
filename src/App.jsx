@@ -1,6 +1,7 @@
 import React from "react";
 import { Route, Routes, Navigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
+import GmailCallback from "./components/email/GmailCallback";
 
 // Pages
 import Dashboard from "./pages/Dashboard";
@@ -14,10 +15,18 @@ import Reports from "./pages/Reports";
 import Standards from "./pages/Standards";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
+import AdminUsers from "./pages/AdminUsers";
 
 // Components
 import Layout from "./components/common/Layout";
 import OfflineIndicator from "./components/common/OfflineIndicator";
+import GradeBookList from "./pages/GradeBookList";
+
+
+
+
+
+
 
 const AppRoutes = () => {
   const { currentUser } = useAuth();
@@ -34,7 +43,11 @@ const AppRoutes = () => {
         element={currentUser ? <Students /> : <Navigate to="/login" />}
       />
       <Route
-        path="/gradebook"
+        path="/gradebooks"
+        element={currentUser ? <GradeBookList /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/gradebooks/:id"
         element={currentUser ? <GradeBook /> : <Navigate to="/login" />}
       />
       <Route
@@ -64,6 +77,14 @@ const AppRoutes = () => {
       <Route
         path="/settings"
         element={currentUser ? <Settings /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/admin/users"
+        element={currentUser ? <AdminUsers /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/auth/gmail/callback"
+        element={currentUser ? <GmailCallback /> : <Navigate to="/login" />}
       />
     </Routes>
   );

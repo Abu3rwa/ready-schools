@@ -1,64 +1,72 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Paper, 
-  Container, 
-  Button, 
-  Snackbar, 
+import React, { useState, useRef, useEffect } from "react";
+import {
+  Box,
+  Typography,
+  Paper,
+  Container,
+  Button,
+  Snackbar,
   Alert,
-  ButtonGroup
-} from '@mui/material';
-import { 
+  ButtonGroup,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  FormHelperText,
+} from "@mui/material";
+import {
   CloudUpload as CloudUploadIcon,
   Upload as UploadIcon,
-  Download as DownloadIcon
-} from '@mui/icons-material';
-import { parseStandardsCSV, exportStandardsToCSV } from '../utils/standardsImportExport';
-import StandardsBrowser from '../components/standards/StandardsBrowser';
-import * as standardsService from '../services/standardsService';
-import { importStandardsData } from '../sampleData/standardsSampleData';
+  Download as DownloadIcon,
+} from "@mui/icons-material";
+import {
+  parseStandardsCSV,
+  exportStandardsToCSV,
+} from "../utils/standardsImportExport";
+import StandardsBrowser from "../components/standards/StandardsBrowser";
+import * as standardsService from "../services/standardsService";
+import { getSubjects } from "../services/subjectsService";
+import { getFrameworks } from "../services/frameworkService";
+import FrameworksManager from "../components/settings/FrameworksManager";
 
 const Standards = () => {
-  const fileInputRef = useRef(null);
   const [snackbar, setSnackbar] = useState({
     open: false,
-    message: '',
-    severity: 'success'
+    message: "",
+    severity: "success",
   });
-  const [standards, setStandards] = useState([]);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState("");
+  const [selectedFramework, setSelectedFramework] = useState("");
+  const [subjects, setSubjects] = useState([]);
+  const [frameworks, setFrameworks] = useState([]);
+  const [previewStandards, setPreviewStandards] = useState([]);
+  const fileInputRef = useRef();
 
-  // Load standards
+  // Load user's subjects and frameworks
   useEffect(() => {
-    const loadStandards = async () => {
+    const loadData = async () => {
       try {
-        const loadedStandards = await standardsService.getStandards();
-        setStandards(loadedStandards);
+        const [userSubjects, userFrameworks] = await Promise.all([
+          getSubjects(),
+          getFrameworks(),
+        ]);
+        setSubjects(userSubjects);
+        setFrameworks(userFrameworks);
       } catch (error) {
-        console.error('Error loading standards:', error);
+        setSnackbar({
+          open: true,
+          message: "Error loading data. Please try again.",
+          severity: "error",
+        });
       }
     };
-    loadStandards();
+    loadData();
   }, []);
-
-  const handleImportSampleData = async () => {
-    try {
-      await importStandardsData(standardsService);
-      setSnackbar({
-        open: true,
-        message: 'Sample standards imported successfully!',
-        severity: 'success'
-      });
-      // Force reload the standards browser
-      window.location.reload();
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: 'Failed to import sample standards. Please try again.',
-        severity: 'error'
-      });
-    }
-  };
 
   const handleImportCSV = async (event) => {
     try {
@@ -69,20 +77,14 @@ const Standards = () => {
       reader.onload = async (e) => {
         try {
           const csvContent = e.target.result;
-          const parsedStandards = parseStandardsCSV(csvContent);
-          await standardsService.bulkImportStandards(parsedStandards);
-          
-          setSnackbar({
-            open: true,
-            message: `Successfully imported ${parsedStandards.length} standards from CSV`,
-            severity: 'success'
-          });
-          window.location.reload();
+          const standards = parseStandardsCSV(csvContent);
+          setPreviewStandards(standards);
+          setShowImportDialog(true);
         } catch (error) {
           setSnackbar({
             open: true,
-            message: 'Error parsing CSV file. Please check the format.',
-            severity: 'error'
+            message: `Error processing file: ${error.message}`,
+            severity: "error",
           });
         }
       };
@@ -90,70 +92,186 @@ const Standards = () => {
     } catch (error) {
       setSnackbar({
         open: true,
-        message: 'Failed to import standards from CSV. Please try again.',
-        severity: 'error'
+        message: `Error reading file: ${error.message}`,
+        severity: "error",
       });
     }
   };
 
-  const handleExportCSV = () => {
+  const handleImportConfirm = async () => {
     try {
-      const csv = exportStandardsToCSV(standards);
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
+      if (!selectedSubject || !selectedFramework) {
+        setSnackbar({
+          open: true,
+          message: "Please select both subject and framework before importing",
+          severity: "warning",
+        });
+        return;
+      }
+
+      // Find the selected subject and framework
+      const subject = subjects.find((s) => s.id === selectedSubject);
+      const framework = frameworks.find((f) => f.id === selectedFramework);
+
+      if (!subject || !framework) {
+        throw new Error("Selected subject or framework not found");
+      }
+
+      const standardsWithMetadata = previewStandards.map((standard) => ({
+        ...standard,
+        subjectId: subject.id,
+        subject: subject.name,
+        frameworkId: framework.id,
+        framework: framework.name,
+      }));
+
+      await Promise.all(
+        standardsWithMetadata.map((standard) =>
+          standardsService.createStandard(standard)
+        )
+      );
+
+      setShowImportDialog(false);
+      setSnackbar({
+        open: true,
+        message: `Successfully imported ${standardsWithMetadata.length} standards`,
+        severity: "success",
+      });
+      window.location.reload();
+    } catch (error) {
+      setSnackbar({
+        open: true,
+        message: `Error importing standards: ${error.message}`,
+        severity: "error",
+      });
+    }
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      const standards = await standardsService.getStandards();
+      const csvContent = exportStandardsToCSV(standards);
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
-      link.download = 'standards_export.csv';
+      link.download = "standards.csv";
       link.click();
     } catch (error) {
       setSnackbar({
         open: true,
-        message: 'Failed to export standards to CSV. Please try again.',
-        severity: 'error'
+        message: `Error exporting standards: ${error.message}`,
+        severity: "error",
       });
     }
   };
 
   return (
-    <Container maxWidth="xl">
-      <Box sx={{ mt: 3, mb: 4 }}>
+    <Container maxWidth="lg">
+      <Box sx={{ mb: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Educational Standards
+          Standards Management
         </Typography>
-        <Typography variant="subtitle1" color="text.secondary" paragraph>
-          Manage educational standards and view their alignment with assignments.
-        </Typography>
-        <ButtonGroup variant="outlined" sx={{ mb: 2 }}>
-          <Button
-            startIcon={<CloudUploadIcon />}
-            onClick={handleImportSampleData}
-          >
-            Import Sample Standards
-          </Button>
+        <Box sx={{ mb: 3 }}>
+          <FrameworksManager />
+        </Box>
+        <ButtonGroup variant="contained" sx={{ mb: 2 }}>
           <Button
             startIcon={<UploadIcon />}
             onClick={() => fileInputRef.current?.click()}
           >
             Import from CSV
           </Button>
-          <Button
-            startIcon={<DownloadIcon />}
-            onClick={handleExportCSV}
-          >
+          <Button startIcon={<DownloadIcon />} onClick={handleExportCSV}>
             Export to CSV
           </Button>
         </ButtonGroup>
         <input
           type="file"
-          ref={fileInputRef}
           accept=".csv"
-          style={{ display: 'none' }}
           onChange={handleImportCSV}
+          style={{ display: "none" }}
+          ref={fileInputRef}
         />
       </Box>
-      
-      <Paper sx={{ p: 0, height: 'calc(100vh - 250px)', overflow: 'hidden' }}>
-        <StandardsBrowser />
-      </Paper>
+
+      <StandardsBrowser />
+
+      <Dialog
+        open={showImportDialog}
+        onClose={() => setShowImportDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Import Standards</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body1" gutterBottom>
+              Found {previewStandards.length} standards to import.
+            </Typography>
+            <FormControl fullWidth sx={{ mt: 2 }}>
+              <InputLabel>Subject</InputLabel>
+              <Select
+                value={selectedSubject}
+                onChange={(e) => setSelectedSubject(e.target.value)}
+                label="Subject"
+              >
+                <MenuItem value="">Select a subject</MenuItem>
+                {subjects.map((subject) => (
+                  <MenuItem key={subject.id} value={subject.id}>
+                    {subject.name}
+                  </MenuItem>
+                ))}
+              </Select>
+              <FormHelperText>
+                Choose the subject for these standards
+              </FormHelperText>
+            </FormControl>
+
+            <FormControl fullWidth sx={{ mt: 2 }}>
+              <InputLabel>Framework</InputLabel>
+              <Select
+                value={selectedFramework}
+                onChange={(e) => setSelectedFramework(e.target.value)}
+                label="Framework"
+              >
+                <MenuItem value="">Select a framework</MenuItem>
+                {frameworks.map((framework) => (
+                  <MenuItem key={framework.id} value={framework.id}>
+                    {framework.name}
+                  </MenuItem>
+                ))}
+              </Select>
+              <FormHelperText>
+                Choose the framework for these standards
+              </FormHelperText>
+            </FormControl>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowImportDialog(false)}>Cancel</Button>
+          <Button
+            onClick={handleImportConfirm}
+            variant="contained"
+            color="primary"
+          >
+            Import Standards
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+      >
+        <Alert
+          severity={snackbar.severity}
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

@@ -1,15 +1,18 @@
-import { getAuth } from 'firebase-admin/auth';
+import { getAuth } from "firebase-admin/auth";
 
 export const requireAuth = async (req) => {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) {
-    throw Object.assign(new Error('Missing token'), { status: 401 });
-  }
   try {
-    const decoded = await getAuth().verifyIdToken(token);
-    return decoded;
-  } catch (e) {
-    throw Object.assign(new Error('Unauthorized'), { status: 401 });
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      throw new Error("No authentication token provided");
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decodedToken = await getAuth().verifyIdToken(token);
+    req.user = decodedToken;
+    return decodedToken;
+  } catch (error) {
+    console.error("Authentication error:", error);
+    throw error;
   }
-}; 
+};

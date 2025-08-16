@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import {
   AppBar,
   Toolbar,
@@ -8,6 +9,8 @@ import {
   Menu,
   MenuItem,
   Badge,
+  Box,
+  Button,
 } from "@mui/material";
 import {
   Menu as MenuIcon,
@@ -18,6 +21,7 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 
 const Header = ({ toggleSidebar }) => {
+  const { t, i18n } = useTranslation();
   const { currentUser, signOut } = useAuth();
   const [anchorEl, setAnchorEl] = React.useState(null);
   const open = Boolean(anchorEl);
@@ -37,6 +41,10 @@ const Header = ({ toggleSidebar }) => {
     } catch (error) {
       console.error("Failed to log out", error);
     }
+  };
+
+  const changeLanguage = (lng) => {
+    i18n.changeLanguage(lng);
   };
 
   return (
@@ -61,8 +69,35 @@ const Header = ({ toggleSidebar }) => {
           <MenuIcon />
         </IconButton>
         <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-          Smile3
+          {t('navigation.dashboard')}
         </Typography>
+
+        <Box sx={{ mr: 2 }}>
+          <Button 
+            color="inherit" 
+            onClick={() => changeLanguage('en')}
+            variant={i18n.language === 'en' ? 'contained' : 'text'}
+            sx={{ 
+              minWidth: 'auto', 
+              px: 1,
+              backgroundColor: i18n.language === 'en' ? 'rgba(255,255,255,0.1)' : 'transparent'
+            }}
+          >
+            🇺🇸 EN
+          </Button>
+          <Button 
+            color="inherit" 
+            onClick={() => changeLanguage('ar')}
+            variant={i18n.language === 'ar' ? 'contained' : 'text'}
+            sx={{ 
+              minWidth: 'auto', 
+              px: 1,
+              backgroundColor: i18n.language === 'ar' ? 'rgba(255,255,255,0.1)' : 'transparent'
+            }}
+          >
+            🇸🇦 عربي
+          </Button>
+        </Box>
 
         <IconButton color="inherit" aria-label="help">
           <Help />
@@ -111,9 +146,9 @@ const Header = ({ toggleSidebar }) => {
               {currentUser?.displayName || currentUser?.email}
             </Typography>
           </MenuItem>
-          <MenuItem onClick={handleClose}>Profile</MenuItem>
-          <MenuItem onClick={handleClose}>My Account</MenuItem>
-          <MenuItem onClick={handleLogout}>Logout</MenuItem>
+          <MenuItem onClick={handleClose}>{t('profile')}</MenuItem>
+          <MenuItem onClick={handleClose}>{t('myAccount')}</MenuItem>
+          <MenuItem onClick={handleLogout}>{t('logout')}</MenuItem>
         </Menu>
       </Toolbar>
     </AppBar>

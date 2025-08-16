@@ -1,12 +1,14 @@
-// Import the functions you need from the SDKs you need
+// Firebase configuration for Teacher Dashboard v2
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import {
+  getAuth,
+  setPersistence,
+  browserLocalPersistence,
+} from "firebase/auth";
+import { getStorage } from "firebase/storage";
 import { getFunctions } from "firebase/functions";
-import { getAnalytics } from "firebase/analytics";
-// https://firebase.google.com/docs/web/setup#available-libraries
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyDJ-7aj31jfFfwOx2uHMkVp3Wzwef6jYzA",
   authDomain: "smile3-8c8c5.firebaseapp.com",
@@ -14,20 +16,39 @@ const firebaseConfig = {
   storageBucket: "smile3-8c8c5.firebasestorage.app",
   messagingSenderId: "610841874714",
   appId: "1:610841874714:web:99f1823fc74cc7943cdca3",
-  measurementId: "G-M3P5N10C5E"
+  measurementId: "G-M3P5N10C5E",
+};
+
+// OAuth configuration
+const authConfig = {
+  clientId:
+    "610841874714-qid6baodcg3fgt3vijkog0s8hk76c4n5.apps.googleusercontent.com",
+  scopes: [
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+  ],
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Cloud Firestore and get a reference to the service
+// Initialize Firebase services
 const db = getFirestore(app);
+const storage = getStorage(app);
+const functions = getFunctions(app);
 
-// Initialize Firebase Authentication
+// Initialize and configure auth
 const auth = getAuth(app);
+auth.useDeviceLanguage(); // Use browser's language
+auth.settings.appVerificationDisabledForTesting = false; // Enable proper verification
 
-// Initialize Firebase Functions
-const functions = getFunctions(app, 'us-central1');
+// Ensure auth state persists across reloads
+setPersistence(auth, browserLocalPersistence).catch((e) => {
+  // Non-fatal; fallback persistence will be used
+  console.warn("Auth persistence setup failed:", e?.message || e);
+});
 
-// Export the initialized app, db, auth, and functions
-export { app, db, auth, functions };
+// Do not override auth domain; rely on Firebase default handling for localhost
+
+// Export the initialized app, db, auth, functions and config
+export { app, db, auth, functions, authConfig };

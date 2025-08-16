@@ -9,6 +9,7 @@ import {
 } from "firebase/auth";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 import { app, db, auth } from "../firebase";
+import { initializeDefaultFrameworks } from "../services/frameworkService";
 
 // Create the context
 const AuthContext = createContext();
@@ -34,17 +35,33 @@ export const AuthProvider = ({ children }) => {
         // If user exists in Firebase Auth, check if they have a document in Firestore
         const userRef = doc(db, "users", user.uid);
         const userDoc = await getDoc(userRef);
-        
+
         // If user doesn't have a document in Firestore, create one
         if (!userDoc.exists()) {
           await setDoc(userRef, {
             uid: user.uid,
             email: user.email,
-            displayName: user.displayName || '',
-            photoURL: user.photoURL || '',
+            displayName: user.displayName || "",
+            photoURL: user.photoURL || "",
             admin: false, // Default to non-admin
             createdAt: new Date(),
+            // Initialize Gmail configuration fields
+            gmail_configured: false,
+            gmail_access_token: null,
+            gmail_refresh_token: null,
+            gmail_token_expiry: null,
           });
+
+          // Initialize default frameworks for new user
+          try {
+            console.log("Initializing default frameworks for new user...");
+            const frameworks = await initializeDefaultFrameworks();
+            console.log("Default frameworks created:", frameworks);
+          } catch (err) {
+            console.error("Error initializing default frameworks:", err);
+            // Don't throw the error - we want the user to be able to log in even if framework creation fails
+            // They can retry framework creation later
+          }
         }
       }
       setCurrentUser(user);
@@ -94,7 +111,7 @@ export const AuthProvider = ({ children }) => {
   const isAuthenticated = () => {
     return !!currentUser;
   };
-  
+
   // Sign in with Google
   const signInWithGoogle = async () => {
     setLoading(true);
@@ -102,17 +119,22 @@ export const AuthProvider = ({ children }) => {
     try {
       const provider = new GoogleAuthProvider();
       // Add scopes for additional permissions if needed
-      provider.addScope('https://www.googleapis.com/auth/userinfo.email');
-      provider.addScope('https://www.googleapis.com/auth/userinfo.profile');
-      
-      console.log('Starting Google sign-in process...');
+      provider.addScope("https://www.googleapis.com/auth/userinfo.email");
+      provider.addScope("https://www.googleapis.com/auth/userinfo.profile");
+
+      // Keep it simple: let Firebase handle redirects; only prompt account selection
+      provider.setCustomParameters({
+        prompt: "select_account",
+      });
+
+      console.log("Starting Google sign-in process...");
       const result = await signInWithPopup(auth, provider);
-      console.log('Google sign-in successful:', result.user.email);
+      console.log("Google sign-in successful:", result.user.email);
       // User creation in Firestore is handled by the onAuthStateChanged listener
       setLoading(false);
       return result.user;
     } catch (err) {
-      console.error('Google sign-in error:', err);
+      console.error("Google sign-in error:", err);
       setError(err.message);
       setLoading(false);
       throw err;

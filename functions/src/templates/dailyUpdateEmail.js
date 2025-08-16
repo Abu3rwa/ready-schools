@@ -21,7 +21,23 @@ export const buildDailyUpdateTemplate = (data) => {
     overallGrade,
     attendanceRate,
     behaviorSummary,
+    // New optional preferences
+    subjectTemplate,
+    includeSections = {}, // { attendance:true, grades:true, behavior:true, assignments:true, upcoming:true }
   } = data;
+
+  // Build subject using template if provided
+  const subjectFromTemplate = () => {
+    if (!subjectTemplate) return null;
+    const tokens = {
+      "{School}": schoolName || "School",
+      "{Student}": studentName || "Student",
+      "{Date}": dayjs(date).format("MMM DD, YYYY"),
+    };
+    let subject = subjectTemplate;
+    Object.entries(tokens).forEach(([k, v]) => (subject = subject.split(k).join(v)));
+    return subject;
+  };
 
   // Build a friendly, personalized salutation
   const studentFirstName = (studentName || "").split(" ")[0] || "Student";
@@ -32,10 +48,7 @@ export const buildDailyUpdateTemplate = (data) => {
 
   // Get pronouns and gender-specific language based on gender
   const getPronouns = (gender) => {
-    // Handle various gender formats and provide appropriate fallbacks
     const genderLower = gender?.toLowerCase()?.trim();
-    
-    // Frontend gender options: ["Male", "Female", "Other", "Prefer not to say"]
     switch(genderLower) {
       case 'male':
       case 'm':
@@ -84,13 +97,7 @@ export const buildDailyUpdateTemplate = (data) => {
           student: 'student',
           child: 'child'
         };
-      case '':
-      case 'unknown':
-      case null:
-      case undefined:
       default:
-        // For empty/unknown genders, use neutral language that's still personal
-        console.log('Using default pronouns for gender:', gender);
         return { 
           subject: 'they', 
           object: 'them', 
@@ -104,40 +111,24 @@ export const buildDailyUpdateTemplate = (data) => {
     }
   };
 
-  // Validate and normalize gender data
   const normalizeGender = (gender) => {
     if (!gender || typeof gender !== 'string') return null;
-    
     const normalized = gender.trim();
     if (normalized === '') return null;
-    
-    // Map common variations to standard values
     const genderMap = {
-      'male': 'Male',
-      'm': 'Male',
-      'male student': 'Male',
-      'boy': 'Male',
-      'female': 'Female',
-      'f': 'Female',
-      'female student': 'Female',
-      'girl': 'Female',
-      'other': 'Other',
-      'prefer not to say': 'Prefer not to say',
-      'non-binary': 'Other',
-      'nonbinary': 'Other',
-      'nb': 'Other',
-      'enby': 'Other',
-      'genderfluid': 'Other',
-      'genderqueer': 'Other',
-      'agender': 'Other'
+      'male': 'Male', 'm': 'Male', 'male student': 'Male', 'boy': 'Male',
+      'female': 'Female', 'f': 'Female', 'female student': 'Female', 'girl': 'Female',
+      'other': 'Other', 'prefer not to say': 'Prefer not to say',
+      'non-binary': 'Other', 'nonbinary': 'Other', 'nb': 'Other', 'enby': 'Other',
+      'genderfluid': 'Other', 'genderqueer': 'Other', 'agender': 'Other'
     };
-    
     const lowerGender = normalized.toLowerCase();
     return genderMap[lowerGender] || normalized;
   };
   
   const normalizedGender = normalizeGender(studentGender);
-  
+  const pronouns = getPronouns(normalizedGender);
+
   // Debug logging to track gender values
   console.log('Gender data processing:', {
     rawGender: studentGender,
@@ -145,8 +136,6 @@ export const buildDailyUpdateTemplate = (data) => {
     normalized: normalizedGender,
     processed: normalizedGender?.toLowerCase()?.trim()
   });
-  
-  const pronouns = getPronouns(normalizedGender);
   
   // Log the pronouns being used
   console.log('Pronouns selected:', pronouns);
@@ -365,7 +354,7 @@ export const buildDailyUpdateTemplate = (data) => {
   const formatSubjectGrades = (subjectGrades) => {
     if (!subjectGrades || Object.keys(subjectGrades).length === 0) {
       return `
-        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 20px 0;">
+        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin: 20px ">
           <tr>
             <td align="center" style="padding: 20px; color: #666; font-style: italic; font-family: Arial, sans-serif;">
               No grades available yet.
@@ -480,8 +469,10 @@ export const buildDailyUpdateTemplate = (data) => {
 
   const attendanceStatusData = getAttendanceStatus();
 
+  const computedSubject = subjectFromTemplate() || `${schoolName} - Daily Update for ${studentName} (${dayjs(date).format("MMM DD, YYYY")})`;
+
   return {
-    subject: `📚 ${schoolName} - Daily Update for ${studentName} (${dayjs(date).format("MMM DD, YYYY")})`,
+    subject: computedSubject,
     html: `
       <!DOCTYPE html>
       <html>
@@ -784,6 +775,7 @@ export const buildDailyUpdateTemplate = (data) => {
               ${getEncouragementMessage()}
 
               <!-- Quick Summary -->
+                  ${includeSections && includeSections.attendance === false && includeSections.subjectGrades === false ? '' : `
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="summary-grid">
                     <tr>
                       <td style="padding: 0 7.5px 0 0;">
@@ -802,13 +794,7 @@ export const buildDailyUpdateTemplate = (data) => {
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="summary-card">
                           <tr>
                             <td style="text-align: center; padding: 20px 15px;">
-                  <div class="summary-value" style="color: ${
-                    attendance.status === "Present"
-                      ? "#2e7d32"
-                      : attendance.status === "Tardy"
-                      ? "#f57c00"
-                      : "#d32f2f"
-                  };">
+                  <div class="summary-value" style="color: ${attendance.status === "Present" ? "#2e7d32" : attendance.status === "Tardy" ? "#f57c00" : "#d32f2f"};">
                     ${attendanceRate}%
                   </div>
                   <div class="summary-label">Attendance Rate</div>
@@ -817,35 +803,11 @@ export const buildDailyUpdateTemplate = (data) => {
                         </table>
                       </td>
                     </tr>
-                    <tr>
-                      <td style="padding: 15px 7.5px 0 0;">
-                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="summary-card">
-                          <tr>
-                            <td style="text-align: center; padding: 20px 15px;">
-                  <div class="summary-value" style="color: #1976d2;">
-                    ${assignments.length || 0}
-                  </div>
-                  <div class="summary-label">Today's Activities</div>
-                            </td>
-                          </tr>
-                        </table>
-                      </td>
-                      <td style="padding: 15px 0 0 7.5px;">
-                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="summary-card">
-                          <tr>
-                            <td style="text-align: center; padding: 20px 15px;">
-                  <div class="summary-value" style="color: #2e7d32;">
-                    ${upcomingAssignments.length || 0}
-                  </div>
-                  <div class="summary-label">Upcoming Tasks</div>
-                            </td>
-                          </tr>
-                        </table>
-                      </td>
-                    </tr>
                   </table>
+                  `}
 
               <!-- Subject Grades Section -->
+                  ${includeSections.subjectGrades === false ? '' : `
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="section">
                     <tr>
                       <td class="section-title">📊 Subject Grades</td>
@@ -855,9 +817,10 @@ export const buildDailyUpdateTemplate = (data) => {
                   ${formatSubjectGrades(subjectGrades)}
                       </td>
                     </tr>
-                  </table>
+                  </table>`}
 
               <!-- Attendance Section -->
+                  ${includeSections.attendance === false ? '' : `
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="section">
                     <tr>
                       <td class="section-title">📅 Today's Attendance</td>
@@ -866,17 +829,14 @@ export const buildDailyUpdateTemplate = (data) => {
                       <td class="section-content">
                         <div class="attendance-status" style="background-color: ${attendanceStatusData.bg};">
                     ${attendanceStatusData.html}
-                    ${
-                      attendance.notes
-                              ? `<br><small style="color: #666; font-weight: normal; font-family: Arial, Helvetica, sans-serif;">${sanitizeHtml(attendance.notes, { allowedTags: [], allowedAttributes: {} })}</small>`
-                        : ""
-                    }
+                    ${attendance.notes ? `<br><small style="color: #666; font-weight: normal; font-family: Arial, Helvetica, sans-serif;">${sanitizeHtml(attendance.notes, { allowedTags: [], allowedAttributes: {} })}</small>` : ""}
                   </div>
                       </td>
                     </tr>
-                  </table>
+                  </table>`}
 
               <!-- Today's Activities -->
+                  ${includeSections.assignments === false ? '' : `
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="section">
                     <tr>
                       <td class="section-title">📚 Today's Learning Activities</td>
@@ -886,12 +846,10 @@ export const buildDailyUpdateTemplate = (data) => {
                   ${formatAssignments(assignments, "learning activities")}
                       </td>
                     </tr>
-                  </table>
+                  </table>`}
 
               <!-- New Grades -->
-              ${
-                grades && grades.length > 0
-                  ? `
+              ${includeSections.grades === false ? '' : (grades && grades.length > 0 ? `
                     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="section">
                       <tr>
                         <td class="section-title">📊 Recent Grades & Assessments</td>
@@ -902,11 +860,10 @@ export const buildDailyUpdateTemplate = (data) => {
                         </td>
                       </tr>
                     </table>
-              `
-                  : ""
-              }
+              ` : '')}
 
               <!-- Behavior Summary -->
+                  ${includeSections.behavior === false ? '' : `
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="section">
                     <tr>
                       <td class="section-title">🌟 Behavior & Social Learning</td>
@@ -916,19 +873,20 @@ export const buildDailyUpdateTemplate = (data) => {
                   ${formatBehavior(behavior)}
                       </td>
                     </tr>
-                  </table>
+                  </table>`}
 
               <!-- Upcoming Assignments -->
+                  ${includeSections.upcoming === false ? '' : `
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="section">
                     <tr>
                       <td class="section-title">⏰ Upcoming Assignments & Deadlines</td>
                     </tr>
                     <tr>
-                      <td class="section-content">
+                      <td class="section-content" style="margin-bottom: 8px;">
                   ${formatUpcoming(upcomingAssignments)}
                       </td>
                     </tr>
-                  </table>
+                  </table>`}
 
               <!-- Contact Information -->
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
@@ -937,13 +895,9 @@ export const buildDailyUpdateTemplate = (data) => {
                 <p><strong>💌 I'm here to support ${studentFirstName}'s success!</strong></p>
                         <p>If you have any questions, concerns, or would like to discuss ${pronouns.possessive} progress, please don't hesitate to reach out. I believe that strong communication between home and school is key to ${pronouns.possessive} success. Your ${pronouns.child} is making wonderful progress, and I'm excited to see ${pronouns.object} continue to grow!</p>
                 <p><strong>📧 Email:</strong> ${teacherEmail || 'Available upon request'}</p>
-                <p><strong>🕐 Best times to contact:</strong> During school hours or by appointment</p>
-                
                 <div class="teacher-signature">
                   <p><strong>Warm regards,</strong></p>
                   <p><strong>${teacherName}</strong></p>
-                  <p><em>${studentFirstName}'s Teacher</em></p>
-                          <p><em>Proud to be teaching such a wonderful ${pronouns.title}!</em></p>
                   <p>${schoolName}</p>
                 </div>
                       </td>

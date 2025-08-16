@@ -1,4 +1,5 @@
 import React from "react";
+import "./i18n";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { ThemeProvider } from "@mui/material/styles";
@@ -14,7 +15,12 @@ import { AttendanceProvider } from "./contexts/AttendanceContext";
 import { BehaviorProvider } from "./contexts/BehaviorContext";
 import { CommunicationProvider } from "./contexts/CommunicationContext";
 import { EmailProvider } from "./contexts/EmailContext";
+import { GmailProvider } from "./contexts/GmailContext";
 import { GoogleSheetsProvider } from "./contexts/GoogleSheetsContext";
+import { StandardsGradingProvider } from "./contexts/StandardsGradingContext";
+import { GradeBookProvider } from "./contexts/GradeBookContext";
+import { SubjectsProvider } from "./contexts/SubjectsContext";
+import { AcademicPeriodsProvider } from "./contexts/AcademicPeriodsContext";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import ErrorBoundary from "./components/common/ErrorBoundary";
@@ -34,13 +40,23 @@ root.render(
                     <AttendanceProvider>
                       <BehaviorProvider>
                         <CommunicationProvider>
-                          <EmailProvider>
-                            <LocalizationProvider dateAdapter={AdapterDayjs}>
-                              <Router>
-                                <App />
-                              </Router>
-                            </LocalizationProvider>
-                          </EmailProvider>
+                          <StandardsGradingProvider>
+                            <AcademicPeriodsProvider>
+                              <SubjectsProvider>
+                                <GradeBookProvider>
+                                  <GmailProvider>
+                                    <EmailProvider>
+                                      <LocalizationProvider dateAdapter={AdapterDayjs}>
+                                        <Router>
+                                          <App />
+                                        </Router>
+                                      </LocalizationProvider>
+                                    </EmailProvider>
+                                  </GmailProvider>
+                                </GradeBookProvider>
+                              </SubjectsProvider>
+                            </AcademicPeriodsProvider>
+                          </StandardsGradingProvider>
                         </CommunicationProvider>
                       </BehaviorProvider>
                     </AttendanceProvider>

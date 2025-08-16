@@ -1,4 +1,6 @@
+import { useTranslation } from "react-i18next";
 import React, { useState, useEffect, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Grid,
   Paper,
@@ -15,6 +17,8 @@ import {
   Avatar,
   Chip,
   Button,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 import {
   People as PeopleIcon,
@@ -61,9 +65,22 @@ ChartJS.register(
 );
 
 const Dashboard = () => {
+  const { t } = useTranslation();
   const { currentUser } = useAuth();
-  console.log(currentUser);
   const navigate = useNavigate();
+  const location = useLocation();
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [welcomeMessage, setWelcomeMessage] = useState("");
+
+  // Handle welcome message from login
+  useEffect(() => {
+    if (location.state?.newLogin) {
+      setShowWelcome(true);
+      setWelcomeMessage(location.state.message);
+      // Clear the state after showing the message
+      navigate("/", { replace: true });
+    }
+  }, [location, navigate]);
   const { students, loading: studentsLoading } = useStudents();
   const { assignments, loading: assignmentsLoading } = useAssignments();
   const { grades, loading: gradesLoading } = useGrades();
@@ -83,7 +100,10 @@ const Dashboard = () => {
   // Overall class average across all available grades (dynamic subjects)
   const classAverage = useMemo(() => {
     const valid = (grades || []).filter(
-      (g) => typeof g.score === "number" && typeof g.points === "number" && g.points > 0
+      (g) =>
+        typeof g.score === "number" &&
+        typeof g.points === "number" &&
+        g.points > 0
     );
     if (valid.length === 0) return 0;
     const sum = valid.reduce((acc, g) => acc + (g.score / g.points) * 100, 0);
@@ -121,17 +141,22 @@ const Dashboard = () => {
       if (englishGrades.length > 0 || socialStudiesGrades.length > 0) {
         const englishAvg =
           englishGrades.length > 0
-            ?
-              englishGrades.reduce((sum, grade) => sum + (grade.score / grade.points) * 100, 0) /
-              englishGrades.length
+            ? englishGrades.reduce(
+                (sum, grade) => sum + (grade.score / grade.points) * 100,
+                0
+              ) / englishGrades.length
             : 0;
         const socialAvg =
           socialStudiesGrades.length > 0
-            ?
-              socialStudiesGrades.reduce((sum, grade) => sum + (grade.score / grade.points) * 100, 0) /
-              socialStudiesGrades.length
+            ? socialStudiesGrades.reduce(
+                (sum, grade) => sum + (grade.score / grade.points) * 100,
+                0
+              ) / socialStudiesGrades.length
             : 0;
-        setClassAverages({ english: Math.round(englishAvg), socialStudies: Math.round(socialAvg) });
+        setClassAverages({
+          english: Math.round(englishAvg),
+          socialStudies: Math.round(socialAvg),
+        });
       }
 
       // Calculate attendance statistics
@@ -241,7 +266,10 @@ const Dashboard = () => {
   // Grade distribution across all subjects
   const gradeDistributionData = useMemo(() => {
     const all = (grades || []).filter(
-      (g) => typeof g.score === "number" && typeof g.points === "number" && g.points > 0
+      (g) =>
+        typeof g.score === "number" &&
+        typeof g.points === "number" &&
+        g.points > 0
     );
     const bins = [0, 0, 0, 0, 0]; // A, B, C, D, F
     for (const g of all) {
@@ -314,11 +342,40 @@ const Dashboard = () => {
 
   return (
     <Box sx={{ flexGrow: 1, px: { xs: 2, sm: 0 } }}>
-      <Typography variant="h4" gutterBottom sx={{ fontSize: { xs: '1.5rem', sm: '2rem', md: '2.25rem' }, textAlign: { xs: 'center', sm: 'left' } }}>
-        Welcome, {currentUser?.displayName || currentUser?.email}!
+      <Snackbar
+        open={showWelcome}
+        autoHideDuration={6000}
+        onClose={() => setShowWelcome(false)}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setShowWelcome(false)}
+          severity="success"
+          sx={{ width: "100%" }}
+        >
+          {welcomeMessage}
+        </Alert>
+      </Snackbar>
+      <Typography
+        variant="h4"
+        gutterBottom
+        sx={{
+          fontSize: { xs: "1.5rem", sm: "2rem", md: "2.25rem" },
+          textAlign: { xs: "center", sm: "left" },
+        }}
+      >
+        {t('welcomeMessage', { name: currentUser?.displayName || currentUser?.email })}
       </Typography>
-      <Typography variant="subtitle1" color="textSecondary" gutterBottom sx={{ fontSize: { xs: '0.875rem', sm: '1rem' }, textAlign: { xs: 'center', sm: 'left' } }}>
-        Here's an overview of your class.
+      <Typography
+        variant="subtitle1"
+        color="textSecondary"
+        gutterBottom
+        sx={{
+          fontSize: { xs: "0.875rem", sm: "1rem" },
+          textAlign: { xs: "center", sm: "left" },
+        }}
+      >
+        {t('overview')}
       </Typography>
 
       {/* Quick Stats */}
@@ -326,21 +383,35 @@ const Dashboard = () => {
         <Grid item xs={6} sm={6} md={3}>
           <Paper
             elevation={2}
-            sx={{ 
-              p: { xs: 1.5, sm: 2 }, 
-              display: "flex", 
+            sx={{
+              p: { xs: 1.5, sm: 2 },
+              display: "flex",
               alignItems: "center",
-              height: '100%'
+              height: "100%",
             }}
           >
-            <Avatar sx={{ bgcolor: "primary.main", mr: { xs: 1, sm: 2 }, width: { xs: 32, sm: 40 }, height: { xs: 32, sm: 40 } }}>
+            <Avatar
+              sx={{
+                bgcolor: "primary.main",
+                mr: { xs: 1, sm: 2 },
+                width: { xs: 32, sm: 40 },
+                height: { xs: 32, sm: 40 },
+              }}
+            >
               <PeopleIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
             </Avatar>
             <Box>
-              <Typography variant="body2" color="textSecondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                Students
+              <Typography
+                variant="body2"
+                color="textSecondary"
+                sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+              >
+                {t('navigation.students')}
               </Typography>
-              <Typography variant="h5" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
+              <Typography
+                variant="h5"
+                sx={{ fontSize: { xs: "1.25rem", sm: "1.5rem" } }}
+              >
                 {students.length}
               </Typography>
             </Box>
@@ -349,21 +420,35 @@ const Dashboard = () => {
         <Grid item xs={6} sm={6} md={3}>
           <Paper
             elevation={2}
-            sx={{ 
-              p: { xs: 1.5, sm: 2 }, 
-              display: "flex", 
+            sx={{
+              p: { xs: 1.5, sm: 2 },
+              display: "flex",
               alignItems: "center",
-              height: '100%'
+              height: "100%",
             }}
           >
-            <Avatar sx={{ bgcolor: "secondary.main", mr: { xs: 1, sm: 2 }, width: { xs: 32, sm: 40 }, height: { xs: 32, sm: 40 } }}>
+            <Avatar
+              sx={{
+                bgcolor: "secondary.main",
+                mr: { xs: 1, sm: 2 },
+                width: { xs: 32, sm: 40 },
+                height: { xs: 32, sm: 40 },
+              }}
+            >
               <AssignmentIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
             </Avatar>
             <Box>
-              <Typography variant="body2" color="textSecondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                Assignments
+              <Typography
+                variant="body2"
+                color="textSecondary"
+                sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+              >
+                {t('navigation.assignments')}
               </Typography>
-              <Typography variant="h5" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
+              <Typography
+                variant="h5"
+                sx={{ fontSize: { xs: "1.25rem", sm: "1.5rem" } }}
+              >
                 {assignments.length}
               </Typography>
             </Box>
@@ -372,23 +457,36 @@ const Dashboard = () => {
         <Grid item xs={6} sm={6} md={3}>
           <Paper
             elevation={2}
-            sx={{ 
-              p: { xs: 1.5, sm: 2 }, 
-              display: "flex", 
+            sx={{
+              p: { xs: 1.5, sm: 2 },
+              display: "flex",
               alignItems: "center",
-              height: '100%'
+              height: "100%",
             }}
           >
-            <Avatar sx={{ bgcolor: "success.main", mr: { xs: 1, sm: 2 }, width: { xs: 32, sm: 40 }, height: { xs: 32, sm: 40 } }}>
+            <Avatar
+              sx={{
+                bgcolor: "success.main",
+                mr: { xs: 1, sm: 2 },
+                width: { xs: 32, sm: 40 },
+                height: { xs: 32, sm: 40 },
+              }}
+            >
               <MenuBookIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
             </Avatar>
             <Box>
-              <Typography variant="body2" color="textSecondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                Class Average
+              <Typography
+                variant="body2"
+                color="textSecondary"
+                sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+              >
+                {t('classAverage')}
               </Typography>
-              <Typography variant="h5" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
-                {classAverage}
-                %
+              <Typography
+                variant="h5"
+                sx={{ fontSize: { xs: "1.25rem", sm: "1.5rem" } }}
+              >
+                {classAverage}%
               </Typography>
             </Box>
           </Paper>
@@ -396,21 +494,35 @@ const Dashboard = () => {
         <Grid item xs={6} sm={6} md={3}>
           <Paper
             elevation={2}
-            sx={{ 
-              p: { xs: 1.5, sm: 2 }, 
-              display: "flex", 
+            sx={{
+              p: { xs: 1.5, sm: 2 },
+              display: "flex",
               alignItems: "center",
-              height: '100%'
+              height: "100%",
             }}
           >
-            <Avatar sx={{ bgcolor: "warning.main", mr: { xs: 1, sm: 2 }, width: { xs: 32, sm: 40 }, height: { xs: 32, sm: 40 } }}>
+            <Avatar
+              sx={{
+                bgcolor: "warning.main",
+                mr: { xs: 1, sm: 2 },
+                width: { xs: 32, sm: 40 },
+                height: { xs: 32, sm: 40 },
+              }}
+            >
               <WarningIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
             </Avatar>
             <Box>
-              <Typography variant="body2" color="textSecondary" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                Alerts
+              <Typography
+                variant="body2"
+                color="textSecondary"
+                sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+              >
+                {t('alerts')}
               </Typography>
-              <Typography variant="h5" sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }}>
+              <Typography
+                variant="h5"
+                sx={{ fontSize: { xs: "1.25rem", sm: "1.5rem" } }}
+              >
                 {lowGradeAlerts.length}
               </Typography>
             </Box>
@@ -423,8 +535,15 @@ const Dashboard = () => {
         {/* Grade Distribution */}
         <Grid item xs={12} lg={8}>
           <Card elevation={2}>
-            <CardHeader 
-              title={<Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>Grade Distribution</Typography>}
+            <CardHeader
+              title={
+                <Typography
+                  variant="h6"
+                  sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+                >
+                  {t('gradeDistribution')}
+                </Typography>
+              }
               sx={{ p: { xs: 2, sm: 3 } }}
             />
             <Divider />
@@ -442,30 +561,30 @@ const Dashboard = () => {
                           boxWidth: 12,
                           padding: 10,
                           font: {
-                            size: window.innerWidth < 600 ? 10 : 12
-                          }
-                        }
+                            size: window.innerWidth < 600 ? 10 : 12,
+                          },
+                        },
                       },
                       title: {
-                        display: false
+                        display: false,
                       },
                     },
                     scales: {
                       x: {
                         ticks: {
                           font: {
-                            size: window.innerWidth < 600 ? 8 : 10
-                          }
-                        }
+                            size: window.innerWidth < 600 ? 8 : 10,
+                          },
+                        },
                       },
                       y: {
                         ticks: {
                           font: {
-                            size: window.innerWidth < 600 ? 8 : 10
-                          }
-                        }
-                      }
-                    }
+                            size: window.innerWidth < 600 ? 8 : 10,
+                          },
+                        },
+                      },
+                    },
                   }}
                 />
               </Box>
@@ -476,32 +595,44 @@ const Dashboard = () => {
         {/* Attendance Overview */}
         <Grid item xs={12} sm={6} lg={4}>
           <Card elevation={2}>
-            <CardHeader 
-              title={<Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>Attendance Overview</Typography>}
+            <CardHeader
+              title={
+                <Typography
+                  variant="h6"
+                  sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+                >
+                  {t('attendanceOverview')}
+                </Typography>
+              }
               sx={{ p: { xs: 2, sm: 3 } }}
             />
             <Divider />
             <CardContent>
               <Box sx={{ display: "flex", justifyContent: "center" }}>
-                <Box sx={{ 
-                  height: { xs: 180, sm: 200, md: 250 }, 
-                  width: "100%", 
-                  maxWidth: { xs: 180, sm: 200, md: 250 }
-                }}>
-                  <Pie data={attendanceChartData} options={{
-                    plugins: {
-                      legend: {
-                        position: "bottom",
-                        labels: {
-                          boxWidth: 12,
-                          padding: 10,
-                          font: {
-                            size: window.innerWidth < 600 ? 10 : 12
-                          }
-                        }
-                      }
-                    }
-                  }} />
+                <Box
+                  sx={{
+                    height: { xs: 180, sm: 200, md: 250 },
+                    width: "100%",
+                    maxWidth: { xs: 180, sm: 200, md: 250 },
+                  }}
+                >
+                  <Pie
+                    data={attendanceChartData}
+                    options={{
+                      plugins: {
+                        legend: {
+                          position: "bottom",
+                          labels: {
+                            boxWidth: 12,
+                            padding: 10,
+                            font: {
+                              size: window.innerWidth < 600 ? 10 : 12,
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  />
                 </Box>
               </Box>
             </CardContent>
@@ -511,32 +642,44 @@ const Dashboard = () => {
         {/* Behavior Overview */}
         <Grid item xs={12} sm={6} lg={4}>
           <Card elevation={2}>
-            <CardHeader 
-              title={<Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>Behavior Overview</Typography>}
+            <CardHeader
+              title={
+                <Typography
+                  variant="h6"
+                  sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+                >
+                  {t('behaviorOverview')}
+                </Typography>
+              }
               sx={{ p: { xs: 2, sm: 3 } }}
             />
             <Divider />
             <CardContent>
               <Box sx={{ display: "flex", justifyContent: "center" }}>
-                <Box sx={{ 
-                  height: { xs: 180, sm: 200, md: 250 }, 
-                  width: "100%", 
-                  maxWidth: { xs: 180, sm: 200, md: 250 }
-                }}>
-                  <Pie data={behaviorChartData} options={{
-                    plugins: {
-                      legend: {
-                        position: "bottom",
-                        labels: {
-                          boxWidth: 12,
-                          padding: 10,
-                          font: {
-                            size: window.innerWidth < 600 ? 10 : 12
-                          }
-                        }
-                      }
-                    }
-                  }} />
+                <Box
+                  sx={{
+                    height: { xs: 180, sm: 200, md: 250 },
+                    width: "100%",
+                    maxWidth: { xs: 180, sm: 200, md: 250 },
+                  }}
+                >
+                  <Pie
+                    data={behaviorChartData}
+                    options={{
+                      plugins: {
+                        legend: {
+                          position: "bottom",
+                          labels: {
+                            boxWidth: 12,
+                            padding: 10,
+                            font: {
+                              size: window.innerWidth < 600 ? 10 : 12,
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  />
                 </Box>
               </Box>
             </CardContent>
@@ -547,39 +690,65 @@ const Dashboard = () => {
         <Grid item xs={12} sm={6} lg={4}>
           <Card elevation={2} sx={{ height: "100%" }}>
             <CardHeader
-              title={<Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>Upcoming Assignments</Typography>}
+              title={
+                <Typography
+                  variant="h6"
+                  sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+                >
+                  {t('upcomingAssignments')}
+                </Typography>
+              }
               action={
-                <Button size="small" onClick={() => navigate("/assignments")} sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                  View All
+                <Button
+                  size="small"
+                  onClick={() => navigate("/assignments")}
+                  sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+                >
+                  {t('viewAll')}
                 </Button>
               }
               sx={{ p: { xs: 2, sm: 3 } }}
             />
             <Divider />
             <CardContent sx={{ p: 0 }}>
-              <List sx={{ 
-                maxHeight: { xs: 200, sm: 250, md: 300 },
-                overflow: 'auto'
-              }}>
+              <List
+                sx={{
+                  maxHeight: { xs: 200, sm: 250, md: 300 },
+                  overflow: "auto",
+                }}
+              >
                 {upcomingAssignments.length > 0 ? (
                   upcomingAssignments.map((assignment) => (
                     <ListItem key={assignment.id} divider>
                       <ListItemAvatar>
                         <Avatar
                           sx={{
-                            bgcolor: assignment.subject === "English" ? "primary.main" : "secondary.main",
+                            bgcolor:
+                              assignment.subject === "English"
+                                ? "primary.main"
+                                : "secondary.main",
                             width: { xs: 32, sm: 40 },
-                            height: { xs: 32, sm: 40 }
+                            height: { xs: 32, sm: 40 },
                           }}
                         >
                           {assignment.subject === "English" ? "E" : "S"}
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText
-                        primary={<Typography sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>{assignment.name}</Typography>}
+                        primary={
+                          <Typography
+                            sx={{ fontSize: { xs: "0.875rem", sm: "1rem" } }}
+                          >
+                            {assignment.name}
+                          </Typography>
+                        }
                         secondary={
-                          <Typography sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                            {`Due: ${new Date(assignment.dueDate).toLocaleDateString()} • ${assignment.subject}`}
+                          <Typography
+                            sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+                          >
+                            {`Due: ${new Date(
+                              assignment.dueDate
+                            ).toLocaleDateString()} • ${assignment.subject}`}
                           </Typography>
                         }
                       />
@@ -587,12 +756,14 @@ const Dashboard = () => {
                   ))
                 ) : (
                   <ListItem>
-                    <ListItemText 
+                    <ListItemText
                       primary={
-                        <Typography sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
-                          No upcoming assignments
+                        <Typography
+                          sx={{ fontSize: { xs: "0.875rem", sm: "1rem" } }}
+                        >
+                          {t('noUpcomingAssignments')}
                         </Typography>
-                      } 
+                      }
                     />
                   </ListItem>
                 )}
@@ -605,20 +776,33 @@ const Dashboard = () => {
         <Grid item xs={12} sm={6} lg={4}>
           <Card elevation={2} sx={{ height: "100%" }}>
             <CardHeader
-              title={<Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>Low Grade Alerts</Typography>}
+              title={
+                <Typography
+                  variant="h6"
+                  sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+                >
+                  {t('lowGradeAlerts')}
+                </Typography>
+              }
               action={
-                <Button size="small" onClick={() => navigate("/gradebook")} sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                  View Grades
+                <Button
+                  size="small"
+                  onClick={() => navigate("/gradebook")}
+                  sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+                >
+                  {t('viewGrades')}
                 </Button>
               }
               sx={{ p: { xs: 2, sm: 3 } }}
             />
             <Divider />
             <CardContent sx={{ p: 0 }}>
-              <List sx={{ 
-                maxHeight: { xs: 200, sm: 250, md: 300 },
-                overflow: 'auto'
-              }}>
+              <List
+                sx={{
+                  maxHeight: { xs: 200, sm: 250, md: 300 },
+                  overflow: "auto",
+                }}
+              >
                 {lowGradeAlerts.length > 0 ? (
                   lowGradeAlerts.map((alert, index) => (
                     <ListItem
@@ -626,18 +810,28 @@ const Dashboard = () => {
                       divider={index < lowGradeAlerts.length - 1}
                     >
                       <ListItemAvatar>
-                        <Avatar sx={{ 
-                          bgcolor: "error.main",
-                          width: { xs: 32, sm: 40 },
-                          height: { xs: 32, sm: 40 }
-                        }}>
+                        <Avatar
+                          sx={{
+                            bgcolor: "error.main",
+                            width: { xs: 32, sm: 40 },
+                            height: { xs: 32, sm: 40 },
+                          }}
+                        >
                           <WarningIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText
-                        primary={<Typography sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>{alert.name}</Typography>}
+                        primary={
+                          <Typography
+                            sx={{ fontSize: { xs: "0.875rem", sm: "1rem" } }}
+                          >
+                            {alert.name}
+                          </Typography>
+                        }
                         secondary={
-                          <Typography sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
+                          <Typography
+                            sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+                          >
                             {`${alert.subject}: ${alert.average}%`}
                           </Typography>
                         }
@@ -647,19 +841,21 @@ const Dashboard = () => {
                         size="small"
                         color="primary"
                         onClick={() => navigate("/communication")}
-                        sx={{ 
-                          fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                          height: { xs: 24, sm: 32 }
+                        sx={{
+                          fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                          height: { xs: 24, sm: 32 },
                         }}
                       />
                     </ListItem>
                   ))
                 ) : (
                   <ListItem>
-                    <ListItemText 
+                    <ListItemText
                       primary={
-                        <Typography sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
-                          No low grade alerts
+                        <Typography
+                          sx={{ fontSize: { xs: "0.875rem", sm: "1rem" } }}
+                        >
+                          {t('noLowGradeAlerts')}
                         </Typography>
                       }
                     />
@@ -674,20 +870,33 @@ const Dashboard = () => {
         <Grid item xs={12}>
           <Card elevation={2}>
             <CardHeader
-              title={<Typography variant="h6" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>Recent Communications</Typography>}
+              title={
+                <Typography
+                  variant="h6"
+                  sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+                >
+                  {t('recentCommunications')}
+                </Typography>
+              }
               action={
-                <Button size="small" onClick={() => navigate("/communication")} sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                  View All
+                <Button
+                  size="small"
+                  onClick={() => navigate("/communication")}
+                  sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+                >
+                  {t('viewAll')}
                 </Button>
               }
               sx={{ p: { xs: 2, sm: 3 } }}
             />
             <Divider />
             <CardContent sx={{ p: 0 }}>
-              <List sx={{ 
-                maxHeight: { xs: 250, sm: 300, md: 400 },
-                overflow: 'auto'
-              }}>
+              <List
+                sx={{
+                  maxHeight: { xs: 250, sm: 300, md: 400 },
+                  overflow: "auto",
+                }}
+              >
                 {recentCommunications.length > 0 ? (
                   recentCommunications.map((comm, index) => {
                     const student = students.find(
@@ -705,33 +914,54 @@ const Dashboard = () => {
                         <ListItemAvatar>
                           <Avatar
                             sx={{
-                              bgcolor: comm.sentStatus === "Sent" ? "success.main" : "warning.main",
+                              bgcolor:
+                                comm.sentStatus === "Sent"
+                                  ? "success.main"
+                                  : "warning.main",
                               width: { xs: 32, sm: 40 },
-                              height: { xs: 32, sm: 40 }
+                              height: { xs: 32, sm: 40 },
                             }}
                           >
                             {comm.sentStatus === "Sent" ? (
-                              <CheckCircleIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
+                              <CheckCircleIcon
+                                sx={{ fontSize: { xs: 20, sm: 24 } }}
+                              />
                             ) : (
-                              <EmailIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
+                              <EmailIcon
+                                sx={{ fontSize: { xs: 20, sm: 24 } }}
+                              />
                             )}
                           </Avatar>
                         </ListItemAvatar>
                         <ListItemText
-                          primary={<Typography sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>{comm.subject}</Typography>}
+                          primary={
+                            <Typography
+                              sx={{ fontSize: { xs: "0.875rem", sm: "1rem" } }}
+                            >
+                              {comm.subject}
+                            </Typography>
+                          }
                           secondary={
-                            <Typography sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                              {`To: ${studentName} • ${new Date(comm.date).toLocaleDateString()}`}
+                            <Typography
+                              sx={{
+                                fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                              }}
+                            >
+                              {`To: ${studentName} • ${new Date(
+                                comm.date
+                              ).toLocaleDateString()}`}
                             </Typography>
                           }
                         />
                         <Chip
                           label={comm.sentStatus}
                           size="small"
-                          color={comm.sentStatus === "Sent" ? "success" : "warning"}
-                          sx={{ 
-                            fontSize: { xs: '0.75rem', sm: '0.875rem' },
-                            height: { xs: 24, sm: 32 }
+                          color={
+                            comm.sentStatus === "Sent" ? "success" : "warning"
+                          }
+                          sx={{
+                            fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                            height: { xs: 24, sm: 32 },
                           }}
                         />
                       </ListItem>
@@ -739,10 +969,12 @@ const Dashboard = () => {
                   })
                 ) : (
                   <ListItem>
-                    <ListItemText 
+                    <ListItemText
                       primary={
-                        <Typography sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
-                          No recent communications
+                        <Typography
+                          sx={{ fontSize: { xs: "0.875rem", sm: "1rem" } }}
+                        >
+                          {t('noRecentCommunications')}
                         </Typography>
                       }
                     />

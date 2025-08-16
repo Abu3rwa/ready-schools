@@ -1,12 +1,19 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { db } from "../firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  addDoc,
+  serverTimestamp
+} from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import {
   recordBehavior,
   updateBehavior as apiUpdateBehavior,
   deleteBehavior as apiDeleteBehavior,
-} from "../services/apiService";
+} from "../services/behaviorService"; // Corrected service path
 
 // Create the context
 const BehaviorContext = createContext();
@@ -20,11 +27,45 @@ export const useBehavior = () => {
   return context;
 };
 
+// Fallback taxonomy used if Firestore collection is empty/unavailable
+const FALLBACK_SKILLS_TAXONOMY = {
+  "Self-Regulation": ["Managing impulsivity", "Staying on task"],
+  "Collaboration": ["Active listening", "Contributing to group goals", "Resolving conflicts"],
+  "Resilience & Perseverance": ["Persisting through challenges", "Learning from setbacks"],
+  "Empathy & Perspective-Taking": ["Considering others' feelings", "Showing compassion"],
+  "Critical Thinking & Problem-Solving": ["Asking thoughtful questions", "Finding creative solutions"],
+  "Leadership & Initiative": ["Taking ownership", "Inspiring others", "Proposing ideas"],
+};
+
+// Enhanced validation function
+const validateBehaviorData = (behaviorData) => {
+  const errors = [];
+  
+  if (!behaviorData.studentId) {
+    errors.push("Student ID is required");
+  }
+  
+  if (!behaviorData.date) {
+    errors.push("Date is required");
+  }
+  
+  if (!behaviorData.description || behaviorData.description.trim().length < 10) {
+    errors.push("Description must be at least 10 characters long");
+  }
+  
+  if (!behaviorData.skills || behaviorData.skills.length === 0) {
+    errors.push("At least one skill must be selected");
+  }
+  
+  return errors;
+};
+
 // Create the provider component
 export const BehaviorProvider = ({ children }) => {
   const [behavior, setBehavior] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [skillsTaxonomy, setSkillsTaxonomy] = useState(FALLBACK_SKILLS_TAXONOMY);
 
   // Set up real-time listener for behavior records
   useEffect(() => {
@@ -61,8 +102,56 @@ export const BehaviorProvider = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
+  // Load skills taxonomy from Firestore (read-only) with fallback
+  useEffect(() => {
+    const loadTaxonomy = async () => {
+      try {
+        const auth = getAuth();
+        const user = auth.currentUser;
+        if (!user) return; // wait until authenticated
+        const skillsCol = collection(db, "skills_taxonomy");
+        const snapshot = await new Promise((resolve, reject) => {
+          const unsubscribe = onSnapshot(
+            skillsCol,
+            (snap) => {
+              unsubscribe();
+              resolve(snap);
+            },
+            (err) => {
+              unsubscribe();
+              reject(err);
+            }
+          );
+        });
+        if (!snapshot.empty) {
+          const taxonomy = {};
+          snapshot.docs.forEach((doc) => {
+            const data = doc.data();
+            const categoryName = data.name || doc.id;
+            taxonomy[categoryName] = Array.isArray(data.subSkills) ? data.subSkills : [];
+          });
+          setSkillsTaxonomy(taxonomy);
+        } else {
+          setSkillsTaxonomy(FALLBACK_SKILLS_TAXONOMY);
+        }
+      } catch (e) {
+        setSkillsTaxonomy(FALLBACK_SKILLS_TAXONOMY);
+      }
+    };
+    loadTaxonomy();
+  }, []);
+
   // Function to log a new behavior incident
   const logBehavior = async (behaviorData) => {
+    // Validate input data
+    const validationErrors = validateBehaviorData(behaviorData);
+    if (validationErrors.length > 0) {
+      const errorMessage = validationErrors.join(", ");
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    }
+
+    // Expects behaviorData in the new format: { studentId, date, description, skills, restorativeAction }
     try {
       const result = await recordBehavior(behaviorData);
       return result;
@@ -74,6 +163,7 @@ export const BehaviorProvider = ({ children }) => {
 
   // Function to update a behavior record
   const updateBehavior = async (behaviorId, updatedData) => {
+    // Expects updatedData in the new format
     try {
       const result = await apiUpdateBehavior(behaviorId, updatedData);
       return result;
@@ -99,48 +189,28 @@ export const BehaviorProvider = ({ children }) => {
     return behavior.filter((record) => record.studentId === studentId);
   };
 
-  // Function to get behavior records by type
-  const getBehaviorByType = (type) => {
-    return behavior.filter((record) => record.type === type);
-  };
+  // Function to get the skills taxonomy
+  const getSkillsTaxonomy = () => skillsTaxonomy;
 
-  // Function to calculate behavior statistics
-  const calculateBehaviorStats = (studentId = null) => {
-    let records = behavior;
+  // Function to add a reflection to a behavior record
+  const addReflection = async (behaviorId, reflectionData) => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
 
-    if (studentId) {
-      records = records.filter((record) => record.studentId === studentId);
+      const reflectionsCollection = collection(db, "behaviors", behaviorId, "reflections");
+      const docData = {
+        ...reflectionData,
+        userId: user.uid,
+        createdAt: serverTimestamp(),
+      };
+      const docRef = await addDoc(reflectionsCollection, docData);
+      return { id: docRef.id, ...docData };
+    } catch (err) {
+      setError(err.message);
+      throw err;
     }
-
-    const total = records.length;
-    const positive = records.filter(
-      (record) => record.type === "Positive"
-    ).length;
-    const negative = records.filter(
-      (record) => record.type === "Negative"
-    ).length;
-
-    // Calculate by severity
-    const lowSeverity = records.filter(
-      (record) => record.severity === "Low"
-    ).length;
-    const mediumSeverity = records.filter(
-      (record) => record.severity === "Medium"
-    ).length;
-    const highSeverity = records.filter(
-      (record) => record.severity === "High"
-    ).length;
-
-    return {
-      total,
-      positive,
-      negative,
-      lowSeverity,
-      mediumSeverity,
-      highSeverity,
-      positivePercentage: total > 0 ? Math.round((positive / total) * 100) : 0,
-      negativePercentage: total > 0 ? Math.round((negative / total) * 100) : 0,
-    };
   };
 
   // Create the value object to be provided by the context
@@ -152,8 +222,8 @@ export const BehaviorProvider = ({ children }) => {
     updateBehavior,
     deleteBehavior,
     getBehaviorByStudent,
-    getBehaviorByType,
-    calculateBehaviorStats,
+    getSkillsTaxonomy,
+    addReflection,
   };
 
   return (

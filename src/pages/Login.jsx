@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { authConfig } from "../firebase";
 import {
   Container,
   CssBaseline,
@@ -10,7 +11,10 @@ import {
   Alert,
   Avatar,
 } from "@mui/material";
-import { Google as GoogleIcon, LockOutlined as LockOutlinedIcon } from "@mui/icons-material";
+import {
+  Google as GoogleIcon,
+  LockOutlined as LockOutlinedIcon,
+} from "@mui/icons-material";
 import "./Login.css";
 
 const Login = () => {
@@ -22,7 +26,14 @@ const Login = () => {
     setLoginError(null);
     try {
       const user = await signInWithGoogle();
-      navigate("/");
+      // Wait a brief moment to ensure Firestore document is created
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      navigate("/", {
+        state: {
+          newLogin: true,
+          message: `Welcome back, ${user.displayName || user.email}!`,
+        },
+      });
     } catch (error) {
       if (error.code === "auth/popup-closed-by-user") {
         setLoginError("Sign-in was cancelled. Please try again.");
@@ -53,7 +64,12 @@ const Login = () => {
           <Typography component="h1" variant="h5">
             Sign in
           </Typography>
-          <Typography variant="body2" color="textSecondary" align="center" sx={{ mt: 1, mb: 3 }}>
+          <Typography
+            variant="body2"
+            color="textSecondary"
+            align="center"
+            sx={{ mt: 1, mb: 3 }}
+          >
             Use your Google account to continue.
           </Typography>
           {loginError && (
@@ -68,6 +84,7 @@ const Login = () => {
             startIcon={<GoogleIcon />}
             className="google-signin-button"
             sx={{ py: 1.5 }}
+            data-client-id={authConfig.clientId} // Add client ID for verification
           >
             Sign in with Google
           </Button>

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Box,
   Button,
@@ -22,6 +23,7 @@ import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon } from "@mui/ico
 import { createSubject, deleteSubject, getSubjects, updateSubject } from "../../services/subjectsService";
 
 const SubjectDialog = ({ open, onClose, onSave, initial }) => {
+  const { t } = useTranslation();
   const [name, setName] = useState(initial?.name || "");
   const [code, setCode] = useState(initial?.code || "");
 
@@ -32,21 +34,21 @@ const SubjectDialog = ({ open, onClose, onSave, initial }) => {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>{initial ? "Edit Subject" : "Add Subject"}</DialogTitle>
+      <DialogTitle>{initial ? t('settings.editSubject') : t('settings.addSubject')}</DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 1 }}>
-          <TextField label="Name" fullWidth value={name} onChange={(e) => setName(e.target.value)} />
-          <TextField label="Code" fullWidth value={code} onChange={(e) => setCode(e.target.value)} />
+          <TextField label={t('settings.subjectName')} fullWidth value={name} onChange={(e) => setName(e.target.value)} />
+          <TextField label={t('settings.subjectCode')} fullWidth value={code} onChange={(e) => setCode(e.target.value)} />
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={onClose}>{t('common.cancel')}</Button>
         <Button
           onClick={() => onSave({ name: name.trim(), code: code.trim() })}
           variant="contained"
           disabled={!name.trim()}
         >
-          Save
+          {t('common.save')}
         </Button>
       </DialogActions>
     </Dialog>
@@ -54,6 +56,7 @@ const SubjectDialog = ({ open, onClose, onSave, initial }) => {
 };
 
 const SubjectsManager = () => {
+  const { t } = useTranslation();
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -92,9 +95,9 @@ const SubjectsManager = () => {
   return (
     <Paper sx={{ p: 2 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-        <Typography variant="h6">Subjects</Typography>
+        <Typography variant="h6">{t('settings.subjects')}</Typography>
         <Button startIcon={<AddIcon />} variant="contained" onClick={() => setDialogOpen(true)}>
-          Add Subject
+          {t('settings.addSubject')}
         </Button>
       </Box>
 

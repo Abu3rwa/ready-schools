@@ -177,43 +177,23 @@ export const EmailProvider = ({ children }) => {
             `Daily updates sent successfully! ${emailsSentCount} emails sent.`
           );
 
-          // Save each email to the frontend and database
+          // Add saved emails to email history
           if (result.data?.savedEmails?.length > 0) {
             for (const emailData of result.data.savedEmails) {
               try {
-                // Save to database
-                const emailToSave = {
-                  studentId: emailData.studentId,
-                  date: emailData.date,
-                  subject: emailData.subject,
-                  content: emailData.content,
-                  sentStatus: emailData.sentStatus || 'Sent',
-                  type: emailData.type || 'daily_update',
-                  attendance: emailData.attendance,
-                  grades: emailData.grades,
-                  behavior: emailData.behavior,
-                  assignments: emailData.assignments,
-                  classwork: emailData.classwork || [],
-                  homework: emailData.homework || [],
-                  upcomingAssignments: emailData.upcomingAssignments || [],
-                  metadata: emailData.metadata
-                };
-                
-                await saveDailyUpdateEmail(emailToSave);
-                
                 // Add to email history
                 const emailRecord = {
-                  id: Date.now() + Math.random(),
+                  id: emailData.id,
                   type: "Daily Update",
                   subject: emailData.subject,
-                  recipients: 1,
+                  recipients: emailData.recipients ? emailData.recipients.length : 1,
                   status: "Sent",
                   date: new Date(emailData.date),
                   details: emailData,
                 };
                 addEmailToHistory(emailRecord);
               } catch (saveError) {
-                console.error('Error saving email to history:', saveError);
+                console.error('Error adding email to history:', saveError);
               }
             }
           }

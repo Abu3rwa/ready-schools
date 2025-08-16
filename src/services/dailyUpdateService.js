@@ -1,5 +1,7 @@
 import { httpsCallable } from "firebase/functions";
 import { functions } from "../firebase";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../firebase";
 
 // Daily Update API functions (callable v2)
 const sendDailyUpdates = httpsCallable(functions, "sendDailyUpdates");
@@ -245,46 +247,8 @@ export class FrontendDailyUpdateService {
       const result = await this.sendDailyUpdatesToAllParents(dataSources, date);
 
       if (result.success) {
-        // Save each daily update email to the frontend
-        const { dailyUpdates = [] } = previewResult.data;
-        const savedEmails = [];
-
-        for (const update of dailyUpdates) {
-          try {
-            // Save each email to the frontend collection
-            const emailData = {
-              studentId: update.studentId,
-              studentName: update.studentName,
-              date: date.toISOString().split('T')[0],
-              subject: `Daily Update - ${update.studentName}`,
-              content: update.emailContent || '',
-              sentStatus: 'Sent',
-              type: 'daily_update',
-              attendance: update.attendance,
-              grades: update.grades,
-              behavior: update.behavior,
-              assignments: update.assignments,
-              metadata: {
-                createdAt: new Date().toISOString(),
-                sentAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                teacherName: contexts.teacher?.name || 'Teacher',
-                schoolName: contexts.schoolName || 'School'
-              }
-            };
-
-            // Add to saved emails array
-            savedEmails.push(emailData);
-          } catch (saveError) {
-            console.error('Error saving email:', saveError);
-          }
-        }
-
-        // Update the result to include saved emails
-        result.data = {
-          ...result.data,
-          savedEmails
-        };
+        // Use the saved emails from the backend function
+        const savedEmails = result.data.savedEmails || [];
 
         if (onProgress) {
           onProgress({
@@ -305,6 +269,17 @@ export class FrontendDailyUpdateService {
       }
       throw error;
     }
+  }
+  // get dailyUpdateEmails history from db
+  async getDailyUpdateHistory (){
+    const collectionRef  = collection(db, 'dailyUpdateEmails')
+    const queryRef = collectionRef;
+    const snapshot = await getDocs(queryRef)
+     return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }))
+
   }
 }
 

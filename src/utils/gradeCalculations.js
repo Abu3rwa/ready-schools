@@ -2,8 +2,8 @@ import dayjs from "dayjs";
 
 // Enhanced Grade Calculation Utilities
 export class GradeCalculator {
-  constructor() {
-    this.gradeScale = {
+  constructor(customGradeScale = null) {
+    this.defaultGradeScale = {
       A: { min: 90, max: 100, gpa: 4.0 },
       "A-": { min: 87, max: 89, gpa: 3.7 },
       "B+": { min: 83, max: 86, gpa: 3.3 },
@@ -17,6 +17,7 @@ export class GradeCalculator {
       "D-": { min: 57, max: 59, gpa: 0.7 },
       F: { min: 0, max: 56, gpa: 0.0 },
     };
+    this.gradeScale = customGradeScale || this.defaultGradeScale;
   }
 
   // Calculate percentage from score and points

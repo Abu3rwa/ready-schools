@@ -28,6 +28,7 @@ import {
 import { FixedSizeList as List } from "react-window";
 import AutoSizer from "react-virtualized-auto-sizer";
 import { gradeCalculator } from "../../utils/gradeCalculations";
+import StandardsGradeCell from "./StandardsGradeCell";
 
 const VirtualizedGradeTable = ({
   students,
@@ -42,6 +43,13 @@ const VirtualizedGradeTable = ({
   filters = {},
   sortBy = "studentName",
   sortOrder = "asc",
+  // Standards grading props
+  showStandardsGrading = false,
+  standardsGradingMode = 'both',
+  getAssignmentStandards = () => [],
+  getStandardsGrade = () => null,
+  onStandardsGradeChange = () => {},
+  standardsGrades = [],
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -78,24 +86,25 @@ const VirtualizedGradeTable = ({
         };
       });
 
-      const totalPoints = assignmentGrades.reduce(
+      const gradedAssignments = assignmentGrades.filter(ag => ag.score !== null);
+      const totalPossiblePointsForGraded = gradedAssignments.reduce(
         (sum, ag) => sum + (ag.points || 0),
         0
       );
-      const earnedPoints = assignmentGrades.reduce(
+      const earnedPointsForGraded = gradedAssignments.reduce(
         (sum, ag) => sum + (ag.score || 0),
         0
       );
-      const average = totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0;
+      const average = totalPossiblePointsForGraded > 0 ? (earnedPointsForGraded / totalPossiblePointsForGraded) * 100 : 0;
 
       return {
         studentId: student.id,
         studentName: `${student.firstName} ${student.lastName}`,
         assignments: assignmentGrades,
-        average: gradeCalculator.calculatePercentage(earnedPoints, totalPoints),
+        average: gradeCalculator.calculatePercentage(earnedPointsForGraded, totalPossiblePointsForGraded),
         letterGrade: gradeCalculator.getLetterGrade(average),
-        totalPoints,
-        earnedPoints,
+        totalPoints: totalPossiblePointsForGraded,
+        earnedPoints: earnedPointsForGraded,
       };
     });
 
@@ -163,26 +172,29 @@ const VirtualizedGradeTable = ({
       if (!studentData) return null;
 
       return (
-        <TableRow 
-          style={style} 
+        <TableRow
+          style={style}
           hover
           sx={{
             backgroundColor: theme.palette.background.paper,
-            '&:hover': {
+            "&:hover": {
               backgroundColor: theme.palette.action.hover,
             },
           }}
         >
           <TableCell
             sx={{
-              minWidth: 150,
+              minWidth: 180,
               fontWeight: 600,
               backgroundColor: theme.palette.grey[50],
               borderRight: `1px solid ${theme.palette.divider}`,
+              position: "sticky",
+              left: 0,
+              zIndex: 2,
             }}
           >
-            <Typography variant="body2" noWrap>
-              {studentData.studentName}
+            <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+              {studentData.studentName || "Unknown Student"}
             </Typography>
           </TableCell>
 
@@ -191,10 +203,14 @@ const VirtualizedGradeTable = ({
               editingCell &&
               editingCell.studentId === studentData.studentId &&
               editingCell.assignmentId === assignment.assignmentId;
+            
+            const assignmentStandards = showStandardsGrading ? getAssignmentStandards(assignment.assignmentId) : [];
 
             return (
+              <React.Fragment key={assignment.assignmentId}>
+                {/* Traditional grade cell */}
+                {(standardsGradingMode === 'traditional' || standardsGradingMode === 'both') && (
               <TableCell
-                key={assignment.assignmentId}
                 align="center"
                 sx={{
                   minWidth: 120,
@@ -292,51 +308,77 @@ const VirtualizedGradeTable = ({
                             }}
                           />
                         </Box>
-                        <Box>
+                          </>
+                        ) : (
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              color: theme.palette.text.secondary,
+                              fontStyle: "italic",
+                            }}
+                          >
+                            No Grade
+                          </Typography>
+                        )}
                           <IconButton
                             size="small"
                             onClick={() =>
-                              handleEditCell(
+                            onGradeEdit(
                                 studentData.studentId,
                                 assignment.assignmentId,
                                 assignment.score
                               )
                             }
+                          sx={{ opacity: 0.7, "&:hover": { opacity: 1 } }}
                           >
                             <EditIcon fontSize="small" />
                           </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() =>
-                              onGradeDelete(
-                                studentData.studentId,
-                                assignment.assignmentId
-                              )
-                            }
-                            color="error"
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
                         </Box>
-                      </>
-                    ) : (
-                      <IconButton
-                        size="small"
-                        onClick={() =>
-                          handleEditCell(
-                            studentData.studentId,
-                            assignment.assignmentId,
-                            null
-                          )
-                        }
-                        color="primary"
-                      >
-                        <AddIcon fontSize="small" />
-                      </IconButton>
                     )}
-                  </Box>
+                  </TableCell>
                 )}
+                
+                {/* Standards grade cells */}
+                {showStandardsGrading && (standardsGradingMode === 'standards' || standardsGradingMode === 'both') && 
+                  assignmentStandards.map((standard) => {
+                    const standardsGrade = getStandardsGrade(
+                      studentData.studentId, 
+                      assignment.assignmentId, 
+                      standard.standardId
+                    );
+                    
+                    return (
+                      <TableCell
+                        key={`${assignment.assignmentId}-${standard.standardId}`}
+                        align="center"
+                        sx={{
+                          minWidth: 100,
+                          position: "relative",
+                          backgroundColor: theme.palette.background.paper,
+                          borderRight: `1px solid ${theme.palette.divider}`,
+                        }}
+                      >
+                        <StandardsGradeCell
+                          studentId={studentData.studentId}
+                          assignmentId={assignment.assignmentId}
+                          standardId={standard.standardId}
+                          currentGrade={standardsGrade}
+                          onGradeChange={(gradeData) => 
+                            onStandardsGradeChange(
+                              studentData.studentId, 
+                              assignment.assignmentId, 
+                              standard.standardId, 
+                              gradeData
+                            )
+                          }
+                          proficiencyScale="four_point"
+                          compact={true}
+                        />
               </TableCell>
+                    );
+                  })
+                }
+              </React.Fragment>
             );
           })}
 
@@ -391,20 +433,35 @@ const VirtualizedGradeTable = ({
       handleSaveGrade,
       handleCancelEdit,
       onGradeDelete,
+      showStandardsGrading,
+      standardsGradingMode,
+      getAssignmentStandards,
+      getStandardsGrade,
+      onStandardsGradeChange,
     ]
   );
 
   // Header row
   const HeaderRow = useMemo(
     () => (
-      <TableRow sx={{ backgroundColor: theme.palette.primary.main }}>
+      <TableRow
+        sx={{
+          backgroundColor: theme.palette.primary.main,
+          "& .MuiTableCell-root": {
+            color: theme.palette.primary.contrastText,
+            backgroundColor: theme.palette.primary.main,
+          },
+        }}
+      >
         <TableCell
           sx={{
-            minWidth: 150,
-            color: "white",
-            fontWeight: 600,
+            minWidth: 180,
+            fontWeight: 700,
             cursor: "pointer",
             "&:hover": { backgroundColor: theme.palette.primary.dark },
+            position: "sticky",
+            left: 0,
+            zIndex: 3,
           }}
           onClick={() => handleSort("studentName")}
         >
@@ -414,13 +471,17 @@ const VirtualizedGradeTable = ({
           </Box>
         </TableCell>
 
-        {assignments.map((assignment) => (
+        {assignments.map((assignment) => {
+          const assignmentStandards = showStandardsGrading ? getAssignmentStandards(assignment.id) : [];
+          
+          return (
+            <React.Fragment key={assignment.id}>
+              {/* Traditional grade column */}
+              {(standardsGradingMode === 'traditional' || standardsGradingMode === 'both') && (
           <TableCell
-            key={assignment.id}
             align="center"
             sx={{
               minWidth: 120,
-              color: "white",
               fontWeight: 600,
             }}
           >
@@ -437,13 +498,40 @@ const VirtualizedGradeTable = ({
               </Box>
             </Tooltip>
           </TableCell>
-        ))}
+              )}
+              
+              {/* Standards columns */}
+              {showStandardsGrading && (standardsGradingMode === 'standards' || standardsGradingMode === 'both') && 
+                assignmentStandards.map((standard) => (
+                  <TableCell
+                    key={`${assignment.id}-${standard.standardId}`}
+                    align="center"
+                    sx={{
+                      minWidth: 100,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <Tooltip title={standard.standardDescription}>
+                      <Box>
+                        <Typography variant="body2" noWrap sx={{ fontWeight: 600 }}>
+                          {standard.standardCode}
+                        </Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                          {assignment.name}
+                        </Typography>
+                      </Box>
+                    </Tooltip>
+                  </TableCell>
+                ))
+              }
+            </React.Fragment>
+          );
+        })}
 
         <TableCell
           align="center"
           sx={{
             minWidth: 100,
-            color: "white",
             fontWeight: 600,
             cursor: "pointer",
             "&:hover": { backgroundColor: theme.palette.primary.dark },
@@ -457,7 +545,7 @@ const VirtualizedGradeTable = ({
         </TableCell>
       </TableRow>
     ),
-    [assignments, theme, handleSort]
+    [assignments, theme, handleSort, showStandardsGrading, standardsGradingMode, getAssignmentStandards]
   );
 
   if (loading) {
@@ -490,9 +578,9 @@ const VirtualizedGradeTable = ({
 
   return (
     <Box sx={{ height: "70vh", width: "100%" }}>
-      <TableContainer 
-        component={Paper} 
-        sx={{ 
+      <TableContainer
+        component={Paper}
+        sx={{
           height: "100%",
           backgroundColor: theme.palette.background.paper,
           border: `1px solid ${theme.palette.divider}`,

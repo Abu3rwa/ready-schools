@@ -1,71 +1,73 @@
 import nodemailer from "nodemailer";
 import getEmailConfig from "../config/email.js";
+import gmailApiService from "./gmailApiService.js";
+import { getFirestore } from "firebase-admin/firestore";
 
 class EmailService {
   constructor() {
-    // Initialize with null transporter - will be set up lazily
+    this.initialized = false;
     this.transporter = null;
     this.dailyCount = 0;
-    this.lastReset = new Date().toDateString();
-    this.initialized = false;
-
-    // Defer all initialization until an actual function is called
-    // This prevents initialization during module loading
+    this.lastReset = new Date();
+    this.db = getFirestore();
   }
 
   async initialize() {
     if (this.initialized) return;
 
     try {
-      // Only get the config when actually needed
-      const emailConfig = getEmailConfig();
-      console.log("Email config:", JSON.stringify(emailConfig, null, 2));
-      
-      this.transporter = nodemailer.createTransport(emailConfig);
-      
-      // Verify connection configuration
+      const config = getEmailConfig();
+      this.transporter = nodemailer.createTransport(config.smtp);
       await this.transporter.verify();
-      console.log("Email service initialized and verified successfully");
+      this.initialized = true;
     } catch (error) {
-      console.error("Failed to create email transporter:", error);
-      console.error("Error details:", {
-        code: error.code,
-        response: error.response,
-        command: error.command,
-        stack: error.stack
-      });
-      // Don't throw an error here, just mark as not initialized
-      // This allows the service to attempt reinitialization later
-      this.initialized = false;
-      throw new Error(`Email service initialization failed: ${error.message}`);
-    }
-
-    this.initialized = true;
-  }
-
-  async verifyConnection() {
-    try {
-      if (!this.initialized) {
-        await this.initialize();
-      }
-      await this.transporter.verify();
-      return true;
-    } catch (error) {
-      console.error("Email service verification failed:", error);
-      return false;
+      console.error("Failed to initialize email service:", error);
+      throw error;
     }
   }
 
   resetDailyCountIfNeeded() {
-    const today = new Date().toDateString();
-    if (this.lastReset !== today) {
+    const today = new Date();
+    if (
+      today.getDate() !== this.lastReset.getDate() ||
+      today.getMonth() !== this.lastReset.getMonth() ||
+      today.getFullYear() !== this.lastReset.getFullYear()
+    ) {
       this.dailyCount = 0;
       this.lastReset = today;
     }
   }
 
-  async sendEmail(options) {
+  async getUserEmailConfig(userId) {
     try {
+      const userDoc = await this.db.collection("users").doc(userId).get();
+      if (!userDoc.exists) return null;
+
+      const userData = userDoc.data();
+      return {
+        useGmailApi: userData.gmail_configured === true,
+        emailConfigured: true,
+      };
+    } catch (error) {
+      console.error("Error getting user email config:", error);
+      return null;
+    }
+  }
+
+  async sendEmail(options, userId = null) {
+    try {
+      // Prioritize OAuth 2 (Gmail API) when available
+      if (userId) {
+        const userConfig = await this.getUserEmailConfig(userId);
+        if (userConfig?.useGmailApi) {
+          console.log("Using Gmail API for sending email");
+          return await gmailApiService.sendEmail(userId, options);
+        }
+      }
+
+      // Check if OAuth 2 is available globally (for cases without userId)
+      // This would require a different approach to determine if Gmail API should be used
+      // For now, we'll fall back to SMTP as before
       if (!this.initialized) {
         console.log("Initializing email service...");
         await this.initialize();
@@ -82,15 +84,15 @@ class EmailService {
         to: options.to,
         subject: options.subject,
         hasHtml: !!options.html,
-        hasText: !!options.text
+        hasText: !!options.text,
       });
 
       const result = await this.transporter.sendMail(options);
       console.log("Email sent successfully:", {
         messageId: result.messageId,
-        response: result.response
+        response: result.response,
       });
-      
+
       this.dailyCount++;
       return result;
     } catch (error) {
@@ -99,94 +101,82 @@ class EmailService {
         command: error.command,
         response: error.response,
         responseCode: error.responseCode,
-        message: error.message
+        message: error.message,
       });
       throw error;
     }
   }
 
-  async sendBatchEmails(emailBatch, { onProgress, maxRetries = 3 } = {}) {
+  async sendBatchEmails(
+    emailBatch,
+    userId = null,
+    { onProgress, maxRetries = 3 } = {}
+  ) {
+    // If userId is provided and they use Gmail API, use that
+    if (userId) {
+      const userConfig = await this.getUserEmailConfig(userId);
+      if (userConfig?.useGmailApi) {
+        console.log("Using Gmail API for batch emails");
+        return await gmailApiService.sendBatchEmails(userId, emailBatch, {
+          onProgress,
+        });
+      }
+    }
+
+    // Fall back to SMTP
     const results = {
       successful: [],
       failed: [],
-      totalAttempted: 0,
     };
 
-    for (const email of emailBatch) {
-      let attempts = 0;
+    for (const [index, email] of emailBatch.entries()) {
+      let retries = 0;
       let success = false;
 
-      while (attempts < maxRetries && !success) {
+      while (retries < maxRetries && !success) {
         try {
           const result = await this.sendEmail(email);
-          results.successful.push({
-            recipient: email.to,
-            messageId: result.messageId,
-            timestamp: new Date(),
-          });
+          results.successful.push({ email, result });
           success = true;
-        } catch (error) {
-          attempts++;
-          if (attempts === maxRetries) {
-            results.failed.push({
-              recipient: email.to,
-              error: error.message,
-              attempts,
-              timestamp: new Date(),
+
+          if (onProgress) {
+            onProgress({
+              completed: index + 1,
+              total: emailBatch.length,
+              success: true,
+              email,
             });
           }
-          // Exponential backoff
-          await new Promise((resolve) =>
-            setTimeout(resolve, Math.pow(2, attempts) * 1000)
+        } catch (error) {
+          retries++;
+          console.error(
+            `Failed to send email (attempt ${retries}/${maxRetries}):`,
+            error
           );
+
+          if (retries === maxRetries) {
+            results.failed.push({ email, error: error.message });
+            if (onProgress) {
+              onProgress({
+                completed: index + 1,
+                total: emailBatch.length,
+                success: false,
+                email,
+                error,
+              });
+            }
+          } else {
+            // Wait before retrying (exponential backoff)
+            await new Promise((resolve) =>
+              setTimeout(resolve, Math.pow(2, retries) * 1000)
+            );
+          }
         }
       }
-
-      results.totalAttempted++;
-      if (onProgress) {
-        onProgress({
-          total: emailBatch.length,
-          current: results.totalAttempted,
-          successful: results.successful.length,
-          failed: results.failed.length,
-        });
-      }
-
-      // Delay between emails to respect rate limits
-      await new Promise((resolve) => setTimeout(resolve, 200));
     }
 
     return results;
   }
-
-  validateEmailOptions(options) {
-    const errors = [];
-
-    if (!options.to) errors.push("Recipient (to) is required");
-    if (!options.subject) errors.push("Subject is required");
-    if (!options.html && !options.text)
-      errors.push("Email content (html or text) is required");
-
-    if (options.attachments) {
-      const totalSize = options.attachments.reduce(
-        (sum, att) => sum + (att.content?.length || 0),
-        0
-      );
-      if (totalSize > 10 * 1024 * 1024) {
-        // 10MB limit
-        errors.push("Total attachments size exceeds 10MB limit");
-      }
-    }
-
-    if (errors.length > 0) {
-      throw new Error(`Email validation failed: ${errors.join(", ")}`);
-    }
-
-    return true;
-  }
 }
 
-// Singleton instance
-const emailService = new EmailService();
-
-export default emailService;
+export default new EmailService();

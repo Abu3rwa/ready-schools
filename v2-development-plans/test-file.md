@@ -1,1 +1,0 @@
-This is a test file to confirm directory creation capabilities.

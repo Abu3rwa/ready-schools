@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import {
   Drawer,
   List,
@@ -22,6 +23,7 @@ import {
   Assessment as AssessmentIcon,
   Settings as SettingsIcon,
   School as SchoolIcon,
+  AdminPanelSettings as AdminIcon,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -29,64 +31,71 @@ const drawerWidth = 240;
 
 // Define unique colors for each menu item
 const menuItems = [
-  { text: "Dashboard", icon: <DashboardIcon />, path: "/", color: "#3498DB" }, // Modern Blue
+  { text: "navigation.dashboard", icon: <DashboardIcon />, path: "/", color: "#3498DB" },
   {
-    text: "Students",
+    text: "navigation.students",
     icon: <PeopleIcon />,
     path: "/students",
     color: "#2ECC71",
-  }, // Emerald Green
+  },
   {
-    text: "Grade Book",
-    icon: <MenuBookIcon />,
-    path: "/gradebook",
+    text: "navigation.gradebooks",
+    icon: <AssessmentIcon />,
+    path: "/gradebooks",
     color: "#F39C12",
-  }, // Orange
+  },
   {
-    text: "Assignments",
+    text: "navigation.assignments",
     icon: <AssignmentIcon />,
     path: "/assignments",
     color: "#E74C3C",
-  }, // Red
+  },
   {
-    text: "Attendance",
+    text: "navigation.attendance",
     icon: <EventNoteIcon />,
     path: "/attendance",
     color: "#9B59B6",
-  }, // Purple
+  },
   {
-    text: "Behavior",
+    text: "navigation.behavior",
     icon: <PsychologyIcon />,
     path: "/behavior",
     color: "#1ABC9C",
-  }, // Turquoise
+  },
   {
-    text: "Communication",
+    text: "navigation.communication",
     icon: <EmailIcon />,
     path: "/communication",
     color: "#E67E22",
-  }, // Carrot Orange
+  },
   {
-    text: "Reports",
+    text: "navigation.reports",
     icon: <AssessmentIcon />,
     path: "/reports",
     color: "#34495E",
-  }, // Wet Asphalt
+  },
   {
-    text: "Standards",
+    text: "navigation.standards",
     icon: <SchoolIcon />,
     path: "/standards",
-    color: "#8E44AD",
-  }, // Purple
+    color: "#B266FF",
+  },
   {
-    text: "Settings",
+    text: "navigation.settings",
     icon: <SettingsIcon />,
     path: "/settings",
     color: "#95A5A6",
-  }, // Concrete
+  },
+  {
+    text: "navigation.adminUsers",
+    icon: <AdminIcon />,
+    path: "/admin/users",
+    color: "#2C3E50",
+  },
 ];
 
 const Sidebar = ({ open, variant = "permanent", onClose }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -222,7 +231,7 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText
-                  primary={item.text}
+                  primary={t(item.text)}
                   primaryTypographyProps={{
                     fontWeight: active ? 600 : 500,
                     letterSpacing: "0.5px",

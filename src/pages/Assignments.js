@@ -31,7 +31,30 @@ import {
   Snackbar,
   Tooltip,
   FormHelperText,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Badge,
+  LinearProgress,
 } from "@mui/material";
+import { useAssignments } from "../contexts/AssignmentContext";
+import { useGrades } from "../contexts/GradeContext";
+import { useStudents } from "../contexts/StudentContext";
+import { useGradeBooks } from "../contexts/GradeBookContext";
+import { useNavigate } from "react-router-dom";
+import Loading from "../components/common/Loading";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
+import EnhancedAssignmentCard from "../components/assignments/EnhancedAssignmentCard";
+import EnhancedAssignmentForm from "../components/assignments/EnhancedAssignmentForm";
+import AssignmentTemplates from "../components/assignments/AssignmentTemplates";
+import CategoryManager from "../components/assignments/CategoryManager";
+import dayjs from "dayjs";
+import { getSubjects as getManagedSubjects } from "../services/subjectsService";
+import { getStandards, getStandardsMappings } from "../services/standardsService";
 import {
   Add as AddIcon,
   Search as SearchIcon,
@@ -43,19 +66,15 @@ import {
   FilterList as FilterIcon,
   CalendarMonth as CalendarIcon,
   ViewList as ListView,
+  Grade as GradeIcon,
+  Visibility as VisibilityIcon,
+  Assessment as AssessmentIcon,
+  School as SchoolIcon,
+  TrendingUp as TrendingUpIcon,
 } from "@mui/icons-material";
-import { useAssignments } from "../contexts/AssignmentContext";
-import { useGrades } from "../contexts/GradeContext";
-import Loading from "../components/common/Loading";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
-import EnhancedAssignmentCard from "../components/assignments/EnhancedAssignmentCard";
-import AssignmentTemplates from "../components/assignments/AssignmentTemplates";
-import dayjs from "dayjs";
-import { getSubjects as getManagedSubjects } from "../services/subjectsService";
-import { getStandards, getStandardsMappings } from "../services/standardsService";
 
 const Assignments = () => {
+  const navigate = useNavigate();
   const {
     assignments,
     loading,
@@ -68,7 +87,9 @@ const Assignments = () => {
     createFromTemplate,
     saveAsTemplate,
   } = useAssignments();
-  const { deleteGradesByAssignment } = useGrades();
+  const { grades, deleteGradesByAssignment } = useGrades();
+  const { students } = useStudents();
+  const { currentGradeBook } = useGradeBooks();
 
   // State for UI
   const [searchTerm, setSearchTerm] = useState("");
@@ -111,14 +132,6 @@ const Assignments = () => {
     })();
   }, []);
 
-  const [assignmentForm, setAssignmentForm] = useState({
-    subject: "",
-    name: "",
-    category: "",
-    points: "",
-    dueDate: dayjs().add(7, "day"),
-    description: "",
-  });
   const [viewMode, setViewMode] = useState("list"); // "list" or "calendar"
   const [tabValue, setTabValue] = useState(0);
   const [snackbar, setSnackbar] = useState({
@@ -127,6 +140,7 @@ const Assignments = () => {
     severity: "success",
   });
   const [openTemplatesDialog, setOpenTemplatesDialog] = useState(false);
+  const [openCategoryManager, setOpenCategoryManager] = useState(false);
 
   // Handle search input change
   const handleSearchChange = (event) => {
@@ -162,42 +176,30 @@ const Assignments = () => {
     Boolean
   );
 
-  // Get all available categories from the enhanced context
-  const getAllCategories = () => {
-    const allCategories = [];
-    Object.values(assignmentCategories).forEach((subcategories) => {
-      allCategories.push(...subcategories);
-    });
-    return allCategories;
-  };
-
-  // Handle form input changes
-  const handleFormChange = (event) => {
-    const { name, value } = event.target;
-    setAssignmentForm({
-      ...assignmentForm,
-      [name]: value,
-    });
-  };
-
-  // Handle date change
-  const handleDateChange = (newDate) => {
-    setAssignmentForm({
-      ...assignmentForm,
-      dueDate: newDate,
-    });
-  };
+  // Calculate assignment statistics
+  const assignmentStats = useMemo(() => {
+    if (!assignments || !grades || !students) return {};
+    
+    return assignments.reduce((acc, assignment) => {
+      const assignmentGrades = grades.filter(g => g.assignmentId === assignment.id);
+      const completionRate = students.length > 0 ? (assignmentGrades.length / students.length) * 100 : 0;
+      const averageGrade = assignmentGrades.length > 0 
+        ? assignmentGrades.reduce((sum, g) => sum + g.score, 0) / assignmentGrades.length 
+        : 0;
+      
+      acc[assignment.id] = {
+        completionRate,
+        averageGrade,
+        gradedCount: assignmentGrades.length,
+        totalStudents: students.length,
+        needsGrading: students.length - assignmentGrades.length
+      };
+      return acc;
+    }, {});
+  }, [assignments, grades, students]);
 
   // Open add assignment dialog
   const handleOpenAddDialog = () => {
-    setAssignmentForm({
-      subject: subjectsOptions[0]?.value || "",
-      name: "",
-      category: "",
-      points: "",
-      dueDate: dayjs().add(7, "day"),
-      description: "",
-    });
     setOpenAddDialog(true);
   };
 
@@ -206,73 +208,15 @@ const Assignments = () => {
     setOpenAddDialog(false);
   };
 
-  // Submit add assignment form
-  const handleAddAssignment = async () => {
-    try {
-      const newAssignment = {
-        ...assignmentForm,
-        points: parseInt(assignmentForm.points, 10),
-        dueDate: assignmentForm.dueDate.format("YYYY-MM-DD"),
-      };
-
-      await addAssignment(newAssignment);
-      setOpenAddDialog(false);
-      setSnackbar({
-        open: true,
-        message: "Assignment added successfully",
-        severity: "success",
-      });
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: `Error adding assignment: ${error.message}`,
-        severity: "error",
-      });
-    }
-  };
-
   // Open edit assignment dialog
   const handleOpenEditDialog = (assignment) => {
     setSelectedAssignment(assignment);
-    setAssignmentForm({
-      subject: assignment.subject,
-      name: assignment.name,
-      category: assignment.category,
-      points: assignment.points.toString(),
-      dueDate: dayjs(assignment.dueDate),
-      description: assignment.description,
-    });
     setOpenEditDialog(true);
   };
 
   // Close edit assignment dialog
   const handleCloseEditDialog = () => {
     setOpenEditDialog(false);
-  };
-
-  // Submit edit assignment form
-  const handleEditAssignment = async () => {
-    try {
-      const updatedAssignment = {
-        ...assignmentForm,
-        points: parseInt(assignmentForm.points, 10),
-        dueDate: assignmentForm.dueDate.format("YYYY-MM-DD"),
-      };
-
-      await updateAssignment(selectedAssignment.id, updatedAssignment);
-      setOpenEditDialog(false);
-      setSnackbar({
-        open: true,
-        message: "Assignment updated successfully",
-        severity: "success",
-      });
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: `Error updating assignment: ${error.message}`,
-        severity: "error",
-      });
-    }
   };
 
   // Open delete assignment dialog
@@ -307,6 +251,22 @@ const Assignments = () => {
         severity: "error",
       });
     }
+  };
+
+  // Navigate to gradebook for grading
+  const handleNavigateToGradebook = (assignment) => {
+    // Find the gradebook for this subject
+    const subject = assignment.subject;
+    if (subject) {
+      navigate(`/gradebooks?subject=${encodeURIComponent(subject)}&assignment=${assignment.id}`);
+    } else {
+      navigate('/gradebooks');
+    }
+  };
+
+  // Navigate to gradebook overview
+  const handleNavigateToGradebookOverview = () => {
+    navigate('/gradebooks');
   };
 
   // Toggle view mode
@@ -389,6 +349,24 @@ const Assignments = () => {
     return "success";
   };
 
+  // Get assignment status
+  const getAssignmentStatus = (assignment) => {
+    const stats = assignmentStats[assignment.id];
+    if (!stats) return { status: 'Unknown', color: 'default' };
+    
+    if (stats.needsGrading > 0) {
+      if (isPastDue(assignment.dueDate)) {
+        return { status: 'Overdue', color: 'error' };
+      } else if (stats.completionRate < 50) {
+        return { status: 'Needs Grading', color: 'warning' };
+      } else {
+        return { status: 'In Progress', color: 'info' };
+      }
+    } else {
+      return { status: 'Completed', color: 'success' };
+    }
+  };
+
   // Group assignments by month and day for calendar view
   const groupAssignmentsByDate = () => {
     const grouped = {};
@@ -455,6 +433,59 @@ const Assignments = () => {
           Assignment Management
         </Typography>
 
+        {/* Quick Stats and Navigation */}
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={8}>
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                <Chip 
+                  label={`${assignments.length} Assignments`} 
+                  color="primary" 
+                  variant="outlined" 
+                  icon={<AssignmentIcon />}
+                />
+                <Chip 
+                  label={`${students.length} Students`} 
+                  color="secondary" 
+                  variant="outlined" 
+                  icon={<SchoolIcon />}
+                />
+                <Chip 
+                  label={`${categories.length} Categories`} 
+                  color="info" 
+                  variant="outlined" 
+                  icon={<CategoryIcon />}
+                />
+                <Chip 
+                  label={`${grades.length} Grades`} 
+                  color="success" 
+                  variant="outlined" 
+                  icon={<GradeIcon />}
+                />
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<AssessmentIcon />}
+                  onClick={handleNavigateToGradebookOverview}
+                >
+                  View Gradebook
+                </Button>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={handleOpenAddDialog}
+                >
+                  Add Assignment
+                </Button>
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
+
         {/* Tabs */}
         <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
           <Tabs
@@ -513,7 +544,16 @@ const Assignments = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} sm={3}>
+            <Grid item xs={12} sm={1}>
+              <Button
+                variant="outlined"
+                onClick={() => setOpenCategoryManager(true)}
+                fullWidth
+              >
+                Manage
+              </Button>
+            </Grid>
+            <Grid item xs={12} sm={2}>
               <Box sx={{ display: "flex", justifyContent: "center" }}>
                 <Tabs
                   value={viewMode}
@@ -537,17 +577,6 @@ const Assignments = () => {
             </Grid>
             <Grid item xs={12} sm={1}>
               <Button
-                variant="contained"
-                color="primary"
-                startIcon={<AddIcon />}
-                onClick={handleOpenAddDialog}
-                fullWidth
-              >
-                Add
-              </Button>
-            </Grid>
-            <Grid item xs={12} sm={1}>
-              <Button
                 variant="outlined"
                 color="secondary"
                 startIcon={<AssignmentIcon />}
@@ -562,37 +591,17 @@ const Assignments = () => {
 
         {/* List View */}
         {viewMode === "list" && (
-          <Grid container spacing={3}>
-            {filteredAssignments.length > 0 ? (
-              filteredAssignments.map((assignment) => (
-                <Grid item xs={12} sm={6} md={4} key={assignment.id}>
-                  <EnhancedAssignmentCard
-                    assignment={assignment}
-                    onEdit={handleOpenEditDialog}
-                    onDelete={handleOpenDeleteDialog}
-                    showActions={true}
-                  />
-                </Grid>
-              ))
-            ) : (
-              <Grid item xs={12}>
-                <Box
-                  sx={{
-                    textAlign: "center",
-                    py: 4,
-                    color: "text.secondary",
-                  }}
-                >
-                  <Typography variant="h6" gutterBottom>
-                    No assignments found
-                  </Typography>
-                  <Typography variant="body2">
-                    Create your first assignment or adjust your filters.
-                  </Typography>
-                </Box>
-              </Grid>
-            )}
-          </Grid>
+          <AssignmentsTab
+            assignments={filteredAssignments}
+            students={students}
+            grades={grades}
+            assignmentStats={assignmentStats}
+            onCreateAssignment={handleOpenAddDialog}
+            onEditAssignment={handleOpenEditDialog}
+            onDeleteAssignment={handleOpenDeleteDialog}
+            onNavigateToGradebook={handleNavigateToGradebook}
+            getAssignmentStatus={getAssignmentStatus}
+          />
         )}
 
         {/* Calendar View */}
@@ -644,7 +653,7 @@ const Assignments = () => {
                                   month.getMonth() + 1
                                 ).padStart(2, "0")}-${String(day).padStart(
                                   2,
-                                  "0"
+                                  0
                                 )}`
                               )
                                 ? "rgba(255, 0, 0, 0.05)"
@@ -687,233 +696,21 @@ const Assignments = () => {
         )}
 
         {/* Add Assignment Dialog */}
-        <Dialog
+        <EnhancedAssignmentForm
           open={openAddDialog}
           onClose={handleCloseAddDialog}
-          maxWidth="sm"
-          fullWidth
-        >
-          <DialogTitle>Add New Assignment</DialogTitle>
-          <DialogContent>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-                <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Subject</InputLabel>
-                  <Select
-                    name="subject"
-                    value={assignmentForm.subject}
-                    onChange={handleFormChange}
-                    label="Subject"
-                  >
-                    {subjectsOptions.map((s) => (
-                      <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormHelperText sx={{ mt: -1, mb: 1 }}>
-                    {assignmentForm.subject && standardsBySubject[assignmentForm.subject]
-                      ? `${standardsBySubject[assignmentForm.subject].length} standards available for this subject`
-                      : "No standards found for this subject yet"}
-                  </FormHelperText>
-                </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Category</InputLabel>
-                  <Select
-                    name="category"
-                    value={assignmentForm.category}
-                    onChange={handleFormChange}
-                    label="Category"
-                  >
-                    {getAllCategories().map((category) => (
-                      <MenuItem key={category} value={category}>
-                        {category}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  name="name"
-                  label="Assignment Name"
-                  value={assignmentForm.name}
-                  onChange={handleFormChange}
-                  fullWidth
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  name="points"
-                  label="Points"
-                  type="number"
-                  value={assignmentForm.points}
-                  onChange={handleFormChange}
-                  fullWidth
-                  required
-                  inputProps={{ min: 1 }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <DatePicker
-                  label="Due Date"
-                  value={assignmentForm.dueDate}
-                  onChange={handleDateChange}
-                  renderInput={(params) => (
-                    <TextField {...params} fullWidth required />
-                  )}
-                  slotProps={{
-                    textField: {
-                      fullWidth: true,
-                      required: true,
-                    },
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  name="description"
-                  label="Description"
-                  value={assignmentForm.description}
-                  onChange={handleFormChange}
-                  fullWidth
-                  multiline
-                  rows={3}
-                />
-              </Grid>
-            </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseAddDialog}>Cancel</Button>
-            <Button
-              onClick={handleAddAssignment}
-              variant="contained"
-              color="primary"
-              disabled={
-                !assignmentForm.name ||
-                !assignmentForm.category ||
-                !assignmentForm.points ||
-                !assignmentForm.dueDate
-              }
-            >
-              Add Assignment
-            </Button>
-          </DialogActions>
-        </Dialog>
+          onSave={addAssignment}
+          isEdit={false}
+        />
 
         {/* Edit Assignment Dialog */}
-        <Dialog
+        <EnhancedAssignmentForm
           open={openEditDialog}
           onClose={handleCloseEditDialog}
-          maxWidth="sm"
-          fullWidth
-        >
-          <DialogTitle>Edit Assignment</DialogTitle>
-          <DialogContent>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Subject</InputLabel>
-                  <Select
-                    name="subject"
-                    value={assignmentForm.subject}
-                    onChange={handleFormChange}
-                    label="Subject"
-                  >
-                    {subjectsOptions.map((s) => (
-                      <MenuItem key={s.value} value={s.value}>{s.label}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Category</InputLabel>
-                  <Select
-                    name="category"
-                    value={assignmentForm.category}
-                    onChange={handleFormChange}
-                    label="Category"
-                  >
-                    {getAllCategories().map((category) => (
-                      <MenuItem key={category} value={category}>
-                        {category}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  name="name"
-                  label="Assignment Name"
-                  value={assignmentForm.name}
-                  onChange={handleFormChange}
-                  fullWidth
-                  required
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  name="points"
-                  label="Points"
-                  type="number"
-                  value={assignmentForm.points}
-                  onChange={handleFormChange}
-                  fullWidth
-                  required
-                  inputProps={{ min: 1 }}
-                />
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <DatePicker
-                  label="Due Date"
-                  value={assignmentForm.dueDate}
-                  onChange={handleDateChange}
-                  renderInput={(params) => (
-                    <TextField {...params} fullWidth required />
-                  )}
-                  slotProps={{
-                    textField: {
-                      fullWidth: true,
-                      required: true,
-                    },
-                  }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  name="description"
-                  label="Description"
-                  value={assignmentForm.description}
-                  onChange={handleFormChange}
-                  fullWidth
-                  multiline
-                  rows={3}
-                />
-              </Grid>
-            </Grid>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseEditDialog}>Cancel</Button>
-            <Button
-              onClick={handleEditAssignment}
-              variant="contained"
-              color="primary"
-              disabled={
-                !assignmentForm.name ||
-                !assignmentForm.category ||
-                !assignmentForm.points ||
-                !assignmentForm.dueDate
-              }
-            >
-              Save Changes
-            </Button>
-          </DialogActions>
-        </Dialog>
+          assignment={selectedAssignment}
+          onSave={(data) => updateAssignment(selectedAssignment.id, data)}
+          isEdit={true}
+        />
 
         {/* Delete Assignment Dialog */}
         <Dialog open={openDeleteDialog} onClose={handleCloseDeleteDialog}>
@@ -950,6 +747,12 @@ const Assignments = () => {
           categories={assignmentCategories}
         />
 
+        {/* Category Manager Dialog */}
+        <CategoryManager
+          open={openCategoryManager}
+          onClose={() => setOpenCategoryManager(false)}
+        />
+
         {/* Snackbar for notifications */}
         <Snackbar
           open={snackbar.open}
@@ -967,6 +770,181 @@ const Assignments = () => {
         </Snackbar>
       </Box>
     </LocalizationProvider>
+  );
+};
+
+// Enhanced Assignments Tab Component with better GradeBook integration
+const AssignmentsTab = ({
+  assignments,
+  students,
+  grades,
+  assignmentStats,
+  onCreateAssignment,
+  onEditAssignment,
+  onDeleteAssignment,
+  onNavigateToGradebook,
+  getAssignmentStatus
+}) => {
+  // Check if date is past due (moved here to fix scope issue)
+  const isPastDue = (dateString) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(dateString);
+    return dueDate < today;
+  };
+
+  return (
+    <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h6">
+          Assignments ({assignments.length})
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={onCreateAssignment}
+        >
+          Create Assignment
+        </Button>
+      </Box>
+
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Name</TableCell>
+              <TableCell>Subject</TableCell>
+              <TableCell>Category</TableCell>
+              <TableCell>Due Date</TableCell>
+              <TableCell>Points</TableCell>
+              <TableCell>Grading Progress</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Actions</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {assignments.map((assignment) => {
+              const stats = assignmentStats[assignment.id];
+              const status = getAssignmentStatus(assignment);
+
+              return (
+                <TableRow key={assignment.id}>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight="medium">
+                      {assignment.name}
+                    </Typography>
+                    {assignment.description && (
+                      <Typography variant="caption" color="text.secondary">
+                        {assignment.description.substring(0, 50)}...
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={assignment.subject} 
+                      size="small"
+                      variant="outlined"
+                      color="primary"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip 
+                      label={assignment.category} 
+                      size="small" 
+                      variant="outlined"
+                      color="secondary"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Box>
+                    <Typography variant="body2">
+                        {new Date(assignment.dueDate).toLocaleDateString()}
+                    </Typography>
+                      <Chip
+                        label={isPastDue(assignment.dueDate) ? 'Overdue' : 'On Time'}
+                        size="small"
+                        color={isPastDue(assignment.dueDate) ? 'error' : 'success'}
+                        variant="outlined"
+                      />
+                    </Box>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" fontWeight="medium">
+                      {assignment.points} pts
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    {stats && (
+                      <Box sx={{ minWidth: 120 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                          <Typography variant="caption">
+                            {stats.gradedCount}/{stats.totalStudents}
+                          </Typography>
+                          <Typography variant="caption">
+                            {stats.completionRate.toFixed(0)}%
+                          </Typography>
+                        </Box>
+                        <LinearProgress 
+                          variant="determinate" 
+                          value={stats.completionRate} 
+                          color={stats.completionRate === 100 ? 'success' : 'primary'}
+                          sx={{ height: 8, borderRadius: 4 }}
+                        />
+                        {stats.averageGrade > 0 && (
+                          <Typography variant="caption" color="text.secondary">
+                            Avg: {stats.averageGrade.toFixed(1)}%
+                          </Typography>
+                        )}
+                      </Box>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={status.status}
+                      color={status.color}
+                      size="small"
+                      variant="filled"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      <Tooltip title="View Details">
+                        <IconButton size="small">
+                          <VisibilityIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Edit Assignment">
+                        <IconButton size="small" onClick={() => onEditAssignment(assignment)}>
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Grade in Gradebook">
+                        <IconButton
+                          size="small"
+                          color="primary"
+                          onClick={() => onNavigateToGradebook(assignment)}
+                        >
+                          <GradeIcon />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete Assignment">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => onDeleteAssignment(assignment)}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Box>
   );
 };
 

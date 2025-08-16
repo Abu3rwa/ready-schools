@@ -39,28 +39,36 @@ export const GradeProvider = ({ children }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
+        console.log("User authenticated:", user.uid);
         setLoading(true);
         const gradesQuery = query(
-          collection(db, "grades"),
-          where("userId", "==", user.uid)
+          collection(db, "grades") // Removed userId filter temporarily
         );
+        console.log("Fetching grades...");
         const unsubscribeGrades = onSnapshot(
           gradesQuery,
           (snapshot) => {
+            console.log(
+              "Grades snapshot received:",
+              snapshot.size,
+              "documents"
+            );
             const gradesData = snapshot.docs.map((doc) => {
               const data = doc.data();
+              console.log("Grade document:", doc.id, data);
               const { id, ...rest } = data;
               return { id: doc.id, ...rest };
             });
+            console.log("Processed grades data:", gradesData);
             setGrades(gradesData);
             setLoading(false);
           },
           (err) => {
-            console.log('Firebase error, loading sample data:', err.message);
+            console.log("Firebase error, loading sample data:", err.message);
             // If Firebase fails, load sample data
             const allSampleGrades = [
               ...sampleData.englishGrades,
-              ...sampleData.socialStudiesGrades
+              ...sampleData.socialStudiesGrades,
             ];
             setGrades(allSampleGrades);
             setLoading(false);
@@ -71,7 +79,7 @@ export const GradeProvider = ({ children }) => {
         // No user logged in, load sample data for development
         const allSampleGrades = [
           ...sampleData.englishGrades,
-          ...sampleData.socialStudiesGrades
+          ...sampleData.socialStudiesGrades,
         ];
         setGrades(allSampleGrades);
         setLoading(false);
@@ -83,17 +91,69 @@ export const GradeProvider = ({ children }) => {
 
   // Function to add a new grade
   const addGrade = async (grade) => {
-    return await createGrade(grade);
+    try {
+      const result = await createGrade(grade);
+      // Update local state if API call succeeds
+      setGrades((prevGrades) => [...prevGrades, result.grade]);
+      return result;
+    } catch (error) {
+      // If using sample data, update only the local state
+      if (error.message.includes("User not authenticated")) {
+        const newGrade = {
+          ...grade,
+          id: Math.random().toString(36).substr(2, 9),
+        };
+        setGrades((prevGrades) => [...prevGrades, newGrade]);
+        return { success: true, grade: newGrade };
+      }
+      throw error;
+    }
   };
 
   // Function to update a grade
   const updateGrade = async (gradeId, updatedData) => {
-    return await updateGradeAPI(gradeId, updatedData);
+    try {
+      const result = await updateGradeAPI(gradeId, updatedData);
+      // Update local state if API call succeeds
+      setGrades((prevGrades) =>
+        prevGrades.map((grade) =>
+          grade.id === gradeId ? { ...grade, ...updatedData } : grade
+        )
+      );
+      return result;
+    } catch (error) {
+      // If using sample data, update only the local state
+      if (error.message.includes("User not authenticated")) {
+        setGrades((prevGrades) =>
+          prevGrades.map((grade) =>
+            grade.id === gradeId ? { ...grade, ...updatedData } : grade
+          )
+        );
+        return { success: true, grade: { id: gradeId, ...updatedData } };
+      }
+      throw error;
+    }
   };
 
   // Function to delete a grade
   const deleteGrade = async (gradeId) => {
-    return await deleteGradeAPI(gradeId);
+    try {
+      const result = await deleteGradeAPI(gradeId);
+      // Update local state if API call succeeds
+      setGrades((prevGrades) =>
+        prevGrades.filter((grade) => grade.id !== gradeId)
+      );
+      return result;
+    } catch (error) {
+      // If using sample data, update only the local state
+      if (error.message.includes("User not authenticated")) {
+        setGrades((prevGrades) =>
+          prevGrades.filter((grade) => grade.id !== gradeId)
+        );
+        return { success: true, message: "Grade deleted successfully" };
+      }
+      throw error;
+    }
   };
 
   // Function to delete all grades for a specific assignment

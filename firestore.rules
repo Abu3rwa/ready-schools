@@ -10,31 +10,149 @@ service cloud.firestore {
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
+    // Rules for academicPeriods collection
+    match /academicPeriods/{periodId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
 
-    // Standards collection rules (new)
+    // Helper function to validate Gmail token data
+    function isValidGmailData() {
+      let validFields = ['gmail_access_token', 'gmail_refresh_token', 'gmail_token_expiry', 'gmail_configured'];
+      let data = request.resource.data;
+      
+      // For partial updates, merge with existing data
+      let newData = resource != null ? resource.data.diff(data).affectedKeys() : data;
+      
+      // Check if only Gmail fields are being modified
+      return newData.hasOnly(validFields);
+    }
+
+    // Users collection rules
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      // Allow creating new user document
+      allow create: if request.auth.uid == userId;
+      // Allow updating user's own document
+      allow update: if request.auth.uid == userId && (
+        // Allow Gmail token updates
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['gmail_access_token', 'gmail_refresh_token', 'gmail_token_expiry', 'gmail_configured']) ||
+        // Allow other user data updates that don't touch Gmail fields
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['gmail_access_token', 'gmail_refresh_token', 'gmail_token_expiry', 'gmail_configured'])
+      );
+    }
+
+    // Frameworks collection rules
+    match /frameworks/{frameworkId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // Subjects collection rules
+    match /subjects/{subjectId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // Standards collection rules
     match /educational_standards/{standardId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isOwner(resource.data.userId);
     }
 
-    // Standards-assignments mapping rules (new)
-    match /standards_assignments/{mappingId} {
+    // Assignment-standards mappings collection rules
+    match /assignment_standards_mappings/{mappingId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isOwner(resource.data.userId);
     }
 
-    // Standards progress rules (new)
+    // Standards grades collection rules
+    match /standards_grades/{gradeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // Standards progress rules (legacy - keeping for backward compatibility)
     match /standards_progress/{progressId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isOwner(resource.data.userId);
     }
 
+    // Students collection rules
+    match /students/{studentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // Grades collection rules
+    match /grades/{gradeId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Assignments collection rules
+    match /assignments/{assignmentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // Behaviors collection rules
+    match /behaviors/{behaviorId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(request.resource.data.userId) &&
+        request.resource.data.keys().hasAll(['studentId', 'date', 'description', 'skills', 'restorativeAction', 'userId', 'createdAt']) &&
+        request.resource.data.skills is list &&
+        (request.resource.data.skills.size() == 0 || (
+          // Basic structure validation for the first element; deeper validation is handled app-side
+          request.resource.data.skills[0].skill is string &&
+          request.resource.data.skills[0].type in ['strength', 'growth']
+        ));
+      allow update: if isOwner(resource.data.userId);
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    // Skills taxonomy collection rules
+    match /skills_taxonomy/{skillId} {
+      allow read: if isAuthenticated();
+    }
+
+    // Analytics collection rules
+    match /analytics/{userId} {
+      allow read: if isOwner(userId);
+      // Write via backend only
+      allow create, update, delete: if false;
+    }
+
+    // Daily update emails collection rules
+    match /dailyUpdateEmails/{emailId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // Gradebooks collection rules
+    match /gradebooks/{gradebookId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.teacherId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.teacherId);
+    }
+
+    // User settings subcollection
+    match /users/{userId}/settings/{settingId} {
+      allow read, write: if isOwner(userId);
+    }
+
     // Your existing rules for other collections
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;  // Deny access to all other collections by default
     }
   }
 }

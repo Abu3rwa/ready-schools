@@ -48,6 +48,8 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs from "dayjs";
 import { useEmail } from "../../contexts/EmailContext";
 import { useAuth } from "../../contexts/AuthContext";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../../firebase";
 
 const DailyUpdateManager = ({
   students,
@@ -76,6 +78,21 @@ const DailyUpdateManager = ({
   const [selectedStudent, setSelectedStudent] = useState(null);
 
   const { currentUser } = useAuth();
+  const [schoolNamePref, setSchoolNamePref] = useState("");
+
+  useEffect(() => {
+    const loadPrefs = async () => {
+      if (!currentUser) return;
+      try {
+        const snap = await getDoc(doc(db, "users", currentUser.uid));
+        if (snap.exists()) {
+          const d = snap.data();
+          if (d.school_name) setSchoolNamePref(d.school_name);
+        }
+      } catch {}
+    };
+    loadPrefs();
+  }, [currentUser?.uid]);
 
   // Prepare contexts data
   const contexts = {
@@ -84,7 +101,7 @@ const DailyUpdateManager = ({
     assignments: assignments || [],
     grades: grades || [],
     behavior: behavior || [],
-    schoolName: "AMLY - The American Libyan School",
+    schoolName: schoolNamePref || undefined,
     teacher: currentUser ? {
       name: currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : 'Teacher'),
       email: currentUser.email || '',

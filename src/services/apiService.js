@@ -244,7 +244,8 @@ export const updateGrade = async (gradeId, updates) => {
     if (!userId) throw new Error("User not authenticated.");
 
     const gradeRef = doc(db, "grades", gradeId);
-    await updateDoc(gradeRef, updates);
+    const updatesWithUserId = { ...updates, userId };
+    await updateDoc(gradeRef, updatesWithUserId);
     return { success: true, grade: { id: gradeId, ...updates } };
   } catch (error) {
     console.error("Error updating grade in Firestore:", error);
@@ -395,7 +396,7 @@ export const recordBulkAttendance = async (date, attendanceRecords) => {
       date,
       userId,
     }));
-    const { writeBatch } = await import('firebase/firestore');
+    const { writeBatch } = await import("firebase/firestore");
     const batch = writeBatch(db);
     newRecords.forEach((record) => {
       const docRef = doc(attendanceCol);
@@ -449,135 +450,6 @@ export const deleteAttendance = async (attendanceId) => {
 };
 
 /**
- * Get behavior records from Firestore
- * @param {string|null} studentId - Optional student ID to filter behavior records
- * @param {string|null} date - Optional date to filter
- * @param {string|null} type - Optional type to filter
- * @returns {Promise<Array>}
- */
-export const getBehaviors = async (
-  studentId = null,
-  date = null,
-  type = null
-) => {
-  try {
-    const userId = getCurrentUserId();
-    if (!userId) throw new Error("User not authenticated.");
-
-    const behaviorsCol = collection(db, "behaviors");
-    let q = query(behaviorsCol, where("userId", "==", userId));
-    if (studentId) {
-      q = query(q, where("studentId", "==", studentId));
-    }
-    if (date) {
-      q = query(q, where("date", "==", date));
-    }
-    if (type) {
-      q = query(q, where("type", "==", type));
-    }
-    const behaviorSnapshot = await getDocs(q);
-    const behaviorList = behaviorSnapshot.docs.map(docToObject);
-    return behaviorList;
-  } catch (error) {
-    console.error("Error fetching behaviors from Firestore:", error);
-    throw new Error("Failed to fetch behaviors.");
-  }
-};
-
-/**
- * Record a behavior incident in Firestore
- * @param {Object} behaviorData - Behavior data to record
- * @returns {Promise<Object>}
- */
-export const recordBehavior = async (behaviorData) => {
-  try {
-    const userId = getCurrentUserId();
-    if (!userId) throw new Error("User not authenticated.");
-
-    const behaviorsCol = collection(db, "behaviors");
-    const newBehavior = { ...behaviorData, userId };
-    const docRef = await addDoc(behaviorsCol, newBehavior);
-    return { success: true, behavior: { id: docRef.id, ...newBehavior } };
-  } catch (error) {
-    console.error("Error recording behavior in Firestore:", error);
-    throw new Error("Failed to record behavior.");
-  }
-};
-
-/**
- * Update a behavior incident in Firestore
- * @param {string} behaviorId - Behavior ID
- * @param {Object} updates - Updated data
- * @returns {Promise<Object>}
- */
-export const updateBehavior = async (behaviorId, updates) => {
-  try {
-    const userId = getCurrentUserId();
-    if (!userId) throw new Error("User not authenticated.");
-
-    const behaviorRef = doc(db, "behaviors", behaviorId);
-    await updateDoc(behaviorRef, updates);
-    return { success: true, behavior: { id: behaviorId, ...updates } };
-  } catch (error) {
-    console.error("Error updating behavior in Firestore:", error);
-    throw new Error("Failed to update behavior.");
-  }
-};
-
-/**
- * Delete a behavior incident from Firestore
- * @param {string} behaviorId - Behavior ID
- * @returns {Promise<Object>}
- */
-export const deleteBehavior = async (behaviorId) => {
-  try {
-    const userId = getCurrentUserId();
-    if (!userId) throw new Error("User not authenticated.");
-
-    const behaviorRef = doc(db, "behaviors", behaviorId);
-    await deleteDoc(behaviorRef);
-    return { success: true, message: "Behavior record deleted successfully" };
-  } catch (error) {
-    console.error("Error deleting behavior in Firestore:", error);
-    throw new Error("Failed to delete behavior.");
-  }
-};
-
-/**
- * Get behavior summary for a student from Firestore
- * @param {string} studentId - Student ID
- * @returns {Promise<Object>}
- */
-export const getBehaviorSummary = async (studentId) => {
-  try {
-    const userId = getCurrentUserId();
-    if (!userId) throw new Error("User not authenticated.");
-
-    const behaviorsCol = collection(db, "behaviors");
-    const q = query(
-      behaviorsCol,
-      where("userId", "==", userId),
-      where("studentId", "==", studentId)
-    );
-    const behaviorSnapshot = await getDocs(q);
-    const behaviors = behaviorSnapshot.docs.map(docToObject);
-
-    const total = behaviors.length;
-    const positive = behaviors.filter(
-      (b) => b.type && b.type.toLowerCase() === "positive"
-    ).length;
-    const negative = behaviors.filter(
-      (b) => b.type && b.type.toLowerCase() === "negative"
-    ).length;
-
-    return { studentId, summary: { total, byType: { positive, negative } } };
-  } catch (error) {
-    console.error("Error fetching behavior summary from Firestore:", error);
-    throw new Error("Failed to fetch behavior summary.");
-  }
-};
-
-/**
  * Get communication records for all students or a specific student from Firestore
  * @param {string|null} studentId - Optional student ID to filter communications
  * @returns {Promise<Array>}
@@ -609,7 +481,10 @@ export const createCommunication = async (communicationData) => {
     const communicationsCol = collection(db, "communications");
     const newCommunication = { ...communicationData, userId };
     const docRef = await addDoc(communicationsCol, newCommunication);
-    return { success: true, communication: { id: docRef.id, ...newCommunication } };
+    return {
+      success: true,
+      communication: { id: docRef.id, ...newCommunication },
+    };
   } catch (error) {
     console.error("Error creating communication in Firestore:", error);
     throw new Error("Failed to create communication.");
@@ -646,6 +521,3 @@ export const generateReport = async (reportConfig) => {
   console.log("Generating report with config:", reportConfig);
   return { success: true, report: "Report generated successfully (Firestore)" };
 };
-
-// Legacy function name compatibility
-export const getBehavior = getBehaviors;

@@ -1,143 +1,215 @@
 import React, { useState, useEffect } from "react";
-import StandardsMapper from "../standards/StandardsMapper";
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
+  Grid,
   TextField,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Grid,
-  Box,
   Typography,
+  Box,
   Chip,
-  IconButton,
-  FormControlLabel,
-  Switch,
-  Slider,
-  Divider,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  ListItemSecondaryAction,
-  Alert,
-  Snackbar,
   Accordion,
   AccordionSummary,
   AccordionDetails,
+  FormControlLabel,
+  Switch,
+  Slider,
+  Alert,
+  Snackbar,
   InputAdornment,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  IconButton,
+  Checkbox,
+  Paper,
+  CircularProgress,
 } from "@mui/material";
 import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
   ExpandMore as ExpandMoreIcon,
-  Assignment as AssignmentIcon,
-  Timer as TimerIcon,
   Grade as GradeIcon,
-  School as SchoolIcon,
-  Description as DescriptionIcon,
-  TrendingUp as TrendingUpIcon,
-  Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
-  Schedule as ScheduleIcon,
-  Settings as SettingsIcon,
-  Assessment as AssessmentIcon,
+  Add as AddIcon,
+  Remove as RemoveIcon,
+  Search as SearchIcon,
 } from "@mui/icons-material";
-import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import dayjs from "dayjs";
+import { useStandardsGrading } from "../../contexts/StandardsGradingContext";
+import { useAssignments } from "../../contexts/AssignmentContext";
+import { useGradeBooks } from "../../contexts/GradeBookContext";
+import * as standardsService from "../../services/standardsService";
+import { getSubjects } from "../../services/subjectsService";
+// import AddCategoryDialog from "./AddCategoryDialog";
 
 const EnhancedAssignmentForm = ({
   open,
   onClose,
   assignment = null,
   onSave,
-  categories,
   isEdit = false,
 }) => {
+  const { createStandardMapping, loadStandardsMappings } =
+    useStandardsGrading();
+  const { getCategoryWeight } = useAssignments();
+  const { gradeBooks, addCategoryToGradeBook } = useGradeBooks();
+  const [selectedGradeBook, setSelectedGradeBook] = useState(null);
   const [formData, setFormData] = useState({
     name: "",
     subject: "",
     category: "",
-    subcategory: "",
     points: "",
     dueDate: dayjs().add(7, "day").toDate(),
     description: "",
     instructions: "",
-    timeEstimate: "",
-    difficultyLevel: "medium",
-    status: "draft",
-    learningObjectives: [],
-    requiredMaterials: [],
-    submissionFormat: "",
-    gradingCriteria: {
-      accuracy: 100,
-    },
-    latePolicy: {
-      allowed: true,
-      penalty: 10,
-      gracePeriod: 24,
-    },
-    retakePolicy: {
-      allowed: false,
-      maxAttempts: 1,
-      timeLimit: 7,
-    },
-    groupSettings: {
-      isGroupAssignment: false,
-      maxGroupSize: 4,
-      groupFormation: "auto",
-    },
   });
 
-  const [newLearningObjective, setNewLearningObjective] = useState("");
-  const [newMaterial, setNewMaterial] = useState("");
+  // const [newLearningObjective, setNewLearningObjective] = useState("");
+  // const [newMaterial, setNewMaterial] = useState("");
   const [errors, setErrors] = useState({});
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
     severity: "success",
   });
-  const [standardsMapperOpen, setStandardsMapperOpen] = useState(false);
+
+  // Standards-based grading state
+  const [standardsGradingEnabled, setStandardsGradingEnabled] = useState(false);
+  const [selectedStandards, setSelectedStandards] = useState([]);
+  const [gradingMode, setGradingMode] = useState("both"); // 'traditional', 'standards', 'both'
+  const [proficiencyScale, setProficiencyScale] = useState("four_point"); // 'four_point', 'five_point'
+
+  // Data loading state
+  const [subjects, setSubjects] = useState([]);
+  const [standards, setStandards] = useState([]);
+  const [loadingStandards, setLoadingStandards] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Load subjects
+  useEffect(() => {
+    const loadSubjects = async () => {
+      try {
+        const subjectsData = await getSubjects();
+        setSubjects(subjectsData);
+      } catch (error) {
+        console.error("Error loading subjects:", error);
+      }
+    };
+    loadSubjects();
+  }, []);
+
+  // Load standards when subject changes
+  useEffect(() => {
+    const loadStandards = async () => {
+      if (!formData.subject) {
+        setStandards([]);
+        setSelectedStandards([]); // Clear selections when no subject
+        return;
+      }
+
+      setLoadingStandards(true);
+      try {
+        // Find the subject name from the subjects list
+        const subjectObj = subjects.find(
+          (s) => s.code === formData.subject || s.name === formData.subject
+        );
+        if (subjectObj) {
+          const standardsData = await standardsService.getStandards({
+            subject: subjectObj.name,
+          });
+          // Ensure unique standards by ID
+          const uniqueStandards = standardsData.filter(
+            (standard, index, self) =>
+              index === self.findIndex((s) => s.id === standard.id)
+          );
+          setStandards(uniqueStandards);
+          setSelectedStandards([]); // Clear selections when subject changes
+        } else {
+          setStandards([]);
+          setSelectedStandards([]);
+        }
+      } catch (error) {
+        console.error("Error loading standards:", error);
+        setStandards([]);
+        setSelectedStandards([]);
+      } finally {
+        setLoadingStandards(false);
+      }
+    };
+
+    loadStandards();
+  }, [formData.subject, subjects]);
+
+  // Remove duplicates from selected standards
+  const removeDuplicateStandards = () => {
+    const uniqueStandards = selectedStandards.filter(
+      (standard, index, self) =>
+        index === self.findIndex((s) => s.standardId === standard.standardId)
+    );
+    setSelectedStandards(uniqueStandards);
+  };
+
+  // Clean up duplicates when selectedStandards changes
+  useEffect(() => {
+    const hasDuplicates =
+      selectedStandards.length !==
+      new Set(selectedStandards.map((s) => s.standardId)).size;
+    if (hasDuplicates) {
+      removeDuplicateStandards();
+    }
+  }, [selectedStandards]);
 
   useEffect(() => {
     if (assignment) {
       setFormData({
         ...formData,
         ...assignment,
-        dueDate: assignment.dueDate ? dayjs(assignment.dueDate).toDate() : dayjs().add(7, "day").toDate(),
+        dueDate: assignment.dueDate
+          ? dayjs(assignment.dueDate).toDate()
+          : dayjs().add(7, "day").toDate(),
       });
+
+      if (assignment.gradebookId) {
+        const gradebook = gradeBooks.find(
+          (gb) => gb.id === assignment.gradebookId
+        );
+        setSelectedGradeBook(gradebook);
+      }
+
+      // Load existing standards mappings if assignment has standards grading
+      if (assignment.hasStandardsAssessment) {
+        setStandardsGradingEnabled(true);
+        setGradingMode(assignment.gradingMode || "both");
+        setProficiencyScale(assignment.proficiencyScale || "four_point");
+
+        // Load existing mappings
+        loadStandardsMappings(assignment.id);
+      }
     }
-  }, [assignment]);
+  }, [assignment, loadStandardsMappings]);
 
   const handleFormChange = (field, value) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
-    
+
     // Clear error when field is updated
     if (errors[field]) {
-      setErrors(prev => ({
+      setErrors((prev) => ({
         ...prev,
-        [field]: null
+        [field]: null,
       }));
     }
-  };
-
-  const handleNestedChange = (parentField, field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [parentField]: {
-        ...prev[parentField],
-        [field]: value
-      }
-    }));
   };
 
   const validateForm = () => {
@@ -145,6 +217,9 @@ const EnhancedAssignmentForm = ({
 
     if (!formData.name.trim()) {
       newErrors.name = "Assignment name is required";
+    }
+    if (!selectedGradeBook) {
+      newErrors.gradebook = "Grade book is required";
     }
     if (!formData.subject) {
       newErrors.subject = "Subject is required";
@@ -163,12 +238,12 @@ const EnhancedAssignmentForm = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!validateForm()) {
       setSnackbar({
         open: true,
         message: "Please fix the errors before saving",
-        severity: "error"
+        severity: "error",
       });
       return;
     }
@@ -178,80 +253,101 @@ const EnhancedAssignmentForm = ({
       dueDate: dayjs(formData.dueDate).toISOString(),
       createdAt: assignment?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      gradebookId: selectedGradeBook ? selectedGradeBook.id : null,
+
+      // Category data
+      categoryWeight:
+        selectedGradeBook?.categories.find((c) => c.name === formData.category)
+          ?.weight || 0,
+
+      // Standards-based grading data
+      hasStandardsAssessment: standardsGradingEnabled,
+      gradingMode: standardsGradingEnabled ? gradingMode : "traditional",
+      proficiencyScale: standardsGradingEnabled
+        ? proficiencyScale
+        : "four_point",
+      standardsWeight: 0.5, // This will be hardcoded as per the edit hint
+      mappedStandardsCount: selectedStandards.length,
+      mappedStandards: selectedStandards.map((s) => s.standardCode),
     };
 
-    onSave(assignmentData);
-    onClose();
-  };
+    try {
+      // Save assignment first
+      const savedAssignment = await onSave(assignmentData);
 
-  const addLearningObjective = () => {
-    if (newLearningObjective.trim()) {
-      setFormData(prev => ({
-        ...prev,
-        learningObjectives: [...prev.learningObjectives, newLearningObjective.trim()]
-      }));
-      setNewLearningObjective("");
-    }
-  };
+      // Create standards mappings if standards grading is enabled
+      if (
+        standardsGradingEnabled &&
+        selectedStandards.length > 0 &&
+        savedAssignment?.id
+      ) {
+        const mappingPromises = selectedStandards.map((standard) =>
+          createStandardMapping({
+            assignmentId: savedAssignment.id,
+            standardId: standard.standardId,
+            alignmentStrength: standard.alignmentStrength || 0.75,
+            coverageType: standard.coverageType || "full",
+            weight: standard.weight || 1.0,
+          })
+        );
 
-  const removeLearningObjective = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      learningObjectives: prev.learningObjectives.filter((_, i) => i !== index)
-    }));
-  };
-
-  const addRequiredMaterial = () => {
-    if (newMaterial.trim()) {
-      setFormData(prev => ({
-        ...prev,
-        requiredMaterials: [...prev.requiredMaterials, newMaterial.trim()]
-      }));
-      setNewMaterial("");
-    }
-  };
-
-  const removeRequiredMaterial = (index) => {
-    setFormData(prev => ({
-      ...prev,
-      requiredMaterials: prev.requiredMaterials.filter((_, i) => i !== index)
-    }));
-  };
-
-  const addGradingCriterion = () => {
-    const criterionName = prompt("Enter criterion name:");
-    if (criterionName && criterionName.trim()) {
-      setFormData(prev => ({
-        ...prev,
-        gradingCriteria: {
-          ...prev.gradingCriteria,
-          [criterionName.trim()]: 0
-        }
-      }));
-    }
-  };
-
-  const removeGradingCriterion = (criterion) => {
-    const newCriteria = { ...formData.gradingCriteria };
-    delete newCriteria[criterion];
-    setFormData(prev => ({
-      ...prev,
-      gradingCriteria: newCriteria
-    }));
-  };
-
-  const updateGradingWeight = (criterion, weight) => {
-    setFormData(prev => ({
-      ...prev,
-      gradingCriteria: {
-        ...prev.gradingCriteria,
-        [criterion]: weight
+        await Promise.all(mappingPromises);
       }
-    }));
+
+      onClose();
+    } catch (error) {
+      console.error("Error saving assignment:", error);
+      setSnackbar({
+        open: true,
+        message: "Error saving assignment. Please try again.",
+        severity: "error",
+      });
+    }
   };
 
-  const getSubjectCategories = () => {
-    return categories[formData.subject] || [];
+  // Filter standards based on search
+  const filteredStandards = standards.filter((standard) => {
+    if (!searchTerm) return true;
+    const search = searchTerm.toLowerCase();
+    return (
+      standard.code?.toLowerCase().includes(search) ||
+      standard.description?.toLowerCase().includes(search) ||
+      standard.name?.toLowerCase().includes(search)
+    );
+  });
+
+  // Handle standard selection
+  const handleStandardToggle = (standard) => {
+    const isSelected = selectedStandards.some(
+      (s) => s.standardId === standard.id
+    );
+
+    if (isSelected) {
+      setSelectedStandards((prev) =>
+        prev.filter((s) => s.standardId !== standard.id)
+      );
+    } else {
+      // Check if this standard is already selected to prevent duplicates
+      const alreadyExists = selectedStandards.some(
+        (s) => s.standardId === standard.id
+      );
+      if (!alreadyExists) {
+        const newStandard = {
+          standardId: standard.id,
+          standardCode: standard.code,
+          standardName: standard.name,
+          standardDescription: standard.description,
+          alignmentStrength: 0.75,
+          coverageType: "full",
+          weight: 1.0,
+        };
+        setSelectedStandards((prev) => [...prev, newStandard]);
+      }
+    }
+  };
+
+  const isStandardSelected = (standard) => {
+    return selectedStandards.some((s) => s.standardId === standard.id);
   };
 
   return (
@@ -269,7 +365,7 @@ const EnhancedAssignmentForm = ({
                   Basic Information
                 </Typography>
               </Grid>
-              
+
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
@@ -283,16 +379,54 @@ const EnhancedAssignmentForm = ({
               </Grid>
 
               <Grid item xs={12} md={6}>
+                <FormControl fullWidth required error={!!errors.gradebook}>
+                  <InputLabel>Grade Book *</InputLabel>
+                  <Select
+                    value={selectedGradeBook ? selectedGradeBook.id : ""}
+                    onChange={(e) => {
+                      const gradebook = gradeBooks.find(
+                        (gb) => gb.id === e.target.value
+                      );
+                      setSelectedGradeBook(gradebook);
+                      handleFormChange(
+                        "subject",
+                        gradebook ? gradebook.subject : ""
+                      );
+                      handleFormChange("category", ""); // Reset category
+                    }}
+                    label="Grade Book *"
+                  >
+                    {gradeBooks.map((gb) => (
+                      <MenuItem key={gb.id} value={gb.id}>
+                        {gb.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {errors.gradebook && (
+                    <Typography variant="caption" color="error">
+                      {errors.gradebook}
+                    </Typography>
+                  )}
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={6}>
                 <FormControl fullWidth required error={!!errors.subject}>
                   <InputLabel>Subject *</InputLabel>
                   <Select
                     value={formData.subject}
-                    onChange={(e) => handleFormChange("subject", e.target.value)}
+                    onChange={(e) =>
+                      handleFormChange("subject", e.target.value)
+                    }
                     label="Subject *"
+                    disabled
                   >
-                    {Object.keys(categories).map((subject) => (
-                      <MenuItem key={subject} value={subject}>
-                        {subject}
+                    {subjects.map((subject) => (
+                      <MenuItem
+                        key={subject.id}
+                        value={subject.code || subject.name}
+                      >
+                        {subject.name}
                       </MenuItem>
                     ))}
                   </Select>
@@ -309,12 +443,27 @@ const EnhancedAssignmentForm = ({
                   <InputLabel>Category *</InputLabel>
                   <Select
                     value={formData.category}
-                    onChange={(e) => handleFormChange("category", e.target.value)}
+                    onChange={(e) =>
+                      handleFormChange("category", e.target.value)
+                    }
                     label="Category *"
+                    disabled={!selectedGradeBook}
                   >
-                    {getSubjectCategories().map((category) => (
-                      <MenuItem key={category} value={category}>
-                        {category}
+                    {selectedGradeBook?.categories?.map((category) => (
+                      <MenuItem key={category.name} value={category.name}>
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                        >
+                          <Box
+                            sx={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: "50%",
+                              backgroundColor: category.color,
+                            }}
+                          />
+                          {category.name} ({category.weight}%)
+                        </Box>
                       </MenuItem>
                     ))}
                   </Select>
@@ -332,85 +481,49 @@ const EnhancedAssignmentForm = ({
                   label="Points *"
                   type="number"
                   value={formData.points}
-                  onChange={(e) => handleFormChange("points", parseInt(e.target.value))}
+                  onChange={(e) =>
+                    handleFormChange("points", parseInt(e.target.value))
+                  }
                   error={!!errors.points}
                   helperText={errors.points}
                   required
                   InputProps={{
-                    startAdornment: <InputAdornment position="start"><GradeIcon /></InputAdornment>,
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <GradeIcon />
+                      </InputAdornment>
+                    ),
                   }}
                 />
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <DatePicker
+                <DateTimePicker
                   label="Due Date *"
                   value={dayjs(formData.dueDate)}
-                  onChange={(newValue) => handleFormChange("dueDate", newValue.toDate())}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      fullWidth
-                      error={!!errors.dueDate}
-                      helperText={errors.dueDate}
-                      required
-                    />
-                  )}
-                />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Difficulty Level</InputLabel>
-                  <Select
-                    value={formData.difficultyLevel}
-                    onChange={(e) => handleFormChange("difficultyLevel", e.target.value)}
-                    label="Difficulty Level"
-                  >
-                    <MenuItem value="easy">Easy</MenuItem>
-                    <MenuItem value="medium">Medium</MenuItem>
-                    <MenuItem value="hard">Hard</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Time Estimate (minutes)"
-                  type="number"
-                  value={formData.timeEstimate}
-                  onChange={(e) => handleFormChange("timeEstimate", parseInt(e.target.value))}
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start"><TimerIcon /></InputAdornment>,
+                  onChange={(newValue) =>
+                    handleFormChange("dueDate", newValue?.toDate())
+                  }
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      error: !!errors.dueDate,
+                      helperText: errors.dueDate,
+                    },
                   }}
                 />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Status</InputLabel>
-                  <Select
-                    value={formData.status}
-                    onChange={(e) => handleFormChange("status", e.target.value)}
-                    label="Status"
-                  >
-                    <MenuItem value="draft">Draft</MenuItem>
-                    <MenuItem value="active">Active</MenuItem>
-                    <MenuItem value="completed">Completed</MenuItem>
-                    <MenuItem value="archived">Archived</MenuItem>
-                  </Select>
-                </FormControl>
               </Grid>
 
               <Grid item xs={12}>
                 <TextField
                   fullWidth
                   label="Description"
+                  value={formData.description}
+                  onChange={(e) =>
+                    handleFormChange("description", e.target.value)
+                  }
                   multiline
                   rows={3}
-                  value={formData.description}
-                  onChange={(e) => handleFormChange("description", e.target.value)}
                 />
               </Grid>
 
@@ -418,300 +531,209 @@ const EnhancedAssignmentForm = ({
                 <TextField
                   fullWidth
                   label="Instructions"
-                  multiline
-                  rows={4}
                   value={formData.instructions}
-                  onChange={(e) => handleFormChange("instructions", e.target.value)}
+                  onChange={(e) =>
+                    handleFormChange("instructions", e.target.value)
+                  }
+                  multiline
+                  rows={3}
                 />
               </Grid>
 
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Submission Format"
-                  value={formData.submissionFormat}
-                  onChange={(e) => handleFormChange("submissionFormat", e.target.value)}
-                  placeholder="e.g., PDF, Word document, online form, etc."
-                />
-              </Grid>
-
-              {/* Learning Objectives */}
+              {/* Standards-Based Assessment */}
               <Grid item xs={12}>
                 <Accordion>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="h6">Learning Objectives</Typography>
+                    <Typography variant="h6">
+                      Standards-Based Assessment
+                    </Typography>
                   </AccordionSummary>
                   <AccordionDetails>
-                    <Box>
-                      <Box display="flex" gap={1} mb={2}>
-                        <TextField
-                          fullWidth
-                          label="Add Learning Objective"
-                          value={newLearningObjective}
-                          onChange={(e) => setNewLearningObjective(e.target.value)}
-                          onKeyPress={(e) => e.key === "Enter" && addLearningObjective()}
-                        />
-                        <IconButton onClick={addLearningObjective} color="primary">
-                          <AddIcon />
-                        </IconButton>
-                      </Box>
-                      <List>
-                        {formData.learningObjectives.map((objective, index) => (
-                          <ListItem key={index}>
-                            <ListItemIcon>
-                              <TrendingUpIcon color="primary" />
-                            </ListItemIcon>
-                            <ListItemText primary={objective} />
-                            <ListItemSecondaryAction>
-                              <IconButton
-                                edge="end"
-                                onClick={() => removeLearningObjective(index)}
-                                color="error"
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </ListItemSecondaryAction>
-                          </ListItem>
-                        ))}
-                      </List>
-                    </Box>
-                  </AccordionDetails>
-                </Accordion>
-              </Grid>
-
-              {/* Required Materials */}
-              <Grid item xs={12}>
-                <Accordion>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="h6">Required Materials</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <Box>
-                      <Box display="flex" gap={1} mb={2}>
-                        <TextField
-                          fullWidth
-                          label="Add Required Material"
-                          value={newMaterial}
-                          onChange={(e) => setNewMaterial(e.target.value)}
-                          onKeyPress={(e) => e.key === "Enter" && addRequiredMaterial()}
-                        />
-                        <IconButton onClick={addRequiredMaterial} color="primary">
-                          <AddIcon />
-                        </IconButton>
-                      </Box>
-                      <Box display="flex" flexWrap="wrap" gap={1}>
-                        {formData.requiredMaterials.map((material, index) => (
-                          <Chip
-                            key={index}
-                            label={material}
-                            onDelete={() => removeRequiredMaterial(index)}
-                            color="primary"
-                            variant="outlined"
-                          />
-                        ))}
-                      </Box>
-                    </Box>
-                  </AccordionDetails>
-                </Accordion>
-              </Grid>
-
-              {/* Grading Criteria */}
-              <Grid item xs={12}>
-                <Accordion>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="h6">Grading Criteria</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <Box>
-                      <Button
-                        startIcon={<AddIcon />}
-                        onClick={addGradingCriterion}
-                        variant="outlined"
-                        sx={{ mb: 2 }}
-                      >
-                        Add Criterion
-                      </Button>
-                      <List>
-                        {Object.entries(formData.gradingCriteria).map(([criterion, weight]) => (
-                          <ListItem key={criterion}>
-                            <ListItemText
-                              primary={criterion.replace("_", " ")}
-                              secondary={
-                                <Slider
-                                  value={weight}
-                                  onChange={(e, newValue) => updateGradingWeight(criterion, newValue)}
-                                  min={0}
-                                  max={100}
-                                  valueLabelDisplay="auto"
-                                  sx={{ mt: 1 }}
-                                />
-                              }
-                            />
-                            <ListItemSecondaryAction>
-                              <Typography variant="body2" sx={{ mr: 2 }}>
-                                {weight}%
-                              </Typography>
-                              <IconButton
-                                edge="end"
-                                onClick={() => removeGradingCriterion(criterion)}
-                                color="error"
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </ListItemSecondaryAction>
-                          </ListItem>
-                        ))}
-                      </List>
-                    </Box>
-                  </AccordionDetails>
-                </Accordion>
-              </Grid>
-
-              {/* Standards Mapping */}
-              <Grid item xs={12}>
-                <Accordion>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="h6">Standards Alignment</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <Button
-                      variant="outlined"
-                      startIcon={<AssessmentIcon />}
-                      onClick={() => setStandardsMapperOpen(true)}
-                      fullWidth
-                    >
-                      Map Educational Standards
-                    </Button>
-                  </AccordionDetails>
-                </Accordion>
-              </Grid>
-
-              {/* Advanced Settings */}
-              <Grid item xs={12}>
-                <Accordion>
-                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                    <Typography variant="h6">Advanced Settings</Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <Grid container spacing={3}>
-                      {/* Late Policy */}
-                      <Grid item xs={12} md={6}>
-                        <Typography variant="subtitle1" gutterBottom>
-                          Late Policy
-                        </Typography>
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={formData.latePolicy.allowed}
-                              onChange={(e) => handleNestedChange("latePolicy", "allowed", e.target.checked)}
-                            />
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={standardsGradingEnabled}
+                          onChange={(e) =>
+                            setStandardsGradingEnabled(e.target.checked)
                           }
-                          label="Allow late submissions"
                         />
-                        {formData.latePolicy.allowed && (
-                          <Box mt={2}>
-                            <TextField
-                              fullWidth
-                              label="Penalty (%)"
-                              type="number"
-                              value={formData.latePolicy.penalty}
-                              onChange={(e) => handleNestedChange("latePolicy", "penalty", parseInt(e.target.value))}
-                              InputProps={{
-                                endAdornment: <InputAdornment position="end">%</InputAdornment>,
-                              }}
-                            />
-                            <TextField
-                              fullWidth
-                              label="Grace Period (hours)"
-                              type="number"
-                              value={formData.latePolicy.gracePeriod}
-                              onChange={(e) => handleNestedChange("latePolicy", "gracePeriod", parseInt(e.target.value))}
-                              sx={{ mt: 2 }}
-                              InputProps={{
-                                endAdornment: <InputAdornment position="end">hrs</InputAdornment>,
-                              }}
-                            />
-                          </Box>
-                        )}
-                      </Grid>
+                      }
+                      label="Enable Standards-Based Grading"
+                    />
 
-                      {/* Retake Policy */}
-                      <Grid item xs={12} md={6}>
-                        <Typography variant="subtitle1" gutterBottom>
-                          Retake Policy
-                        </Typography>
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={formData.retakePolicy.allowed}
-                              onChange={(e) => handleNestedChange("retakePolicy", "allowed", e.target.checked)}
-                            />
-                          }
-                          label="Allow retakes"
-                        />
-                        {formData.retakePolicy.allowed && (
-                          <Box mt={2}>
-                            <TextField
-                              fullWidth
-                              label="Max Attempts"
-                              type="number"
-                              value={formData.retakePolicy.maxAttempts}
-                              onChange={(e) => handleNestedChange("retakePolicy", "maxAttempts", parseInt(e.target.value))}
-                            />
-                            <TextField
-                              fullWidth
-                              label="Time Limit (days)"
-                              type="number"
-                              value={formData.retakePolicy.timeLimit}
-                              onChange={(e) => handleNestedChange("retakePolicy", "timeLimit", parseInt(e.target.value))}
-                              sx={{ mt: 2 }}
-                              InputProps={{
-                                endAdornment: <InputAdornment position="end">days</InputAdornment>,
-                              }}
-                            />
-                          </Box>
-                        )}
-                      </Grid>
-
-                      {/* Group Settings */}
-                      <Grid item xs={12}>
-                        <Typography variant="subtitle1" gutterBottom>
-                          Group Settings
-                        </Typography>
-                        <FormControlLabel
-                          control={
-                            <Switch
-                              checked={formData.groupSettings.isGroupAssignment}
-                              onChange={(e) => handleNestedChange("groupSettings", "isGroupAssignment", e.target.checked)}
-                            />
-                          }
-                          label="Group assignment"
-                        />
-                        {formData.groupSettings.isGroupAssignment && (
-                          <Box mt={2}>
-                            <TextField
-                              fullWidth
-                              label="Max Group Size"
-                              type="number"
-                              value={formData.groupSettings.maxGroupSize}
-                              onChange={(e) => handleNestedChange("groupSettings", "maxGroupSize", parseInt(e.target.value))}
-                            />
-                            <FormControl fullWidth sx={{ mt: 2 }}>
-                              <InputLabel>Group Formation</InputLabel>
+                    {standardsGradingEnabled && (
+                      <Box sx={{ mt: 2 }}>
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} md={6}>
+                            <FormControl fullWidth>
+                              <InputLabel>Grading Mode</InputLabel>
                               <Select
-                                value={formData.groupSettings.groupFormation}
-                                onChange={(e) => handleNestedChange("groupSettings", "groupFormation", e.target.value)}
-                                label="Group Formation"
+                                value={gradingMode}
+                                onChange={(e) => setGradingMode(e.target.value)}
+                                label="Grading Mode"
                               >
-                                <MenuItem value="auto">Automatic</MenuItem>
-                                <MenuItem value="manual">Manual</MenuItem>
-                                <MenuItem value="student-choice">Student Choice</MenuItem>
+                                <MenuItem value="traditional">
+                                  Traditional Only (Points)
+                                </MenuItem>
+                                <MenuItem value="standards">
+                                  Standards Only (Proficiency)
+                                </MenuItem>
+                                <MenuItem value="both">
+                                  Both Traditional & Standards
+                                </MenuItem>
                               </Select>
                             </FormControl>
-                          </Box>
-                        )}
-                      </Grid>
-                    </Grid>
+                          </Grid>
+
+                          <Grid item xs={12} md={6}>
+                            <FormControl fullWidth>
+                              <InputLabel>Proficiency Scale</InputLabel>
+                              <Select
+                                value={proficiencyScale}
+                                onChange={(e) =>
+                                  setProficiencyScale(e.target.value)
+                                }
+                                label="Proficiency Scale"
+                              >
+                                <MenuItem value="four_point">
+                                  4-Point Scale (1-4)
+                                </MenuItem>
+                                <MenuItem value="five_point">
+                                  5-Point Scale (1-5)
+                                </MenuItem>
+                              </Select>
+                            </FormControl>
+                          </Grid>
+
+                          {gradingMode === "both" && (
+                            <Grid item xs={12}>
+                              <Alert severity="info">
+                                Students will receive both a traditional grade
+                                (points) and individual standards grades
+                                (proficiency levels).
+                              </Alert>
+                            </Grid>
+                          )}
+
+                          {/* Standards Selection */}
+                          <Grid item xs={12}>
+                            <Typography variant="subtitle1" gutterBottom>
+                              Select Standards to Assess (
+                              {selectedStandards.length} selected)
+                            </Typography>
+
+                            {/* Debug info - remove this in production */}
+                            {process.env.NODE_ENV === "development" &&
+                              selectedStandards.length > 0 && (
+                                <Box
+                                  sx={{
+                                    mb: 2,
+                                    p: 1,
+                                    bgcolor: "yellow.100",
+                                    borderRadius: 1,
+                                  }}
+                                >
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    Selected:{" "}
+                                    {selectedStandards
+                                      .map((s) => s.standardCode)
+                                      .join(", ")}
+                                  </Typography>
+                                </Box>
+                              )}
+
+                            {formData.subject ? (
+                              <>
+                                <TextField
+                                  fullWidth
+                                  size="small"
+                                  placeholder="Search standards..."
+                                  value={searchTerm}
+                                  onChange={(e) =>
+                                    setSearchTerm(e.target.value)
+                                  }
+                                  InputProps={{
+                                    startAdornment: (
+                                      <SearchIcon
+                                        sx={{ mr: 1, color: "text.secondary" }}
+                                      />
+                                    ),
+                                  }}
+                                  sx={{ mb: 2 }}
+                                />
+
+                                {loadingStandards ? (
+                                  <Box
+                                    display="flex"
+                                    justifyContent="center"
+                                    p={2}
+                                  >
+                                    <CircularProgress />
+                                  </Box>
+                                ) : filteredStandards.length > 0 ? (
+                                  <Paper
+                                    variant="outlined"
+                                    sx={{ maxHeight: 300, overflow: "auto" }}
+                                  >
+                                    <List dense>
+                                      {filteredStandards.map((standard) => (
+                                        <ListItem
+                                          key={standard.id}
+                                          button
+                                          onClick={() =>
+                                            handleStandardToggle(standard)
+                                          }
+                                        >
+                                          <Checkbox
+                                            checked={isStandardSelected(
+                                              standard
+                                            )}
+                                            onChange={() =>
+                                              handleStandardToggle(standard)
+                                            }
+                                          />
+                                          <ListItemText
+                                            primary={
+                                              <Box>
+                                                <Typography
+                                                  variant="subtitle2"
+                                                  fontWeight="bold"
+                                                >
+                                                  {standard.code}
+                                                </Typography>
+                                                <Typography
+                                                  variant="body2"
+                                                  color="text.secondary"
+                                                >
+                                                  {standard.description}
+                                                </Typography>
+                                              </Box>
+                                            }
+                                          />
+                                        </ListItem>
+                                      ))}
+                                    </List>
+                                  </Paper>
+                                ) : (
+                                  <Alert severity="info">
+                                    No standards found for {formData.subject}.
+                                    Please add standards in the Standards page.
+                                  </Alert>
+                                )}
+                              </>
+                            ) : (
+                              <Alert severity="warning">
+                                Please select a subject first to see available
+                                standards.
+                              </Alert>
+                            )}
+                          </Grid>
+                        </Grid>
+                      </Box>
+                    )}
                   </AccordionDetails>
                 </Accordion>
               </Grid>
@@ -719,9 +741,7 @@ const EnhancedAssignmentForm = ({
           </LocalizationProvider>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose}>
-            Cancel
-          </Button>
+          <Button onClick={onClose}>Cancel</Button>
           <Button
             onClick={handleSave}
             variant="contained"
@@ -744,16 +764,6 @@ const EnhancedAssignmentForm = ({
           {snackbar.message}
         </Alert>
       </Snackbar>
-
-      {/* Standards Mapper Dialog */}
-      {assignment && (
-        <StandardsMapper
-          open={standardsMapperOpen}
-          onClose={() => setStandardsMapperOpen(false)}
-          assignmentId={assignment.id}
-          assignmentName={assignment.name}
-        />
-      )}
     </>
   );
 };

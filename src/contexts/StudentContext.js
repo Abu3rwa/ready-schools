@@ -11,6 +11,19 @@ import {
   updateStudent as apiUpdateStudent,
   deleteStudent as apiDeleteStudent,
 } from "../services/apiService";
+import { db } from "../firebase";
+import {
+  collection,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  query,
+  where,
+  getDocs,
+  serverTimestamp,
+} from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 // Create the context
 const StudentContext = createContext();
@@ -35,8 +48,14 @@ export const StudentProvider = ({ children }) => {
   const fetchStudents = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await getStudents();
-      setStudents(data);
+      try {
+        const data = await getStudents();
+        setStudents(data);
+      } catch (error) {
+        console.log("Loading sample students data");
+        const { sampleData } = await import("../sampleData");
+        setStudents(sampleData.students);
+      }
       setError(null);
     } catch (err) {
       console.error("Failed to fetch students:", err);
@@ -112,6 +131,82 @@ export const StudentProvider = ({ children }) => {
     setSelectedStudent(null);
   };
 
+  // Function to add a goal for a student
+  const addGoal = async (studentId, goalData) => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
+
+      const goalsCollection = collection(db, "students", studentId, "goals");
+      const docData = {
+        ...goalData,
+        userId: user.uid,
+        createdAt: serverTimestamp(),
+      };
+      const docRef = await addDoc(goalsCollection, docData);
+      return { id: docRef.id, ...docData };
+    } catch (err) {
+      console.error("Error adding goal:", err);
+      throw err;
+    }
+  };
+
+  // Function to update a goal
+  const updateGoal = async (studentId, goalId, updatedData) => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
+
+      const goalDoc = doc(db, "students", studentId, "goals", goalId);
+      await updateDoc(goalDoc, updatedData);
+      return { id: goalId, ...updatedData };
+    } catch (err) {
+      console.error("Error updating goal:", err);
+      throw err;
+    }
+  };
+
+  // Function to get goals for a student
+  const getGoals = async (studentId) => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
+
+      const goalsCollection = collection(db, "students", studentId, "goals");
+      const q = query(goalsCollection, where("userId", "==", user.uid));
+      const querySnapshot = await getDocs(q);
+      
+      const goals = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      
+      return goals;
+    } catch (err) {
+      console.error("Error fetching goals:", err);
+      throw err;
+    }
+  };
+
+  // Function to delete a goal
+  const deleteGoal = async (studentId, goalId) => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
+
+      const goalDoc = doc(db, "students", studentId, "goals", goalId);
+      await deleteDoc(goalDoc);
+      return { id: goalId };
+    } catch (err) {
+      console.error("Error deleting goal:", err);
+      throw err;
+    }
+  };
+
   // Create the value object to be provided by the context
   const value = {
     students,
@@ -123,6 +218,10 @@ export const StudentProvider = ({ children }) => {
     deleteStudent,
     selectStudent,
     clearSelectedStudent,
+    addGoal,
+    updateGoal,
+    getGoals,
+    deleteGoal,
   };
 
   return (
