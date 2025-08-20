@@ -216,6 +216,12 @@ const Attendance = () => {
 
       // Save new records
       if (newRecords.length > 0) {
+        console.log('Saving new attendance records:', {
+          dateString,
+          newRecordsCount: newRecords.length,
+          sampleRecord: newRecords[0],
+          allRecords: newRecords
+        });
         await recordBulkAttendance(dateString, newRecords);
       }
 

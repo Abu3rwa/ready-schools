@@ -35,9 +35,10 @@ export const ROUNDING_METHODS = {
  * Calculate weighted average for a category
  * @param {Array} grades - Array of grade objects
  * @param {Object} category - Category configuration
+ * @param {Array} assignments - Array of assignment objects (optional)
  * @returns {Object} Calculation result
  */
-export const calculateCategoryAverage = (grades, category) => {
+export const calculateCategoryAverage = (grades, category, assignments = []) => {
   if (!grades || grades.length === 0) {
     return {
       average: 0,
@@ -69,13 +70,16 @@ export const calculateCategoryAverage = (grades, category) => {
   let earnedPoints = 0;
 
   validGrades.forEach(grade => {
-    const assignment = grade.assignment;
+    // Find the assignment for this grade
+    const assignment = assignments?.find(a => a.id === grade.assignmentId);
     if (assignment && assignment.points) {
       const maxPoints = parseFloat(assignment.points);
       const score = parseFloat(grade.score);
       
       totalPoints += maxPoints;
-      earnedPoints += score;
+      // Since score is stored as percentage, convert to points
+      const earnedPointsForAssignment = (score / 100) * maxPoints;
+      earnedPoints += earnedPointsForAssignment;
     }
   });
 
@@ -121,7 +125,7 @@ export const calculateFinalGrade = (gradeBook, grades, assignments) => {
       return assignment && assignment.category === category.name;
     });
 
-    const categoryCalculation = calculateCategoryAverage(categoryGrades, category);
+    const categoryCalculation = calculateCategoryAverage(categoryGrades, category, assignments);
     const weight = category.weight || 0;
     
     categoryBreakdown.push({
@@ -399,7 +403,7 @@ export const getStudentGradeSummary = (studentId, gradeBook, grades, assignments
       return assignment && assignment.category === category.name;
     });
 
-    categoryGrades[category.name] = calculateCategoryAverage(categoryGradesList, category);
+    categoryGrades[category.name] = calculateCategoryAverage(categoryGradesList, category, assignments);
   });
 
   return {

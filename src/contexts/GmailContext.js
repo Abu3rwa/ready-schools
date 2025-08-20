@@ -61,6 +61,10 @@ export const GmailProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
+      // Clear any existing Gmail errors first
+      if (currentUser) {
+        await gmailService.clearGmailError(currentUser.uid);
+      }
       await gmailService.initiateGmailAuth();
     } catch (error) {
       setError(error.message);
@@ -68,7 +72,7 @@ export const GmailProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentUser]);
 
   // Handle OAuth callback
   const handleGmailCallback = useCallback(async (code, state) => {

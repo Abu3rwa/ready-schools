@@ -1,11 +1,27 @@
-import { getStorage } from 'firebase-admin/storage';
+import { getStorage } from "firebase-admin/storage";
 import dayjs from 'dayjs';
 
 class AttachmentService {
   constructor() {
-    this.storage = getStorage();
-    // Updated to use the correct storage bucket for project smile3-8c8c5
-    this.bucket = this.storage.bucket('smile3-8c8c5.firebasestorage.app');
+    // Don't initialize Firebase Admin services in constructor
+    this.storage = null;
+    this.bucket = null;
+  }
+
+  // Lazy initialization of Storage
+  getStorage() {
+    if (!this.storage) {
+      this.storage = getStorage();
+    }
+    return this.storage;
+  }
+
+  // Lazy initialization of bucket
+  getBucket() {
+    if (!this.bucket) {
+      this.bucket = this.getStorage().bucket('smile3-8c8c5.firebasestorage.app');
+    }
+    return this.bucket;
   }
 
   /**
@@ -45,7 +61,7 @@ class AttachmentService {
   async getStudentReport(studentId, date) {
     try {
       const path = `daily_update_attachments/templates/student_reports/${studentId}/${date}_report.pdf`;
-      const file = this.bucket.file(path);
+      const file = this.getBucket().file(path);
       const exists = await file.exists();
 
       if (!exists[0]) {
@@ -71,7 +87,7 @@ class AttachmentService {
   async getClassMaterials(date) {
     try {
       const path = `daily_update_attachments/templates/class_materials/${date}`;
-      const [files] = await this.bucket.getFiles({ prefix: path });
+      const [files] = await this.getBucket().getFiles({ prefix: path });
 
       return files.map(file => ({
         filename: file.name.split('/').pop(),
@@ -92,7 +108,7 @@ class AttachmentService {
    */
   async uploadPDF(fileBuffer, path) {
     try {
-      const file = this.bucket.file(path);
+      const file = this.getBucket().file(path);
       await file.save(fileBuffer, {
         metadata: {
           contentType: 'application/pdf'
@@ -112,7 +128,7 @@ class AttachmentService {
    */
   async deleteFile(path) {
     try {
-      const file = this.bucket.file(path);
+      const file = this.getBucket().file(path);
       await file.delete();
       return true;
     } catch (error) {

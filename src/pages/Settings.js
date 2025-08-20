@@ -4,6 +4,8 @@ import { Container, Box, Typography, Grid } from "@mui/material";
 import SubjectsManager from "../components/settings/SubjectsManager";
 import EmailSettings from "../components/settings/EmailSettings";
 import AcademicPeriodsManager from "../components/settings/AcademicPeriodsManager";
+import CharacterTraitsManager from "../components/settings/CharacterTraitsManager";
+import GmailSetup from "../components/email/GmailSetup";
 
 const Settings = () => {
   const { t } = useTranslation();
@@ -20,6 +22,9 @@ const Settings = () => {
       </Box>
       <Grid container spacing={3}>
         <Grid item xs={12}>
+          <CharacterTraitsManager />
+        </Grid>
+        <Grid item xs={12}>
           <AcademicPeriodsManager />
         </Grid>
         <Grid item xs={12}>
@@ -27,6 +32,9 @@ const Settings = () => {
         </Grid>
         <Grid item xs={12}>
           <EmailSettings />
+        </Grid>
+        <Grid item xs={12}>
+          <GmailSetup />
         </Grid>
       </Grid>
     </Container>

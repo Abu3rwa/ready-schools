@@ -7,7 +7,8 @@ export const sampleData = {
       lastName: "Doe",
       grade: "5",
       section: "A",
-      email: "john.doe@example.com"
+      email: "john.doe@example.com",
+      studentEmail: "john.doe@school.edu"
     },
     {
       id: "student2",
@@ -15,7 +16,8 @@ export const sampleData = {
       lastName: "Smith",
       grade: "5",
       section: "A",
-      email: "jane.smith@example.com"
+      email: "jane.smith@example.com",
+      studentEmail: "jane.smith@school.edu"
     }
   ],
   assignments: [

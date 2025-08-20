@@ -103,6 +103,10 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isOwner(resource.data.userId);
     }
+    // Lessons collection rules
+    match /lessons/{lessonId} {
+      allow read, write: if isAuthenticated();
+    }
 
     // Behaviors collection rules
     match /behaviors/{behaviorId} {
@@ -143,6 +147,13 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.teacherId == request.auth.uid;
       allow update, delete: if isOwner(resource.data.teacherId);
+    }
+
+    // Attendance collection rules
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
     }
 
     // User settings subcollection

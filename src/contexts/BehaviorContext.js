@@ -213,6 +213,47 @@ export const BehaviorProvider = ({ children }) => {
     }
   };
 
+  // Function to calculate behavior statistics for a student
+  const calculateBehaviorStats = (studentId) => {
+    const studentBehaviors = behavior.filter(record => record.studentId === studentId);
+    
+    if (studentBehaviors.length === 0) {
+      return {
+        positive: 0,
+        negative: 0,
+        positivePercentage: "0",
+        negativePercentage: "0"
+      };
+    }
+
+    // Count positive and negative behaviors
+    let positive = 0;
+    let negative = 0;
+
+    studentBehaviors.forEach(record => {
+      if (record.skills && Array.isArray(record.skills)) {
+        record.skills.forEach(skill => {
+          if (skill.type === 'strength') {
+            positive++;
+          } else if (skill.type === 'growth') {
+            negative++;
+          }
+        });
+      }
+    });
+
+    const total = positive + negative;
+    const positivePercentage = total > 0 ? Math.round((positive / total) * 100) : 0;
+    const negativePercentage = total > 0 ? Math.round((negative / total) * 100) : 0;
+
+    return {
+      positive,
+      negative,
+      positivePercentage: `${positivePercentage}%`,
+      negativePercentage: `${negativePercentage}%`
+    };
+  };
+
   // Create the value object to be provided by the context
   const value = {
     behavior,
@@ -224,6 +265,7 @@ export const BehaviorProvider = ({ children }) => {
     getBehaviorByStudent,
     getSkillsTaxonomy,
     addReflection,
+    calculateBehaviorStats,
   };
 
   return (

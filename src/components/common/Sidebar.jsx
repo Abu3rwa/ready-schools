@@ -24,6 +24,7 @@ import {
   Settings as SettingsIcon,
   School as SchoolIcon,
   AdminPanelSettings as AdminIcon,
+  Book as BookIcon,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -49,6 +50,12 @@ const menuItems = [
     icon: <AssignmentIcon />,
     path: "/assignments",
     color: "#E74C3C",
+  },
+  {
+    text: "navigation.lessons",
+    icon: <BookIcon />,
+    path: "/lessons",
+    color: "#FF6B6B",
   },
   {
     text: "navigation.attendance",

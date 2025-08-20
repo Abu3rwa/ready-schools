@@ -79,8 +79,12 @@ export class ReportGenerator {
     if (grades && grades.length > 0) {
       this.doc.moveDown().text('Today\'s Grades:');
       grades.forEach(grade => {
-        const percentage = Math.round((grade.score / grade.points) * 100);
-        this.doc.text(`${grade.assignmentName}: ${grade.score}/${grade.points} (${percentage}%)`);
+        if (grade.points && grade.points > 0) {
+          const percentage = Math.round((grade.score / grade.points) * 100);
+          this.doc.text(`${grade.assignmentName}: ${grade.score}/${grade.points} (${percentage}%)`);
+        } else {
+          this.doc.text(`${grade.assignmentName}: ${grade.score} points`);
+        }
       });
     }
 

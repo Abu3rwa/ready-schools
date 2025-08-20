@@ -25,6 +25,7 @@
     "students": "Students",
     "gradebooks": "Grade Books",
     "assignments": "Assignments",
+    "lessons": "Lessons",
     "attendance": "Attendance",
     "behavior": "Behavior",
     "communication": "Communication",
@@ -241,7 +242,8 @@
     "behavior": "Behavior",
     "activities": "Activities",
     "upcoming": "Upcoming",
-    "subjectGrades": "Subject Grades"
+    "subjectGrades": "Subject Grades",
+    "lessons": "Lessons"
   },
   
   "settings": {

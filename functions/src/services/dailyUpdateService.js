@@ -5,18 +5,19 @@ export class DailyUpdateService {
     this.dataSources = {};
   }
 
-  // Set data sources (students, attendance, assignments, grades, behavior)
+  // Set data sources (students, attendance, assignments, grades, behavior, lessons)
   setDataSources(sources) {
-    console.log('Setting data sources:', {
+    console.log("Setting data sources:", {
       studentsCount: (sources.students || []).length,
       attendanceCount: (sources.attendance || []).length,
       assignmentsCount: (sources.assignments || []).length,
       gradesCount: (sources.grades || []).length,
       behaviorCount: (sources.behavior || []).length,
+      lessonsCount: (sources.lessons || []).length,
       teacher: sources.teacher,
-      schoolName: sources.schoolName
+      schoolName: sources.schoolName,
     });
-    
+
     // Ensure we have arrays for all data sources
     this.dataSources = {
       students: sources.students || [],
@@ -24,8 +25,9 @@ export class DailyUpdateService {
       assignments: sources.assignments || [],
       grades: sources.grades || [],
       behavior: sources.behavior || [],
+      lessons: sources.lessons || [],
       teacher: sources.teacher,
-      schoolName: sources.schoolName
+      schoolName: sources.schoolName,
     };
   }
 
@@ -50,6 +52,9 @@ export class DailyUpdateService {
     // Get today's behavior incidents
     const behavior = this.getTodayBehavior(studentId, dateString);
 
+    // Get today's lessons
+    const lessons = this.getTodayLessons(studentId, dateString);
+
     // Get upcoming assignments (next 7 days)
     const upcomingAssignments = this.getUpcomingAssignments(studentId, date);
 
@@ -60,19 +65,19 @@ export class DailyUpdateService {
     const subjectGrades = this.calculateSubjectGrades(studentId);
 
     // Calculate attendance rate
-    const attendanceRate = this.calculateAttendanceRate(studentId);
+    const attendanceRate = this.calculateAttendanceRate(studentId, dateString);
 
     // Get parent emails and optional parent display name
     const parentEmails = this.getParentEmails(student);
     const parentName = this.getParentName(student);
 
     // Debug logging for gender data
-    console.log('Student gender data:', {
+    console.log("Student gender data:", {
       studentId: student.id,
       studentName: `${student.firstName} ${student.lastName}`,
       rawGender: student.gender,
       genderType: typeof student.gender,
-      processedGender: student.gender || null
+      processedGender: student.gender || null,
     });
 
     return {
@@ -86,37 +91,41 @@ export class DailyUpdateService {
       assignments,
       grades,
       behavior,
+      lessons,
       upcomingAssignments,
       overallGrade,
       subjectGrades,
       attendanceRate,
       // Additional metadata
       schoolName: this.dataSources.schoolName || "AMLY School",
-      teacherName: (this.dataSources.teacher?.name) || (this.dataSources.teacher?.displayName) || "Teacher",
+      teacherName:
+        this.dataSources.teacher?.name ||
+        this.dataSources.teacher?.displayName ||
+        "Teacher",
       teacherEmail: this.dataSources.teacher?.email || "",
     };
   }
 
   // Generate daily updates for all students
   generateAllDailyUpdates(date = new Date()) {
-    console.log('Generating daily updates for date:', date);
-    console.log('Data sources:', {
+    console.log("Generating daily updates for date:", date);
+    console.log("Data sources:", {
       studentsCount: (this.dataSources.students || []).length,
       attendanceCount: (this.dataSources.attendance || []).length,
       assignmentsCount: (this.dataSources.assignments || []).length,
       gradesCount: (this.dataSources.grades || []).length,
       behaviorCount: (this.dataSources.behavior || []).length,
       teacher: this.dataSources.teacher,
-      schoolName: this.dataSources.schoolName
+      schoolName: this.dataSources.schoolName,
     });
 
     const updates = [];
 
     for (const student of this.dataSources.students || []) {
       try {
-        console.log('Generating update for student:', student.id);
+        console.log("Generating update for student:", student.id);
         const update = this.generateDailyUpdate(student.id, date);
-        console.log('Generated update:', update);
+        console.log("Generated update:", update);
         updates.push(update);
       } catch (error) {
         console.error(
@@ -126,7 +135,7 @@ export class DailyUpdateService {
       }
     }
 
-    console.log('Generated updates for', updates.length, 'students');
+    console.log("Generated updates for", updates.length, "students");
     return updates;
   }
 
@@ -153,8 +162,12 @@ export class DailyUpdateService {
     // Get assignments that are due today or were assigned today
     const todayAssignments = (this.dataSources.assignments || []).filter(
       (assignment) => {
-        const dueDate = dayjs(assignment.dueDate).format("YYYY-MM-DD");
-        const createdDate = dayjs(assignment.createdAt).format("YYYY-MM-DD");
+        const dueDate = assignment.dueDate
+          ? dayjs(assignment.dueDate).format("YYYY-MM-DD")
+          : null;
+        const createdDate = assignment.createdAt
+          ? dayjs(assignment.createdAt).format("YYYY-MM-DD")
+          : null;
         return dueDate === dateString || createdDate === dateString;
       }
     );
@@ -182,6 +195,9 @@ export class DailyUpdateService {
   getTodayGrades(studentId, dateString) {
     return (this.dataSources.grades || [])
       .filter((grade) => {
+        if (!grade.dateEntered) {
+          return false;
+        }
         const gradeDate = dayjs(grade.dateEntered).format("YYYY-MM-DD");
         return grade.studentId === studentId && gradeDate === dateString;
       })
@@ -199,8 +215,21 @@ export class DailyUpdateService {
 
   getTodayBehavior(studentId, dateString) {
     return (this.dataSources.behavior || []).filter((incident) => {
+      if (!incident.date) {
+        return false;
+      }
       const incidentDate = dayjs(incident.date).format("YYYY-MM-DD");
       return incident.studentId === studentId && incidentDate === dateString;
+    });
+  }
+
+  getTodayLessons(studentId, dateString) {
+    return (this.dataSources.lessons || []).filter((lesson) => {
+      if (!lesson.date) {
+        return false;
+      }
+      const lessonDate = dayjs(lesson.date).format("YYYY-MM-DD");
+      return lessonDate === dateString;
     });
   }
 
@@ -209,6 +238,9 @@ export class DailyUpdateService {
 
     return (this.dataSources.assignments || [])
       .filter((assignment) => {
+        if (!assignment.dueDate) {
+          return false;
+        }
         const dueDate = dayjs(assignment.dueDate);
         return dueDate.isAfter(dayjs(date)) && dueDate.isBefore(nextWeek);
       })
@@ -220,13 +252,38 @@ export class DailyUpdateService {
       (grade) => grade.studentId === studentId
     );
 
-    if (studentGrades.length === 0) return 0;
+    console.log(`Calculating overall grade for student ${studentId}:`, {
+      totalGrades: studentGrades.length,
+      grades: studentGrades,
+    });
 
-    const totalPercentage = studentGrades.reduce((sum, grade) => {
-      return sum + (grade.score / grade.points) * 100;
+    if (studentGrades.length === 0) return null;
+
+    const validGrades = studentGrades.filter(
+      (grade) => grade.score != null && grade.points != null && grade.points > 0
+    );
+
+    console.log(`Valid grades for student ${studentId}:`, {
+      validCount: validGrades.length,
+      validGrades: validGrades,
+    });
+
+    if (validGrades.length === 0) return null;
+
+    const totalPercentage = validGrades.reduce((sum, grade) => {
+      const percentage = (grade.score / grade.points) * 100;
+      console.log(
+        `Grade calculation: ${grade.score}/${grade.points} = ${percentage}%`
+      );
+      return sum + percentage;
     }, 0);
 
-    return Math.round(totalPercentage / studentGrades.length);
+    const averageGrade = Math.round(totalPercentage / validGrades.length);
+    console.log(
+      `Final average grade for student ${studentId}: ${averageGrade}%`
+    );
+
+    return averageGrade;
   }
 
   // Calculate per-subject average grades for a student
@@ -243,9 +300,21 @@ export class DailyUpdateService {
     const subjectTotals = new Map();
 
     for (const grade of grades) {
+      // Skip grades with invalid data
+      if (grade.score == null) {
+        continue;
+      }
+
       const assignment = assignmentsById.get(grade.assignmentId);
       const subject = assignment?.subject || "General";
-      const percentage = (grade.score / grade.points) * 100;
+
+      let percentage;
+      if (grade.points && grade.points > 0) {
+        percentage = (grade.score / grade.points) * 100;
+      } else {
+        // For grades without points, use the score as a percentage (assuming it's already a percentage)
+        percentage = grade.score;
+      }
 
       if (!subjectTotals.has(subject)) {
         subjectTotals.set(subject, { sum: 0, count: 0 });
@@ -257,16 +326,32 @@ export class DailyUpdateService {
 
     const subjectAverages = {};
     for (const [subject, { sum, count }] of subjectTotals) {
-      subjectAverages[subject] = Math.round(sum / count);
+      if (count > 0) {
+        subjectAverages[subject] = Math.round(sum / count);
+      }
     }
 
     return subjectAverages;
   }
 
-  calculateAttendanceRate(studentId) {
-    const studentAttendance = (this.dataSources.attendance || []).filter(
+  calculateAttendanceRate(studentId, dateString = null) {
+    let studentAttendance = (this.dataSources.attendance || []).filter(
       (record) => record.studentId === studentId
     );
+
+    // If dateString is provided, filter by date
+    if (dateString) {
+      studentAttendance = studentAttendance.filter(
+        (record) => record.date === dateString
+      );
+    }
+
+    console.log(`Calculating attendance rate for student ${studentId}:`, {
+      dateString,
+      totalRecords: studentAttendance.length,
+      records: studentAttendance,
+      statuses: studentAttendance.map((r) => r.status),
+    });
 
     if (studentAttendance.length === 0) return 0;
 
@@ -274,14 +359,25 @@ export class DailyUpdateService {
       (record) => record.status === "Present"
     ).length;
 
-    return Math.round((presentCount / studentAttendance.length) * 100);
+    const attendanceRate = Math.round(
+      (presentCount / studentAttendance.length) * 100
+    );
+
+    console.log(
+      `Attendance rate result: ${presentCount}/${studentAttendance.length} = ${attendanceRate}%`
+    );
+
+    return attendanceRate;
   }
 
   getParentEmails(student) {
-    const emails = [];
-    if (student.parentEmail1) emails.push(student.parentEmail1);
-    if (student.parentEmail2) emails.push(student.parentEmail2);
-    return emails;
+    const emails = [student.parentEmail1, student.parentEmail2]
+      .filter(Boolean)
+      .map((e) => (typeof e === "string" ? e.trim() : e))
+      .filter((e) => typeof e === "string" && e.length > 0);
+    // normalize to lowercase for uniqueness; sender transports are case-insensitive on local-part for most providers
+    const uniqueLower = Array.from(new Set(emails.map((e) => e.toLowerCase())));
+    return uniqueLower;
   }
 
   getParentName(student) {
@@ -311,15 +407,34 @@ export class DailyUpdateService {
   getClassSummary(date = new Date()) {
     const dateString = dayjs(date).format("YYYY-MM-DD");
     const totalStudents = (this.dataSources.students || []).length;
+
+    console.log(`Generating class summary for date: ${dateString}`);
+    console.log(
+      "Available attendance records:",
+      this.dataSources.attendance || []
+    );
+
     const presentStudents = (this.dataSources.attendance || []).filter(
-      (a) => a.date === dateString && a.status === "present"
+      (a) => a.date === dateString && a.status === "Present"
     ).length;
     const absentStudents = (this.dataSources.attendance || []).filter(
-      (a) => a.date === dateString && a.status === "absent"
+      (a) => a.date === dateString && a.status === "Absent"
     ).length;
     const lateStudents = (this.dataSources.attendance || []).filter(
-      (a) => a.date === dateString && a.status === "late"
+      (a) => a.date === dateString && a.status === "Tardy"
     ).length;
+
+    console.log(`Class summary attendance counts:`, {
+      dateString,
+      totalStudents,
+      presentStudents,
+      absentStudents,
+      lateStudents,
+      attendanceRate:
+        totalStudents > 0
+          ? Math.round((presentStudents / totalStudents) * 100)
+          : 0,
+    });
 
     // Calculate new grades today
     const newGradesToday = (this.dataSources.grades || []).filter(
@@ -338,23 +453,33 @@ export class DailyUpdateService {
     // Calculate average grade across all students
     let totalGrade = 0;
     let gradeCount = 0;
-    
+
     for (const student of this.dataSources.students || []) {
       const studentGrades = (this.dataSources.grades || []).filter(
         (grade) => grade.studentId === student.id
       );
-      
+
       if (studentGrades.length > 0) {
-        const studentAverage = studentGrades.reduce((sum, grade) => {
-          return sum + (grade.score / grade.points) * 100;
-        }, 0) / studentGrades.length;
-        
-        totalGrade += studentAverage;
-        gradeCount++;
+        // Filter out invalid grades
+        const validGrades = studentGrades.filter(
+          (grade) =>
+            grade.score != null && grade.points != null && grade.points > 0
+        );
+
+        if (validGrades.length > 0) {
+          const studentAverage =
+            validGrades.reduce((sum, grade) => {
+              return sum + (grade.score / grade.points) * 100;
+            }, 0) / validGrades.length;
+
+          totalGrade += studentAverage;
+          gradeCount++;
+        }
       }
     }
 
-    const averageGrade = gradeCount > 0 ? Math.round(totalGrade / gradeCount) : 0;
+    const averageGrade =
+      gradeCount > 0 ? Math.round(totalGrade / gradeCount) : null;
 
     return {
       date: dateString,
@@ -362,12 +487,13 @@ export class DailyUpdateService {
       presentStudents,
       absentStudents,
       lateStudents,
-      attendanceRate: totalStudents > 0 ? (presentStudents / totalStudents) * 100 : 0,
+      attendanceRate:
+        totalStudents > 0 ? (presentStudents / totalStudents) * 100 : 0,
       // Frontend expected properties - map existing data to expected names
       presentToday: presentStudents,
       newGradesToday,
       upcomingAssignments,
-      averageGrade
+      averageGrade,
     };
   }
 
@@ -377,13 +503,13 @@ export class DailyUpdateService {
       this.setDataSources(dataSources);
       const dailyUpdates = this.generateAllDailyUpdates(date);
       const classSummary = this.getClassSummary(date);
-      
+
       return {
         dailyUpdates,
         classSummary,
         totalStudents: dailyUpdates.length,
         success: true,
-        message: `Generated daily updates for ${dailyUpdates.length} students`
+        message: `Generated daily updates for ${dailyUpdates.length} students`,
       };
     } catch (error) {
       console.error("Error generating daily updates:", error);
@@ -392,7 +518,7 @@ export class DailyUpdateService {
         error: error.message,
         dailyUpdates: [],
         classSummary: null,
-        totalStudents: 0
+        totalStudents: 0,
       };
     }
   }
@@ -402,18 +528,18 @@ export class DailyUpdateService {
     try {
       this.setDataSources(dataSources);
       const dailyUpdate = this.generateDailyUpdate(studentId, date);
-      
+
       return {
         success: true,
         data: dailyUpdate,
-        message: `Generated daily update for ${dailyUpdate.studentName}`
+        message: `Generated daily update for ${dailyUpdate.studentName}`,
       };
     } catch (error) {
       console.error("Error generating student daily update:", error);
       return {
         success: false,
         error: error.message,
-        data: null
+        data: null,
       };
     }
   }
@@ -421,7 +547,7 @@ export class DailyUpdateService {
   // Get daily update data without sending emails
   async getDailyUpdateData(studentId = null, dataSources, date = new Date()) {
     try {
-      console.log('getDailyUpdateData called with:', {
+      console.log("getDailyUpdateData called with:", {
         studentId,
         date,
         dataSources: {
@@ -431,29 +557,29 @@ export class DailyUpdateService {
           gradesCount: (dataSources.grades || []).length,
           behaviorCount: (dataSources.behavior || []).length,
           teacher: dataSources.teacher,
-          schoolName: dataSources.schoolName
-        }
+          schoolName: dataSources.schoolName,
+        },
       });
-      
+
       this.setDataSources(dataSources);
-      
+
       if (studentId) {
-        console.log('Generating single student update');
+        console.log("Generating single student update");
         const dailyUpdate = this.generateDailyUpdate(studentId, date);
-        console.log('Generated single student update:', dailyUpdate);
+        console.log("Generated single student update:", dailyUpdate);
         return {
           success: true,
           data: dailyUpdate,
-          message: `Retrieved daily update data for ${dailyUpdate.studentName}`
+          message: `Retrieved daily update data for ${dailyUpdate.studentName}`,
         };
       } else {
-        console.log('Generating all student updates');
+        console.log("Generating all student updates");
         const dailyUpdates = this.generateAllDailyUpdates(date);
-        console.log('Generated updates for', dailyUpdates.length, 'students');
-        
+        console.log("Generated updates for", dailyUpdates.length, "students");
+
         const classSummary = this.getClassSummary(date);
-        console.log('Generated class summary:', classSummary);
-        
+        console.log("Generated class summary:", classSummary);
+
         const result = {
           success: true,
           data: {
@@ -461,9 +587,9 @@ export class DailyUpdateService {
             classSummary,
             totalStudents: dailyUpdates.length,
           },
-          message: `Retrieved daily update data for ${dailyUpdates.length} students`
+          message: `Retrieved daily update data for ${dailyUpdates.length} students`,
         };
-        console.log('Returning result:', result);
+        console.log("Returning result:", result);
         return result;
       }
     } catch (error) {
@@ -473,7 +599,7 @@ export class DailyUpdateService {
         success: false,
         error: error.message,
         stack: error.stack,
-        data: null
+        data: null,
       };
     }
   }

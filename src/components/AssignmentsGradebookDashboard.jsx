@@ -86,8 +86,7 @@ const AssignmentsGradebookDashboard = () => {
     gradeBooks, 
     loading: gradebooksLoading,
     getGradeBookAnalytics,
-    getGradeBookStandardsData,
-    ensureGradeBookForSubject
+    getGradeBookStandardsData
   } = useGradeBooks();
 
   const { 
@@ -198,13 +197,6 @@ const AssignmentsGradebookDashboard = () => {
     try {
       console.log('Creating assignment:', assignmentData);
       
-      // Ensure gradebook exists for the subject
-      if (assignmentData.subject) {
-        console.log('Ensuring gradebook exists for subject:', assignmentData.subject);
-        const gradebook = await ensureGradeBookForSubject(assignmentData.subject);
-        console.log('Gradebook ensured:', gradebook);
-      }
-      
       const result = await addAssignment(assignmentData);
       console.log('Assignment created successfully:', result);
       setShowAssignmentDialog(false);
@@ -219,31 +211,21 @@ const AssignmentsGradebookDashboard = () => {
     if (!selectedAssignment || !selectedStudent || !gradeValue) return;
 
     try {
-      // Validate and normalize the grade value
+      // Validate the grade value
       let normalizedScore = parseFloat(gradeValue);
       
-      // Check if the grade is already a percentage (0-100) or needs conversion
-      if (normalizedScore > 100) {
-        // If score is greater than 100, it might be points earned out of total points
-        // Convert to percentage: (points earned / total points) * 100
-        normalizedScore = (normalizedScore / selectedAssignment.points) * 100;
-        console.log(`Converting ${gradeValue} points to ${normalizedScore.toFixed(2)}%`);
-      } else if (normalizedScore <= selectedAssignment.points && normalizedScore > 0) {
-        // If score is less than or equal to assignment points, it's likely points earned
-        // Convert to percentage: (points earned / total points) * 100
-        normalizedScore = (normalizedScore / selectedAssignment.points) * 100;
-        console.log(`Converting ${gradeValue} points earned to ${normalizedScore.toFixed(2)}%`);
-      } else if (normalizedScore < 0) {
+      // Ensure the score is within valid range
+      if (normalizedScore < 0) {
         normalizedScore = 0;
-      } else if (normalizedScore > 100) {
-        normalizedScore = 100;
+      } else if (normalizedScore > selectedAssignment.points) {
+        normalizedScore = selectedAssignment.points;
       }
 
       console.log('Creating grade for:', {
         student: selectedStudent.name,
         assignment: selectedAssignment.name,
         originalScore: gradeValue,
-        normalizedScore: normalizedScore,
+        pointsEarned: normalizedScore,
         assignmentPoints: selectedAssignment.points,
         subject: selectedAssignment.subject,
         standardsGrades
@@ -253,7 +235,8 @@ const AssignmentsGradebookDashboard = () => {
         studentId: selectedStudent.id,
         assignmentId: selectedAssignment.id,
         subject: selectedAssignment.subject,
-        score: normalizedScore, // Ensure this is the calculated percentage
+        score: normalizedScore, // Store as raw points (5, 4, etc.)
+        points: selectedAssignment.points, // Add the total possible points
         date: new Date().toISOString(),
         type: 'assignment'
       };

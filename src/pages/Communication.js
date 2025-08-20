@@ -60,6 +60,8 @@ import {
   FormatItalic as ItalicIcon,
   FormatUnderlined as UnderlinedIcon,
   FormatListBulleted as ListIcon,
+  Settings as SettingsIcon,
+  Email as EmailIcon2,
 } from "@mui/icons-material";
 import { useStudents } from "../contexts/StudentContext";
 import { useCommunication } from "../contexts/CommunicationContext";
@@ -68,6 +70,9 @@ import { useAttendance } from "../contexts/AttendanceContext";
 import { useAssignments } from "../contexts/AssignmentContext";
 import { useGrades } from "../contexts/GradeContext";
 import { useBehavior } from "../contexts/BehaviorContext";
+import { useAuth } from "../contexts/AuthContext";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../firebase";
 import Loading from "../components/common/Loading";
 import DailyUpdateManager from "../components/communication/DailyUpdateManager";
 import EmailStatus from "../components/communication/EmailStatus";
@@ -91,16 +96,19 @@ const Communication = () => {
   } = useCommunication();
   
   const [communications, setCommunications] = useState(initialCommunications);
+  const { currentUser } = useAuth();
+
+  // Context hooks
+  const { attendance, loading: attendanceLoading } = useAttendance();
+  const { assignments, loading: assignmentsLoading } = useAssignments();
+  const { grades, loading: gradesLoading } = useGrades();
+  const { behavior, loading: behaviorLoading } = useBehavior();
+  console.log("Attendance::::::::::::::: ", attendance)
 
   // Keep communications in sync with context
   useEffect(() => {
     setCommunications(initialCommunications);
   }, [initialCommunications]);
-
-  const { attendance, loading: attendanceLoading } = useAttendance();
-  const { assignments, loading: assignmentsLoading } = useAssignments();
-  const { grades, loading: gradesLoading } = useGrades();
-  const { behavior, loading: behaviorLoading } = useBehavior();
 
   // State for UI
   const [selectedStudent, setSelectedStudent] = useState(null);
@@ -134,39 +142,13 @@ const Communication = () => {
     severity: "success",
   });
 
-  // Email templates
-  const emailTemplates = [
-    {
-      name: "Weekly Progress Update",
-      subject: "Weekly Progress Update for [Student Name]",
-      content:
-        "Dear Parent/Guardian,\n\nI wanted to provide you with a weekly update on [Student Name]'s progress. This week, your child has been working on [subject/topic] and has shown [observations].\n\nSome highlights include:\n- [Highlight 1]\n- [Highlight 2]\n- [Highlight 3]\n\nAreas that may need additional support at home:\n- [Area 1]\n- [Area 2]\n\nPlease feel free to contact me if you have any questions or concerns.\n\nBest regards,\nMs. Smith",
-    },
-    {
-      name: "Missing Assignment Notice",
-      subject: "Missing Assignment Notice for [Student Name]",
-      content:
-        "Dear Parent/Guardian,\n\nI'm writing to inform you that [Student Name] has not submitted the following assignment(s):\n\n- [Assignment Name] - Due on [Due Date]\n\nIt's important that this work is completed as soon as possible to ensure [Student Name] stays on track with the curriculum. Please encourage your child to complete and submit this work by [Extended Due Date].\n\nIf there are any challenges preventing the completion of this work, please let me know so we can find a solution together.\n\nThank you for your support,\nMs. Smith",
-    },
-    {
-      name: "Positive Behavior Recognition",
-      subject: "Recognizing [Student Name]'s Positive Behavior",
-      content:
-        "Dear Parent/Guardian,\n\nI wanted to take a moment to recognize [Student Name] for demonstrating excellent behavior in class. Specifically, [he/she] has shown [specific positive behaviors or traits].\n\nThis kind of behavior contributes positively to our classroom environment and sets a great example for other students. I wanted to make sure you were aware of this achievement.\n\nThank you for your continued support in [Student Name]'s education.\n\nBest regards,\nMs. Smith",
-    },
-    {
-      name: "Upcoming Test Reminder",
-      subject: "Upcoming Test Reminder for [Student Name]",
-      content:
-        "Dear Parent/Guardian,\n\nThis is a reminder that [Student Name]'s class will have an upcoming test on [subject] scheduled for [test date].\n\nThe test will cover the following topics:\n- [Topic 1]\n- [Topic 2]\n- [Topic 3]\n\nTo prepare, students should review their notes, complete the practice problems assigned, and study the relevant textbook sections.\n\nPlease encourage your child to start studying early and to ask questions in class if they need clarification on any topics.\n\nThank you for your support,\nMs. Smith",
-    },
-    {
-      name: "Class Announcement",
-      subject: "Important Class Announcement",
-      content:
-        "Dear Parents/Guardians,\n\nI wanted to inform you about an upcoming event/change in our classroom:\n\n[Announcement details]\n\nThis will take place on [date] at [time].\n\n[Any action items or preparations needed]\n\nPlease let me know if you have any questions.\n\nBest regards,\nMs. Smith",
-    },
-  ];
+  // Check Gmail configuration status
+  const [gmailStatus, setGmailStatus] = useState({
+    configured: false,
+    tokenValid: false,
+    loading: true
+  });
+  const [gmailStatusRefresh, setGmailStatusRefresh] = useState(0);
 
   // Loading state
   const loading =
@@ -186,6 +168,207 @@ const Communication = () => {
       }));
     }
   }, [loading, students, emailForm.studentId]);
+
+  // Check Gmail configuration status
+  useEffect(() => {
+    // Safety: never hang the loader longer than 8s
+    const safetyTimer = setTimeout(() => {
+      setGmailStatus((prev) => ({ ...prev, loading: false }));
+    }, 8000);
+
+    const checkGmailStatus = async () => {
+      try {
+        console.log('Starting Gmail status check', { hasUser: !!currentUser });
+        if (!currentUser) {
+          setGmailStatus({ configured: false, tokenValid: false, loading: false });
+          return;
+        }
+
+        // Check if user has Gmail configuration directly from Firestore
+        const userRef = doc(db, "users", currentUser.uid);
+        const userDoc = await getDoc(userRef);
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          // Check if user has Gmail tokens (ignore gmail_configured flag)
+          const hasTokens = userData.gmail_access_token && userData.gmail_refresh_token;
+          // Consider configured if we have tokens, regardless of the flag
+          const isConfigured = hasTokens;
+          
+          // Debug logging
+          console.log('Gmail status check:', {
+            hasTokens,
+            isConfigured,
+            gmailConfiguredFlag: userData.gmail_configured,
+            tokenExpiry: userData.gmail_token_expiry,
+            currentTime: Date.now(),
+            tokenError: userData.gmail_token_error
+          });
+          
+          setGmailStatus({
+            configured: isConfigured,
+            tokenValid: hasTokens, // Simplified: just check if tokens exist
+            loading: false
+          });
+        } else {
+          setGmailStatus({ configured: false, tokenValid: false, loading: false });
+        }
+      } catch (error) {
+        console.error('Error checking Gmail status:', error);
+        setGmailStatus({ configured: false, tokenValid: false, loading: false });
+      } finally {
+        clearTimeout(safetyTimer);
+      }
+    };
+
+    checkGmailStatus();
+
+    return () => clearTimeout(safetyTimer);
+  }, [currentUser, gmailStatusRefresh]);
+
+  // Show Gmail configuration prompt if not configured
+  if (gmailStatus.loading) {
+    return <Loading message="Checking Gmail configuration..." />;
+  }
+
+  // Changed: only gate on configured status, not token validity
+  if (!gmailStatus.configured) {
+    return (
+      <Box sx={{ 
+        flexGrow: 1,
+        px: { xs: 2, sm: 3, md: 4 },
+        py: { xs: 3, sm: 4, md: 6 },
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '60vh'
+      }}>
+        <Card elevation={3} sx={{ maxWidth: 600, width: '100%', textAlign: 'center' }}>
+          <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
+            <EmailIcon2 sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
+            
+            <Typography variant="h4" gutterBottom sx={{ mb: 2 }}>
+              Gmail Configuration Required
+            </Typography>
+            
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+              Your Gmail account needs to be configured to send emails from the Communication Center.
+            </Typography>
+
+            <Alert severity="info" sx={{ mb: 3, textAlign: 'left' }}>
+              <Typography variant="body2">
+                <strong>What this means:</strong> The Communication Center needs access to your Gmail account to send daily updates, progress reports, and other communications to parents and students.
+              </Typography>
+            </Alert>
+
+            <Alert severity="success" sx={{ mb: 3, textAlign: 'left' }}>
+              <Typography variant="body2">
+                <strong>How to configure:</strong> Click "Configure Gmail" below, then scroll down on the Settings page to find the "Gmail Setup" section. 
+                You'll need to authorize the app to access your Gmail account.
+              </Typography>
+            </Alert>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="large"
+                startIcon={<SettingsIcon />}
+                onClick={() => window.location.href = '/settings'}
+                sx={{ 
+                  px: 4, 
+                  py: 1.5,
+                  fontSize: '1.1rem',
+                  minWidth: 200
+                }}
+              >
+                Configure Gmail
+              </Button>
+              
+              <Typography variant="body2" color="text.secondary">
+                You'll be redirected to Settings page where you can find Gmail Setup
+              </Typography>
+
+              <Button
+                variant="outlined"
+                color="primary"
+                size="medium"
+                startIcon={<EmailIcon2 />}
+                onClick={() => {
+                  setGmailStatus({ configured: false, tokenValid: false, loading: true });
+                  setGmailStatusRefresh((n) => n + 1);
+                }}
+                sx={{ 
+                  px: 3, 
+                  py: 1,
+                  fontSize: '1rem',
+                  minWidth: 150
+                }}
+              >
+                Check Status Again
+              </Button>
+            </Box>
+
+            <Divider sx={{ my: 3 }} />
+            
+            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+              Why Gmail Configuration?
+            </Typography>
+            
+            <Box sx={{ textAlign: 'left' }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>Secure:</strong> Uses OAuth2 authentication, no password sharing
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>Reliable:</strong> Direct Gmail API integration for better delivery
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>Professional:</strong> Emails sent from your verified Gmail account
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                • <strong>Trackable:</strong> Monitor email delivery and engagement
+              </Typography>
+            </Box>
+          </CardContent>
+        </Card>
+      </Box>
+    );
+  }
+
+  // Email templates
+  const emailTemplates = [
+    {
+      name: "Weekly Progress Update",
+      subject: "Weekly Progress Update for [Student Name]",
+      content:
+        "Dear Parent/Guardian,\n\nI wanted to provide you with a weekly update on [Student Name]'s progress. This week, your child has been working on [subject/topic] and has shown [observations].\n\nSome highlights include:\n- [Highlight 1]\n- [Highlight 2]\n- [Highlight 3]\n\nAreas that may need additional support at home:\n- [Area 1]\n- [Area 2]\n\nPlease feel free to contact me if you have any questions or concerns.\n\nBest regards,\nMs. Smith",
+    },
+    {
+      name: "Missing Assignment Notice",
+      subject: "Missing Assignment Notice for [Student Name]",
+      content:
+        "Dear Parent/Guardian,\n\nI'm writing to inform you that [Student Name] has not submitted the following assignment(s):\n\n- [Assignment Name] - Due on [Due Date]\n\nIt's important that this work is completed as soon as possible to ensure [Student Name] stays on track with the curriculum. Please encourage your child to complete and submit this work by [Extended Due Date].\n\nIf there are any challenges preventing the completion of this work, please let me know so we can find a solution together.\n\nThank you for your support,\nMs. Smith",
+    },
+    {
+      name: "Positive Behavior Recognition",
+      subject: "Recognizing [Student Name]'s Positive Behavior",
+      content:
+        "Dear Parent/Guardian,\n\nI wanted to take a moment to recognize [Student Name] for demonstrating excellent behavior in class. Specifically, [he/she] has shown [specific positive behaviors or traits].\n\nThis kind of behavior contributes positively to our classroom environment and sets a great example for other students. I wanted to make sure you were aware of this achievement.\n\nThank you for your continued support,\nMs. Smith",
+    },
+    {
+      name: "Upcoming Test Reminder",
+      subject: "Upcoming Test Reminder for [Student Name]",
+      content:
+        "Dear Parent/Guardian,\n\nThis is a reminder that [Student Name]'s class will have an upcoming test on [subject] scheduled for [test date].\n\nThe test will cover the following topics:\n- [Topic 1]\n- [Topic 2]\n- [Topic 3]\n\nTo prepare, students should review their notes, complete the practice problems assigned, and study the relevant textbook sections.\n\nPlease encourage your child to start studying early and to ask questions in class if they need clarification on any topics.\n\nThank you for your support,\nMs. Smith",
+    },
+    {
+      name: "Class Announcement",
+      subject: "Important Class Announcement",
+      content:
+        "Dear Parents/Guardians,\n\nI wanted to inform you about an upcoming event/change in our classroom:\n\n[Announcement details]\n\nThis will take place on [date] at [time].\n\n[Any action items or preparations needed]\n\nPlease let me know if you have any questions.\n\nBest regards,\nMs. Smith",
+    },
+  ];
 
   // Handle student selection
   const handleStudentSelect = (student) => {
@@ -620,11 +803,19 @@ const Communication = () => {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Box sx={{ flexGrow: 1 }}>
+      <Box sx={{ 
+        flexGrow: 1,
+        px: { xs: 1, sm: 2, md: 3 },
+        py: { xs: 1, sm: 2 }
+      }}>
         <Typography
           variant="h4"
           gutterBottom
-          sx={{ fontSize: { xs: "1.5rem", sm: "1.75rem", md: "2.125rem" }, textAlign: { xs: "center", sm: "left" } }}
+          sx={{ 
+            fontSize: { xs: "1.25rem", sm: "1.5rem", md: "1.75rem", lg: "2.125rem" }, 
+            textAlign: { xs: "center", sm: "left" },
+            mb: { xs: 2, sm: 3 }
+          }}
         >
           Communication Center
         </Typography>
@@ -634,11 +825,12 @@ const Communication = () => {
           sx={{
             borderBottom: 1,
             borderColor: "divider",
-            mb: 3,
+            mb: { xs: 2, sm: 3 },
             position: "sticky",
             top: 0,
             zIndex: 1,
             bgcolor: "background.paper",
+            px: { xs: 1, sm: 0 },
           }}
         >
           <Tabs
@@ -649,10 +841,12 @@ const Communication = () => {
             scrollButtons="auto"
             allowScrollButtonsMobile
             sx={{
-              minHeight: { xs: 48, sm: 48 },
+              minHeight: { xs: 40, sm: 48 },
               "& .MuiTab-root": {
-                minHeight: { xs: 48, sm: 48 },
-                px: { xs: 2, sm: 3 },
+                minHeight: { xs: 40, sm: 48 },
+                px: { xs: 1, sm: 2, md: 3 },
+                fontSize: { xs: "0.75rem", sm: "0.875rem", md: "1rem" },
+                minWidth: { xs: "auto", sm: "auto" },
               },
             }}
           >
@@ -663,36 +857,75 @@ const Communication = () => {
         </Box>
 
         {/* Email History Tab */}
-        {tabValue === 0 && <DailyEmailsHistory initialTemplate={templateToCompose} />}
+        {tabValue === 0 && (
+          <Box sx={{ px: { xs: 1, sm: 0 } }}>
+            <DailyEmailsHistory initialTemplate={templateToCompose} />
+          </Box>
+        )}
 
         {/* Email Templates Tab */}
         {tabValue === 1 && (
-          <Grid container spacing={3}>
+          <Box sx={{ px: { xs: 1, sm: 0 } }}>
+            <Grid container spacing={{ xs: 2, sm: 3 }}>
             {emailTemplates.map((template, index) => (
-              <Grid item xs={12} md={6} key={index}>
-                <Card elevation={2}>
-                  <CardContent>
-                    <Typography variant="h6" gutterBottom>
+              <Grid item xs={12} sm={6} lg={4} key={index}>
+                <Card elevation={2} sx={{ height: '100%' }}>
+                  <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                    <Typography 
+                      variant="h6" 
+                      gutterBottom
+                      sx={{ 
+                        fontSize: { xs: "1rem", sm: "1.25rem" },
+                        mb: { xs: 1, sm: 2 }
+                      }}
+                    >
                       {template.name}
                     </Typography>
-                    <Divider sx={{ mb: 2 }} />
-                    <Typography variant="subtitle1" gutterBottom>
+                    <Divider sx={{ mb: { xs: 1, sm: 2 } }} />
+                    <Typography 
+                      variant="subtitle1" 
+                      gutterBottom
+                      sx={{ 
+                        fontSize: { xs: "0.875rem", sm: "1rem" },
+                        fontWeight: "bold"
+                      }}
+                    >
                       Subject: {template.subject}
                     </Typography>
                     <Typography
                       variant="body2"
-                      sx={{ whiteSpace: "pre-line", mb: 2 }}
+                      sx={{ 
+                        whiteSpace: "pre-line", 
+                        mb: { xs: 1, sm: 2 },
+                        fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                        lineHeight: 1.4,
+                        maxHeight: { xs: "120px", sm: "150px" },
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 6,
+                        WebkitBoxOrient: "vertical"
+                      }}
                     >
                       {template.content}
                     </Typography>
-                    <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                    <Box sx={{ 
+                      display: "flex", 
+                      justifyContent: "flex-end",
+                      mt: "auto"
+                    }}>
                       <Button
                         variant="contained"
                         color="primary"
+                        size="small"
                         startIcon={<EmailIcon />}
                         onClick={() => {
                           setTemplateToCompose(template);
                           setTabValue(0);
+                        }}
+                        sx={{
+                          fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                          px: { xs: 1.5, sm: 2 }
                         }}
                       >
                         Use Template
@@ -702,14 +935,18 @@ const Communication = () => {
                 </Card>
               </Grid>
             ))}
-          </Grid>
+            </Grid>
+          </Box>
         )}
 
         {/* Daily Updates Tab */}
         {tabValue === 2 && (
-          <>
+          <Box sx={{ 
+            px: { xs: 1, sm: 0 },
+            '& > *': { mb: { xs: 2, sm: 3 } }
+          }}>
             <EmailStatus />
-            <DailyUpdateManager
+             <DailyUpdateManager
               students={students}
               attendance={attendance}
               assignments={assignments}
@@ -719,7 +956,7 @@ const Communication = () => {
                 // Success message is handled by EmailProvider
               }}
             />
-          </>
+           </Box>
         )}
 
       </Box>

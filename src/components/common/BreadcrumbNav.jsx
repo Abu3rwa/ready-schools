@@ -127,22 +127,39 @@ const BreadcrumbNav = () => {
         {breadcrumbItems.map((item, index) => (
           <Box key={item.path} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             {item.icon && (
-              <Tooltip title={item.label}>
+              item.isLast ? (
+                // Last item: no Tooltip, disabled button
                 <IconButton
                   size="small"
-                  onClick={() => navigate(item.path)}
-                  disabled={item.isLast}
+                  disabled={true}
                   sx={{ 
                     p: 0.5,
-                    color: item.isLast ? 'text.primary' : 'primary.main',
+                    color: 'text.primary',
                     '&:hover': {
-                      backgroundColor: item.isLast ? 'transparent' : 'action.hover'
+                      backgroundColor: 'transparent'
                     }
                   }}
                 >
                   {item.icon}
                 </IconButton>
-              </Tooltip>
+              ) : (
+                // Not last item: Tooltip with clickable button
+                <Tooltip title={item.label}>
+                  <IconButton
+                    size="small"
+                    onClick={() => navigate(item.path)}
+                    sx={{ 
+                      p: 0.5,
+                      color: 'primary.main',
+                      '&:hover': {
+                        backgroundColor: 'action.hover'
+                      }
+                    }}
+                  >
+                    {item.icon}
+                  </IconButton>
+                </Tooltip>
+              )
             )}
             {item.isLast ? (
               <Typography 

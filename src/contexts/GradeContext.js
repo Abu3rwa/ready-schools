@@ -172,6 +172,53 @@ export const GradeProvider = ({ children }) => {
     await batch.commit();
   };
 
+  // Function to calculate student averages
+  const calculateStudentAverages = (studentId) => {
+    const studentGrades = grades.filter(grade => grade.studentId === studentId);
+    
+    if (studentGrades.length === 0) {
+      return {
+        overall: "N/A",
+        subjects: {}
+      };
+    }
+
+    // Calculate overall average
+    const overallGrades = studentGrades.map(grade => {
+      if (grade.percentage) return grade.percentage;
+      if (grade.score && grade.points) return (grade.score / grade.points) * 100;
+      return null;
+    }).filter(grade => grade !== null);
+
+    const overall = overallGrades.length > 0 
+      ? Math.round((overallGrades.reduce((sum, grade) => sum + grade, 0) / overallGrades.length) * 10) / 10
+      : "N/A";
+
+    // Dynamically calculate subject-specific averages
+    const subjectAverages = {};
+    const uniqueSubjects = [...new Set(studentGrades.map(grade => grade.subject).filter(Boolean))];
+    
+    uniqueSubjects.forEach(subject => {
+      const subjectGrades = studentGrades
+        .filter(grade => grade.subject === subject)
+        .map(grade => {
+          if (grade.percentage) return grade.percentage;
+          if (grade.score && grade.points) return (grade.score / grade.points) * 100;
+          return null;
+        })
+        .filter(grade => grade !== null);
+
+      subjectAverages[subject] = subjectGrades.length > 0
+        ? Math.round((subjectGrades.reduce((sum, grade) => sum + grade, 0) / subjectGrades.length) * 10) / 10
+        : "N/A";
+    });
+
+    return {
+      overall: overall === "N/A" ? "N/A" : `${overall}%`,
+      subjects: subjectAverages
+    };
+  };
+
   // Create the value object to be provided by the context
   const value = {
     grades,
@@ -181,6 +228,7 @@ export const GradeProvider = ({ children }) => {
     updateGrade,
     deleteGrade,
     deleteGradesByAssignment,
+    calculateStudentAverages,
   };
 
   return (

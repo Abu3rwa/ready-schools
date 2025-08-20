@@ -30,6 +30,9 @@ import {
   Grid,
   Link,
   Divider,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -43,6 +46,7 @@ import {
   School as SchoolIcon,
   TrendingUp as TrendingUpIcon,
   ArrowBack as ArrowBackIcon,
+  ExpandMore as ExpandMoreIcon,
 } from "@mui/icons-material";
 import { useStudents } from "../contexts/StudentContext";
 import { useGrades } from "../contexts/GradeContext";
@@ -51,6 +55,8 @@ import { useGradeBooks } from "../contexts/GradeBookContext";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import Loading from "../components/common/Loading";
 import SimpleGradeBookSelector from "../components/gradebooks/SimpleGradeBookSelector";
+import CategoryAveragesDisplay from "../components/gradebooks/CategoryAveragesDisplay";
+import GradingInstructions from "../components/gradebooks/GradingInstructions";
 
 const GradeBook = () => {
   const { id } = useParams();
@@ -102,6 +108,7 @@ const GradeBook = () => {
     if (!currentGradeBook) return;
     try {
       await archiveGradeBook(currentGradeBook.id);
+
       setSnackbar({
         open: true,
         message: "Gradebook archived.",
@@ -129,12 +136,6 @@ const GradeBook = () => {
     message: "",
     severity: "success",
   });
-  const [gradeDialog, setGradeDialog] = useState({
-    open: false,
-    student: null,
-    assignment: null,
-  });
-  const [gradeValue, setGradeValue] = useState("");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [highlightedAssignment, setHighlightedAssignment] =
     useState(linkedAssignmentId);
@@ -142,17 +143,9 @@ const GradeBook = () => {
 
   // Load gradebook when component mounts
   useEffect(() => {
-    console.log("GradeBook component - useEffect triggered");
-    console.log("ID from params:", id);
-    console.log("Current gradebook:", currentGradeBook);
-    console.log("Loading state:", gradeBookLoading);
-
     if (id) {
-      console.log("Loading gradebook with ID:", id);
       loadGradeBook(id)
-        .then((gradeBook) => {
-          console.log("Gradebook loaded successfully:", gradeBook);
-        })
+        .then((gradeBook) => {})
         .catch((error) => {
           console.error("Error loading grade book:", error);
           if (error.message.includes("offline")) {
@@ -173,7 +166,10 @@ const GradeBook = () => {
     } else {
       console.log("No gradebook ID provided, showing selector");
     }
-  }, [id, loadGradeBook]);
+    // Intentionally only depend on `id` to avoid re-running when
+    // context functions change identity and cause a render loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   // Highlight linked assignment if coming from assignments page
   useEffect(() => {
@@ -233,18 +229,49 @@ const GradeBook = () => {
   // Get students for current gradebook
   const gradebookStudents = useMemo(() => {
     if (!students || !currentGradeBook) return [];
-    return students.filter(
+
+    console.log("GradeBook Debug:", {
+      currentGradeBook: currentGradeBook,
+      currentSubject: currentGradeBook?.subject,
+      totalStudents: students.length,
+      students: students.map((s) => ({
+        id: s.id,
+        name: `${s.firstName} ${s.lastName}`,
+        subject: s.subject,
+      })),
+    });
+
+    // More flexible filtering - include students with matching subject OR no subject specified
+    const filteredStudents = students.filter(
       (s) => s.subject === currentGradeBook.subject || !s.subject
     );
+
+    console.log(
+      "Filtered students:",
+      filteredStudents.length,
+      filteredStudents
+    );
+
+    return filteredStudents;
   }, [students, currentGradeBook]);
 
   // Calculate category average for a student
+  /**
+   * Calculates the average for a student in a category using raw points.
+   * Assumes grade.score is stored as raw points earned (not percentage).
+   * Returns average (%), total possible points, and earned points.
+   */
   const calculateCategoryAverage = (studentId, category) => {
     if (!grades || !assignments || !currentGradeBook)
       return { average: 0, totalPoints: 0, earnedPoints: 0 };
 
+    // Filter assignments by gradebookId first, then fallback to subject
     const categoryAssignments = assignments.filter(
-      (a) => a.subject === currentGradeBook.subject && a.category === category
+      (a) =>
+        (a.gradebookId === currentGradeBook.id && a.category === category) ||
+        (a.subject === currentGradeBook.subject &&
+          a.category === category &&
+          !a.gradebookId)
     );
 
     if (categoryAssignments.length === 0)
@@ -259,8 +286,8 @@ const GradeBook = () => {
         (g) => g.studentId === studentId && g.assignmentId === assignment.id
       );
       if (grade) {
-        // Convert percentage to points
-        const earnedPoints = (grade.score / 100) * assignment.points;
+        // Use raw points for earned score
+        const earnedPoints = grade.score;
         totalEarned += earnedPoints;
         totalPossible += assignment.points;
         gradedCount++;
@@ -308,11 +335,20 @@ const GradeBook = () => {
   };
 
   // Get assignment statistics for a category
+  /**
+   * Returns assignment statistics for a category using raw points.
+   * Deduplicates grades by studentId for each assignment.
+   */
   const getCategoryStats = (category) => {
     if (!assignments || !grades || !gradebookStudents) return {};
 
+    // Filter assignments by gradebookId first, then fallback to subject
     const categoryAssignments = assignments.filter(
-      (a) => a.subject === currentGradeBook.subject && a.category === category
+      (a) =>
+        (a.gradebookId === currentGradeBook.id && a.category === category) ||
+        (a.subject === currentGradeBook.subject &&
+          a.category === category &&
+          !a.gradebookId)
     );
 
     if (categoryAssignments.length === 0) return {};
@@ -326,8 +362,16 @@ const GradeBook = () => {
       const assignmentGrades = grades.filter(
         (g) => g.assignmentId === assignment.id
       );
-      assignmentGrades.forEach((grade) => {
-        totalEarned += (grade.score / 100) * assignment.points;
+      // Deduplicate grades by studentId so we don't count multiple grade records
+      const uniqueByStudent = Object.values(
+        assignmentGrades.reduce((acc, g) => {
+          acc[g.studentId] = g;
+          return acc;
+        }, {})
+      );
+      uniqueByStudent.forEach((grade) => {
+        // Use raw points for earned score
+        totalEarned += grade.score;
         totalGrades++;
       });
     });
@@ -350,70 +394,28 @@ const GradeBook = () => {
     };
   };
 
-  // Open grade entry dialog
-  const openGradeDialog = (student, assignment) => {
-    const existingGrade = grades.find(
-      (g) => g.studentId === student.id && g.assignmentId === assignment.id
+  // Get assignments by category
+  const getAssignmentsByCategory = (category) => {
+    if (!assignments || !currentGradeBook) return [];
+
+    return assignments.filter(
+      (a) => a.subject === currentGradeBook.subject && a.category === category
     );
-    setGradeValue(existingGrade ? existingGrade.score.toString() : "");
-    setGradeDialog({ open: true, student, assignment });
   };
 
-  // Save grade
-  const saveGrade = async () => {
-    if (!gradeValue || !gradeDialog.student || !gradeDialog.assignment) return;
+  // Get category details with assignments
+  const getCategoryDetails = (category) => {
+    const stats = getCategoryStats(category);
+    const categoryAssignments = getAssignmentsByCategory(category);
+    const categoryConfig = currentGradeBook.categories?.find(
+      (c) => c.name === category
+    );
 
-    try {
-      const score = parseFloat(gradeValue);
-      if (isNaN(score) || score < 0 || score > 100) {
-        setSnackbar({
-          open: true,
-          message: "Please enter a valid percentage between 0-100",
-          severity: "error",
-        });
-        return;
-      }
-
-      const gradeData = {
-        studentId: gradeDialog.student.id,
-        assignmentId: gradeDialog.assignment.id,
-        score: score,
-        subject: gradeDialog.assignment.subject,
-        dateEntered: new Date().toISOString(),
-      };
-
-      const existingGrade = grades.find(
-        (g) =>
-          g.studentId === gradeDialog.student.id &&
-          g.assignmentId === gradeDialog.assignment.id
-      );
-
-      if (existingGrade) {
-        await updateGrade(existingGrade.id, gradeData);
-      } else {
-        await addGrade(gradeData);
-      }
-
-      setSnackbar({
-        open: true,
-        message: "Grade saved successfully",
-        severity: "success",
-      });
-      setGradeDialog({ open: false, student: null, assignment: null });
-      setGradeValue("");
-    } catch (error) {
-      setSnackbar({
-        open: true,
-        message: `Error saving grade: ${error.message}`,
-        severity: "error",
-      });
-    }
-  };
-
-  // Close grade dialog
-  const closeGradeDialog = () => {
-    setGradeDialog({ open: false, student: null, assignment: null });
-    setGradeValue("");
+    return {
+      ...stats,
+      assignments: categoryAssignments,
+      config: categoryConfig,
+    };
   };
 
   // Navigate to assignments page
@@ -536,17 +538,6 @@ const GradeBook = () => {
               />
               <Button
                 variant="outlined"
-                onClick={() =>
-                  setViewMode(viewMode === "summary" ? "detailed" : "summary")
-                }
-                size="small"
-              >
-                {viewMode === "summary"
-                  ? "Show Detailed View"
-                  : "Show Summary View"}
-              </Button>
-              <Button
-                variant="outlined"
                 startIcon={<AssignmentIcon />}
                 onClick={navigateToAssignments}
                 size="small"
@@ -583,8 +574,8 @@ const GradeBook = () => {
                 <DialogTitle>Delete Gradebook</DialogTitle>
                 <DialogContent>
                   <Typography>
-                    Are you sure you want to permanently delete this gradebook?
-                    This action cannot be undone.
+                    Are you sure you want to permanently delete "
+                    {currentGradeBook?.name}"? This action cannot be undone.
                   </Typography>
                 </DialogContent>
                 <DialogActions>
@@ -609,8 +600,8 @@ const GradeBook = () => {
                 <DialogTitle>Archive Gradebook</DialogTitle>
                 <DialogContent>
                   <Typography>
-                    Are you sure you want to archive this gradebook? You can
-                    restore it later from the archive.
+                    Are you sure you want to archive "{currentGradeBook?.name}"?
+                    You can reactivate it later from the filters.
                   </Typography>
                 </DialogContent>
                 <DialogActions>
@@ -633,424 +624,197 @@ const GradeBook = () => {
 
       {/* Quick Stats */}
       <Box sx={{ display: "flex", gap: 2, mb: 3, flexWrap: "wrap" }}>
-        <Chip
-          label={`${gradebookStudents.length} Students`}
-          color="primary"
-          variant="outlined"
-        />
-        <Chip
-          label={`${
-            assignments.filter((a) => a.subject === currentGradeBook.subject)
-              .length
-          } Assignments`}
-          color="secondary"
-          variant="outlined"
-        />
-        <Chip
-          label={`${assignmentCategories.length} Categories`}
-          color="info"
-          variant="outlined"
-        />
-        <Chip
-          label={`${
-            grades.filter(
-              (g) =>
-                assignments.find((a) => a.id === g.assignmentId)?.subject ===
-                currentGradeBook.subject
-            ).length
-          } Grades`}
-          color="default"
-          variant="outlined"
-        />
+        {(() => {
+          const subjectAssignments = assignments.filter(
+            (a) => a.subject === currentGradeBook.subject
+          );
+          const subjectGrades = grades.filter(
+            (g) =>
+              assignments.find((a) => a.id === g.assignmentId)?.subject ===
+              currentGradeBook.subject
+          );
+
+          console.log("Quick Stats Debug:", {
+            currentSubject: currentGradeBook.subject,
+            totalAssignments: assignments.length,
+            subjectAssignments: subjectAssignments.length,
+            assignments: assignments.map((a) => ({
+              id: a.id,
+              name: a.name,
+              subject: a.subject,
+            })),
+            totalGrades: grades.length,
+            subjectGrades: subjectGrades.length,
+          });
+
+          return (
+            <>
+              <Chip
+                label={`${gradebookStudents.length} Students`}
+                color="primary"
+                variant="outlined"
+              />
+              <Chip
+                label={`${subjectAssignments.length} Assignments`}
+                color="secondary"
+                variant="outlined"
+              />
+              <Chip
+                label={`${assignmentCategories.length} Categories`}
+                color="info"
+                variant="outlined"
+              />
+              <Chip
+                label={`${subjectGrades.length} Grades`}
+                color="default"
+                variant="outlined"
+              />
+            </>
+          );
+        })()}
       </Box>
 
       {/* Gradebook Table */}
-      {viewMode === "summary" ? (
-        <Paper sx={{ mb: 3 }}>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell
-                    sx={{
-                      fontWeight: "bold",
-                      backgroundColor: "primary.main",
-                      color: "white",
-                    }}
-                  >
-                    Students
-                  </TableCell>
-                  {assignmentCategories.map((category) => {
-                    const stats = getCategoryStats(category);
-                    return (
-                      <TableCell
-                        key={category}
-                        align="center"
-                        sx={{
-                          fontWeight: "bold",
-                          backgroundColor: "secondary.main",
-                          color: "white",
-                          minWidth: 120,
-                        }}
-                      >
-                        <Box>
-                          <Typography variant="body2" fontWeight="bold">
-                            {category}
-                          </Typography>
-                          {stats.totalAssignments > 0 && (
-                            <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                              {stats.totalAssignments} assignments •{" "}
-                              {stats.totalPoints} pts
-                            </Typography>
-                          )}
-                        </Box>
-                      </TableCell>
-                    );
-                  })}
-                  <TableCell
-                    align="center"
-                    sx={{
-                      fontWeight: "bold",
-                      backgroundColor: "success.main",
-                      color: "white",
-                      minWidth: 100,
-                    }}
-                  >
-                    Overall
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {gradebookStudents.map((student) => (
-                  <TableRow key={student.id}>
-                    <TableCell sx={{ fontWeight: "bold" }}>
+      <Paper sx={{ mb: 3 }}>
+        <TableContainer>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell
+                  sx={{
+                    fontWeight: "bold",
+                    backgroundColor: "primary.main",
+                    color: "white",
+                  }}
+                >
+                  Students
+                </TableCell>
+                {assignmentCategories.map((category) => {
+                  const stats = getCategoryStats(category);
+                  return (
+                    <TableCell
+                      key={category}
+                      align="center"
+                      sx={{
+                        fontWeight: "bold",
+                        backgroundColor: "secondary.main",
+                        color: "white",
+                        minWidth: 120,
+                      }}
+                    >
                       <Box>
                         <Typography variant="body2" fontWeight="bold">
-                          {student.firstName} {student.lastName}
+                          {category}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {student.studentId || "No ID"}
-                        </Typography>
+                        {stats.totalAssignments > 0 && (
+                          <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                            {stats.totalAssignments} assignments •{" "}
+                            {stats.totalPoints} pts
+                          </Typography>
+                        )}
                       </Box>
                     </TableCell>
-                    {assignmentCategories.map((category) => {
-                      const categoryData = calculateCategoryAverage(
-                        student.id,
-                        category
-                      );
-                      return (
-                        <TableCell key={category} align="center">
-                          {categoryData.totalPoints > 0 ? (
-                            <Box>
-                              <Typography
-                                variant="body2"
-                                sx={{ fontWeight: "bold" }}
-                              >
-                                {categoryData.average}%
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {categoryData.earnedPoints}/
-                                {categoryData.totalPoints} pts
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                display="block"
-                                color="primary"
-                              >
-                                {getLetterGrade(categoryData.average)}
-                              </Typography>
-                            </Box>
-                          ) : (
-                            <Typography variant="body2" color="text.secondary">
-                              No grades
-                            </Typography>
-                          )}
-                        </TableCell>
-                      );
-                    })}
-                    <TableCell align="center">
-                      {(() => {
-                        const overall = calculateStudentOverall(student.id);
-                        return overall.totalPoints > 0 ? (
+                  );
+                })}
+                <TableCell
+                  align="center"
+                  sx={{
+                    fontWeight: "bold",
+                    backgroundColor: "success.main",
+                    color: "white",
+                    minWidth: 100,
+                  }}
+                >
+                  Overall
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {gradebookStudents.map((student) => (
+                <TableRow key={student.id}>
+                  <TableCell sx={{ fontWeight: "bold" }}>
+                    <Box>
+                      <Typography variant="body2" fontWeight="bold">
+                        {student.firstName} {student.lastName}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {student.studentId || "No ID"}
+                      </Typography>
+                    </Box>
+                  </TableCell>
+                  {assignmentCategories.map((category) => {
+                    const categoryData = calculateCategoryAverage(
+                      student.id,
+                      category
+                    );
+                    return (
+                      <TableCell key={category} align="center">
+                        {categoryData.totalPoints > 0 ? (
                           <Box>
                             <Typography
                               variant="body2"
-                              sx={{ fontWeight: "bold", color: "success.main" }}
+                              sx={{ fontWeight: "bold" }}
                             >
-                              {overall.average}%
+                              {categoryData.average}%
                             </Typography>
                             <Typography
                               variant="caption"
                               color="text.secondary"
                             >
-                              {overall.earnedPoints}/{overall.totalPoints} pts
+                              {categoryData.earnedPoints}/
+                              {categoryData.totalPoints} pts
                             </Typography>
                             <Typography
                               variant="caption"
                               display="block"
-                              color="success.main"
+                              color="primary"
                             >
-                              {getLetterGrade(overall.average)}
+                              {getLetterGrade(categoryData.average)}
                             </Typography>
                           </Box>
                         ) : (
                           <Typography variant="body2" color="text.secondary">
                             No grades
                           </Typography>
-                        );
-                      })()}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
-      ) : (
-        <Paper sx={{ mb: 3 }}>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell
-                    sx={{
-                      fontWeight: "bold",
-                      backgroundColor: "primary.main",
-                      color: "white",
-                    }}
-                  >
-                    Students
-                  </TableCell>
-                  {assignments
-                    .filter((a) => a.subject === currentGradeBook.subject)
-                    .map((assignment) => (
-                      <TableCell
-                        key={assignment.id}
-                        align="center"
-                        sx={{
-                          fontWeight: "bold",
-                          backgroundColor: "secondary.main",
-                          color: "white",
-                          minWidth: 120,
-                        }}
-                      >
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                  <TableCell align="center">
+                    {(() => {
+                      const overall = calculateStudentOverall(student.id);
+                      return overall.totalPoints > 0 ? (
                         <Box>
-                          <Typography variant="body2" fontWeight="bold">
-                            {assignment.name}
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: "bold", color: "success.main" }}
+                          >
+                            {overall.average}%
                           </Typography>
-                          <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                            {assignment.points} pts
+                          <Typography variant="caption" color="text.secondary">
+                            {overall.earnedPoints}/{overall.totalPoints} pts
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            display="block"
+                            color="success.main"
+                          >
+                            {getLetterGrade(overall.average)}
                           </Typography>
                         </Box>
-                      </TableCell>
-                    ))}
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          No grades
+                        </Typography>
+                      );
+                    })()}
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {gradebookStudents.map((student) => (
-                  <TableRow key={student.id}>
-                    <TableCell sx={{ fontWeight: "bold" }}>
-                      <Box>
-                        <Typography variant="body2" fontWeight="bold">
-                          {student.firstName} {student.lastName}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {student.studentId || "No ID"}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    {assignments
-                      .filter((a) => a.subject === currentGradeBook.subject)
-                      .map((assignment) => {
-                        const grade = grades.find(
-                          (g) =>
-                            g.studentId === student.id &&
-                            g.assignmentId === assignment.id
-                        );
-                        return (
-                          <TableCell key={assignment.id} align="center">
-                            <Button
-                              size="small"
-                              variant={grade ? "outlined" : "text"}
-                              onClick={() =>
-                                openGradeDialog(student, assignment)
-                              }
-                            >
-                              {grade ? `${grade.score}%` : "-"}
-                            </Button>
-                          </TableCell>
-                        );
-                      })}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
-      )}
-
-      {/* Assignment Details */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: 2,
-          }}
-        >
-          <Typography variant="h6">Assignment Details</Typography>
-        </Box>
-        <Grid container spacing={2}>
-          {assignmentCategories.map((category) => {
-            const categoryAssignments = assignments.filter(
-              (a) =>
-                a.subject === currentGradeBook.subject &&
-                a.category === category
-            );
-            const stats = getCategoryStats(category);
-
-            return (
-              <Grid item xs={12} md={6} lg={4} key={category}>
-                <Card
-                  variant="outlined"
-                  sx={{
-                    border:
-                      highlightedAssignment &&
-                      categoryAssignments.some(
-                        (a) => a.id === highlightedAssignment
-                      )
-                        ? "2px solid #1976d2"
-                        : "1px solid rgba(0, 0, 0, 0.12)",
-                    boxShadow:
-                      highlightedAssignment &&
-                      categoryAssignments.some(
-                        (a) => a.id === highlightedAssignment
-                      )
-                        ? "0 0 10px rgba(25, 118, 210, 0.3)"
-                        : "none",
-                  }}
-                >
-                  <CardContent>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        mb: 1,
-                      }}
-                    >
-                      <Typography variant="subtitle1" fontWeight="bold">
-                        {category}
-                      </Typography>
-                      {stats.totalAssignments > 0 && (
-                        <Chip
-                          label={`${stats.completionRate}% complete`}
-                          size="small"
-                          color={
-                            stats.completionRate === 100 ? "success" : "primary"
-                          }
-                        />
-                      )}
-                    </Box>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      {categoryAssignments.length} assignments •{" "}
-                      {stats.totalPoints || 0} total points
-                    </Typography>
-                    {stats.averageGrade > 0 && (
-                      <Typography variant="body2" color="primary" gutterBottom>
-                        Class Average: {stats.averageGrade}%
-                      </Typography>
-                    )}
-                    <Divider sx={{ my: 1 }} />
-                    {categoryAssignments.map((assignment) => (
-                      <Box
-                        key={assignment.id}
-                        id={`assignment-${assignment.id}`}
-                        sx={{
-                          mb: 1,
-                          p: 1,
-                          bgcolor:
-                            highlightedAssignment === assignment.id
-                              ? "primary.50"
-                              : "grey.50",
-                          borderRadius: 1,
-                          border:
-                            highlightedAssignment === assignment.id
-                              ? "1px solid #1976d2"
-                              : "none",
-                        }}
-                      >
-                        <Typography variant="body2" fontWeight="medium">
-                          {assignment.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {assignment.points} points • Due:{" "}
-                          {new Date(assignment.dueDate).toLocaleDateString()}
-                        </Typography>
-                      </Box>
-                    ))}
-                  </CardContent>
-                </Card>
-              </Grid>
-            );
-          })}
-        </Grid>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Paper>
-
-      {/* Grade Entry Dialog */}
-      <Dialog
-        open={gradeDialog.open}
-        onClose={closeGradeDialog}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          Enter Grade: {gradeDialog.student?.firstName}{" "}
-          {gradeDialog.student?.lastName} - {gradeDialog.assignment?.name}
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="body2" gutterBottom>
-              <strong>Assignment:</strong> {gradeDialog.assignment?.name}
-            </Typography>
-            <Typography variant="body2" gutterBottom>
-              <strong>Student:</strong> {gradeDialog.student?.firstName}{" "}
-              {gradeDialog.student?.lastName}
-            </Typography>
-            <Typography variant="body2" gutterBottom>
-              <strong>Points:</strong> {gradeDialog.assignment?.points}
-            </Typography>
-            <TextField
-              fullWidth
-              label="Grade (%)"
-              type="number"
-              value={gradeValue}
-              onChange={(e) => setGradeValue(e.target.value)}
-              inputProps={{ min: 0, max: 100, step: 0.1 }}
-              sx={{ mt: 2 }}
-              helperText="Enter grade as percentage (0-100)"
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeGradeDialog}>Cancel</Button>
-          <Button
-            onClick={saveGrade}
-            variant="contained"
-            disabled={!gradeValue}
-          >
-            Save Grade
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Snackbar */}
       <Snackbar

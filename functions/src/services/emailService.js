@@ -9,7 +9,16 @@ class EmailService {
     this.transporter = null;
     this.dailyCount = 0;
     this.lastReset = new Date();
-    this.db = getFirestore();
+    // Don't initialize Firebase Admin services in constructor
+    this.db = null;
+  }
+
+  // Lazy initialization of Firestore
+  getDb() {
+    if (!this.db) {
+      this.db = getFirestore();
+    }
+    return this.db;
   }
 
   async initialize() {
@@ -40,7 +49,7 @@ class EmailService {
 
   async getUserEmailConfig(userId) {
     try {
-      const userDoc = await this.db.collection("users").doc(userId).get();
+      const userDoc = await this.getDb().collection("users").doc(userId).get();
       if (!userDoc.exists) return null;
 
       const userData = userDoc.data();
@@ -56,18 +65,59 @@ class EmailService {
 
   async sendEmail(options, userId = null) {
     try {
+      const allowSmtpFallback = process.env.SMTP_GLOBAL_FALLBACK_ENABLED === 'true';
+
       // Prioritize OAuth 2 (Gmail API) when available
       if (userId) {
         const userConfig = await this.getUserEmailConfig(userId);
         if (userConfig?.useGmailApi) {
           console.log("Using Gmail API for sending email");
-          return await gmailApiService.sendEmail(userId, options);
+          try {
+            const result = await gmailApiService.sendEmail(userId, options);
+            console.log("Gmail API email sent successfully:", result);
+            return result;
+          } catch (gmailError) {
+            console.error("Gmail API failed", gmailError);
+
+            // If Gmail API fails due to auth issues, mark user as needing re-auth
+            if (gmailError.message?.toLowerCase().includes('token') || gmailError.message?.toLowerCase().includes('auth')) {
+              try {
+                await this.getDb().collection("users").doc(userId).update({
+                  gmail_configured: false,
+                  gmail_last_error: gmailError.message,
+                  gmail_error_time: new Date().toISOString()
+                });
+                console.log(`Marked user ${userId} as needing Gmail re-authentication`);
+              } catch (updateError) {
+                console.error("Failed to update user auth status:", updateError);
+              }
+            }
+
+            if (!allowSmtpFallback) {
+              console.log("SMTP fallback disabled; rethrowing Gmail error");
+              throw gmailError;
+            }
+            console.log("Using SMTP fallback for sending email");
+            // continue to SMTP fallback below
+          }
+        } else {
+          // User has no Gmail configured
+          if (!allowSmtpFallback) {
+            throw new Error("Gmail is not configured for this user, and SMTP fallback is disabled");
+          }
+        }
+      } else {
+        // No user context
+        if (!allowSmtpFallback) {
+          throw new Error("No userId provided for Gmail sending, and SMTP fallback is disabled");
         }
       }
 
-      // Check if OAuth 2 is available globally (for cases without userId)
-      // This would require a different approach to determine if Gmail API should be used
-      // For now, we'll fall back to SMTP as before
+      // Fallback to SMTP (only if explicitly enabled)
+      if (!allowSmtpFallback) {
+        throw new Error("SMTP fallback is disabled");
+      }
+      console.log("Using SMTP fallback for sending email");
       if (!this.initialized) {
         console.log("Initializing email service...");
         await this.initialize();
@@ -88,20 +138,28 @@ class EmailService {
       });
 
       const result = await this.transporter.sendMail(options);
-      console.log("Email sent successfully:", {
+      console.log("Email sent successfully via SMTP:", {
         messageId: result.messageId,
-        response: result.response,
+        to: options.to,
+        subject: options.subject,
       });
 
       this.dailyCount++;
-      return result;
+      return {
+        success: true,
+        messageId: result.messageId,
+        method: 'smtp'
+      };
     } catch (error) {
-      console.error("Failed to send email. Error details:", {
-        code: error.code,
-        command: error.command,
-        response: error.response,
-        responseCode: error.responseCode,
-        message: error.message,
+      console.error("Email service error:", {
+        error: error.message,
+        userId: userId,
+        options: {
+          to: options.to,
+          subject: options.subject,
+          hasHtml: !!options.html,
+          hasText: !!options.text,
+        }
       });
       throw error;
     }

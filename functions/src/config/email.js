@@ -4,14 +4,17 @@ const getEmailConfig = () => {
     // Get credentials from environment variables (set by Cloud Functions from secrets)
     const email = process.env.SMTP_EMAIL || "abdulhafeez.alameen@amly.us";
     const password = process.env.SMTP_PASSWORD || "xgwv lchq wfvb enfz";
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    // Get Google OAuth2 credentials
+    const clientId =
+      "610841874714-qid6baodcg3fgt3vijkog0s8hk76c4n5.apps.googleusercontent.com";
+    const clientSecret = "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";
     const redirectUrl = process.env.APP_URL
       ? `${process.env.APP_URL}/auth/gmail/callback`
       : null;
 
     // Return both SMTP and OAuth configs
     return {
+      /*
       smtp: {
         host: "smtp.gmail.com",
         port: 465,
@@ -22,6 +25,7 @@ const getEmailConfig = () => {
         },
         debug: true, // Enable debug output
       },
+      */
       oauth:
         clientId && clientSecret
           ? {

@@ -40,6 +40,13 @@ export default function WeeklyTemplate({ data, startDate, endDate }) {
     behaviorSummary,
     upcomingAssessments,
     weeklyGradeChanges,
+    // New fields from enhanced weekly service
+    attendance,
+    lessons,
+    grades,
+    behavior,
+    upcoming,
+    statistics
   } = data;
 
   const getStatusColor = (value) => {
@@ -96,6 +103,45 @@ export default function WeeklyTemplate({ data, startDate, endDate }) {
       </Typography>
 
       <Grid container spacing={3}>
+        {/* This Week's Lessons */}
+        {lessons && lessons.length > 0 && (
+          <Grid item xs={12}>
+            <Card sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                This Week's Lessons
+              </Typography>
+              <Grid container spacing={2}>
+                {lessons.map((lesson, index) => (
+                  <Grid item xs={12} sm={6} key={index}>
+                    <Box sx={{ 
+                      borderLeft: '3px solid #3498db', 
+                      paddingLeft: 2, 
+                      marginBottom: 2 
+                    }}>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        {lesson.subject}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary">
+                        {lesson.title}
+                      </Typography>
+                      {lesson.objectives && (
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                          <strong>Objectives:</strong> {lesson.objectives}
+                        </Typography>
+                      )}
+                      {lesson.activities && (
+                        <Typography variant="body2" sx={{ mt: 1 }}>
+                          <strong>Activities:</strong> {lesson.activities}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+            </Card>
+          </Grid>
+        )}
+
         {/* Academic Progress */}
         <Grid item xs={12}>
           <Card sx={{ p: 2 }}>

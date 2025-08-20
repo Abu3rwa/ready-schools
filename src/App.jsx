@@ -16,6 +16,7 @@ import Standards from "./pages/Standards";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import AdminUsers from "./pages/AdminUsers";
+import Lessons from "./pages/Lessons";
 
 // Components
 import Layout from "./components/common/Layout";
@@ -53,6 +54,10 @@ const AppRoutes = () => {
       <Route
         path="/assignments"
         element={currentUser ? <Assignments /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/lessons"
+        element={currentUser ? <Lessons /> : <Navigate to="/login" />}
       />
       <Route
         path="/attendance"

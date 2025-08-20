@@ -17,21 +17,25 @@ import {
   Check as CheckIcon,
   Error as ErrorIcon,
   Settings as SettingsIcon,
+  Refresh as RefreshIcon,
 } from "@mui/icons-material";
 import { useGmail } from "../../contexts/GmailContext";
 import { useAuth } from "../../contexts/AuthContext";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { db } from "../../firebase";
 
 const GmailSetup = () => {
   const { currentUser } = useAuth();
   const { isConfigured, loading, error, setupGmail, checkGmailConfiguration } =
     useGmail();
   const [status, setStatus] = useState("checking"); // checking, configured, not_configured, error
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        await checkGmailConfiguration();
-        setStatus(isConfigured ? "configured" : "not_configured");
+        const configured = await checkGmailConfiguration();
+        setStatus(configured ? "configured" : "not_configured");
       } catch (err) {
         console.error("Error checking Gmail status:", err);
         setStatus("error");
@@ -39,13 +43,47 @@ const GmailSetup = () => {
     };
 
     checkStatus();
-  }, [checkGmailConfiguration, isConfigured]);
+  }, [checkGmailConfiguration, currentUser]);
 
   const handleSetupClick = async () => {
     try {
       await setupGmail();
     } catch (err) {
       console.error("Error setting up Gmail:", err);
+    }
+  };
+
+  const handleMarkConfigured = async () => {
+    if (!currentUser) return;
+    setBusy(true);
+    try {
+      const userRef = doc(db, "users", currentUser.uid);
+      const snap = await getDoc(userRef);
+      const data = snap.exists() ? snap.data() : null;
+      const hasTokens = !!(data && data.gmail_access_token && data.gmail_refresh_token);
+      if (!hasTokens) {
+        console.warn("No existing tokens found; cannot mark as configured.");
+        setBusy(false);
+        return;
+      }
+      await updateDoc(userRef, { gmail_configured: true });
+      const configured = await checkGmailConfiguration();
+      setStatus(configured ? "configured" : "not_configured");
+    } catch (e) {
+      console.error("Failed to mark Gmail as configured:", e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setStatus("checking");
+    try {
+      const configured = await checkGmailConfiguration();
+      setStatus(configured ? "configured" : "not_configured");
+    } catch (err) {
+      console.error("Error refreshing Gmail status:", err);
+      setStatus("error");
     }
   };
 
@@ -115,12 +153,20 @@ const GmailSetup = () => {
         </ListItem>
       </List>
 
-      <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
+      <Box sx={{ mt: 3, display: "flex", gap: 1, justifyContent: "flex-end", flexWrap: 'wrap' }}>
+        <Button
+          variant="outlined"
+          onClick={handleRefresh}
+          disabled={status === "checking"}
+          startIcon={<RefreshIcon />}
+        >
+          Refresh Status
+        </Button>
         <Button
           variant="contained"
           color={isConfigured ? "success" : "primary"}
           onClick={handleSetupClick}
-          disabled={loading || status === "checking"}
+          disabled={loading || status === "checking" || busy}
           startIcon={isConfigured ? <CheckIcon /> : <EmailIcon />}
         >
           {loading
@@ -129,6 +175,16 @@ const GmailSetup = () => {
             ? "Reconfigure Gmail"
             : "Connect Gmail"}
         </Button>
+        {!isConfigured && (
+          <Button
+            variant="text"
+            color="secondary"
+            onClick={handleMarkConfigured}
+            disabled={busy}
+          >
+            Mark as Configured (use existing tokens)
+          </Button>
+        )}
       </Box>
 
       {/* Benefits section */}

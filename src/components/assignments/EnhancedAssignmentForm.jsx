@@ -212,26 +212,49 @@ const EnhancedAssignmentForm = ({
     }
   };
 
+  // Validate form
   const validateForm = () => {
     const newErrors = {};
 
     if (!formData.name.trim()) {
       newErrors.name = "Assignment name is required";
     }
+
     if (!selectedGradeBook) {
-      newErrors.gradebook = "Grade book is required";
+      newErrors.gradebook = "Please select a grade book";
     }
+
     if (!formData.subject) {
       newErrors.subject = "Subject is required";
     }
+
     if (!formData.category) {
       newErrors.category = "Category is required";
     }
+
     if (!formData.points || formData.points <= 0) {
       newErrors.points = "Points must be greater than 0";
     }
+
     if (!formData.dueDate) {
       newErrors.dueDate = "Due date is required";
+    }
+
+    // Validate gradebook-category relationship
+    if (selectedGradeBook && formData.category) {
+      const categoryExists = selectedGradeBook.categories?.some(
+        (c) => c.name === formData.category
+      );
+      if (!categoryExists) {
+        newErrors.category =
+          "Selected category does not exist in this grade book";
+      }
+    }
+
+    // Validate standards selection if standards grading is enabled
+    if (standardsGradingEnabled && selectedStandards.length === 0) {
+      newErrors.standards =
+        "Please select at least one standard for assessment";
     }
 
     setErrors(newErrors);
@@ -248,17 +271,44 @@ const EnhancedAssignmentForm = ({
       return;
     }
 
+    // Ensure we have all required data
+    if (!selectedGradeBook) {
+      setSnackbar({
+        open: true,
+        message: "Please select a grade book",
+        severity: "error",
+      });
+      return;
+    }
+
+    const selectedCategory = selectedGradeBook.categories?.find(
+      (c) => c.name === formData.category
+    );
+
+    if (!selectedCategory) {
+      setSnackbar({
+        open: true,
+        message: "Selected category not found in grade book",
+        severity: "error",
+      });
+      return;
+    }
+
     const assignmentData = {
       ...formData,
       dueDate: dayjs(formData.dueDate).toISOString(),
       createdAt: assignment?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      gradebookId: selectedGradeBook ? selectedGradeBook.id : null,
 
-      // Category data
-      categoryWeight:
-        selectedGradeBook?.categories.find((c) => c.name === formData.category)
-          ?.weight || 0,
+      // Enhanced gradebook association
+      gradebookId: selectedGradeBook.id,
+      gradebookName: selectedGradeBook.name,
+
+      // Enhanced category data
+      category: selectedCategory.name,
+      categoryId: selectedCategory.id || selectedCategory.name,
+      categoryWeight: selectedCategory.weight || 0,
+      categoryColor: selectedCategory.color || "#ccc",
 
       // Standards-based grading data
       hasStandardsAssessment: standardsGradingEnabled,
@@ -293,6 +343,12 @@ const EnhancedAssignmentForm = ({
 
         await Promise.all(mappingPromises);
       }
+
+      setSnackbar({
+        open: true,
+        message: `Assignment "${formData.name}" created successfully and linked to ${selectedGradeBook.name}`,
+        severity: "success",
+      });
 
       onClose();
     } catch (error) {
@@ -388,10 +444,23 @@ const EnhancedAssignmentForm = ({
                         (gb) => gb.id === e.target.value
                       );
                       setSelectedGradeBook(gradebook);
-                      handleFormChange(
-                        "subject",
-                        gradebook ? gradebook.subject : ""
-                      );
+
+                      // Try to find a matching subject object so the Select value
+                      // uses the same key as the MenuItem values (code or name).
+                      let subjectValue = "";
+                      if (gradebook) {
+                        const subj = subjects.find(
+                          (s) =>
+                            s.code === gradebook.subject ||
+                            s.name === gradebook.subject ||
+                            s.id === gradebook.subject
+                        );
+                        subjectValue = subj
+                          ? subj.code || subj.name
+                          : gradebook.subject || "";
+                      }
+
+                      handleFormChange("subject", subjectValue);
                       handleFormChange("category", ""); // Reset category
                     }}
                     label="Grade Book *"

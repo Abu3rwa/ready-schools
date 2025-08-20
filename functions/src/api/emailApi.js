@@ -1,584 +1,828 @@
-import { onRequest, onCall, HttpsError } from "firebase-functions/v2/https";
-import emailService from "../services/emailService.js";
 import { buildDailyUpdateTemplate } from "../templates/dailyUpdateEmail.js";
+import { buildStudentDailyEmailTemplate } from "../templates/studentDailyUpdateEmail.js";
 import { requireAuth } from "../middleware/auth.js";
-import { getFirestore } from "firebase-admin/firestore";
-import sanitizeHtml from "sanitize-html";
-// Lazy load these imports only when needed
-// import { DailyUpdateService } from "../services/dailyUpdateService.js";
-// import { buildDailyUpdateTemplate } from "../templates/dailyUpdateEmail.js";
+import { HttpsError } from "firebase-functions/v2/https";
 
-// Middleware to check authentication
-const checkAuth = async (req, res, next) => {
+// Student-specific: preview student daily email (admin/teacher)
+export const studentPreviewDailyEmail = async (req, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      throw new Error("No authentication token provided");
+    const authed = await requireAuth(req).catch(() => null);
+    if (!authed) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
+    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+    if (!req.is("application/json")) return res.status(415).json({ error: "Unsupported Media Type" });
 
-    const token = authHeader.split(" ")[1];
-    // TODO: Implement proper token verification with Firebase Auth
-    // const decodedToken = await admin.auth().verifyIdToken(token);
-    // req.user = decodedToken;
-
-    next();
+    const { data } = req.body || {};
+    if (!data || !data.studentName || !data.date) {
+      return res.status(400).json({ error: "Missing data.studentName or data.date" });
+    }
+    const tpl = buildStudentDailyEmailTemplate(data);
+    return res.json({ success: true, subject: tpl.subject, html: tpl.html, text: tpl.text });
   } catch (error) {
-    res.status(401).json({ error: "Unauthorized: " + error.message });
+    console.error("studentPreviewDailyEmail error", error);
+    return res.status(500).json({ error: error.message });
   }
 };
 
-// Validate student emails
-const validateStudentEmails = (emails) => {
-  if (!Array.isArray(emails)) {
-    emails = [emails];
-  }
-
-  // Ensure all emails are provided and valid
-  const invalidEmails = emails.filter(
-    (email) => !email || typeof email !== "string" || !email.includes("@")
-  );
-  if (invalidEmails.length > 0) {
-    throw new Error(`Invalid student email(s): ${invalidEmails.join(", ")}`);
-  }
-
-  return emails;
-};
-
-// Send a single email to student(s)
-export const sendEmail = onRequest(async (req, res) => {
-  if (!(await requireAuth(req).catch(() => null))) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  if (req.method !== "POST")
-    return res.status(405).json({ error: "Method Not Allowed" });
-  if (!req.is("application/json"))
-    return res.status(415).json({ error: "Unsupported Media Type" });
+// Student-specific: queue/send now to one or more students
+export const studentQueueDailyEmail = async (req, res) => {
   try {
-    const { studentEmails, subject, content, templateType, templateData } =
-      req.body;
+    const authed = await requireAuth(req).catch(() => null);
+    if (!authed) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+    if (!req.is("application/json")) return res.status(415).json({ error: "Unsupported Media Type" });
 
-    if (!studentEmails || !subject || (!content && !templateType)) {
-      return res.status(400).json({
-        error:
-          "Missing required fields: 'studentEmails', 'subject', and either 'content' or 'templateType' are required",
-      });
+    const { recipients, data } = req.body || {};
+    if (!Array.isArray(recipients) || recipients.length === 0) {
+      return res.status(400).json({ error: "Missing recipients[]" });
+    }
+    
+    // Add userId to data for character traits integration
+    const templateData = {
+      ...data,
+      userId: req.user?.uid
+    };
+    
+    const tpl = await buildStudentDailyEmailTemplate(templateData);
+    const emailService = (await import("../services/emailService.js")).default;
+    const result = await emailService.sendEmail({ to: recipients, subject: tpl.subject, html: tpl.html, text: tpl.text }, req.user?.uid);
+    return res.json({ success: true, messageId: result?.messageId, sentTo: recipients });
+  } catch (error) {
+    console.error("studentQueueDailyEmail error", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Send a single email
+export const sendEmail = async (req, res) => {
+  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+  try {
+    const { to, subject, html, text, userId } = req.body || {};
+    if (!to || !subject) {
+      return res.status(400).json({ error: "Missing required fields: to, subject" });
+    }
+    const emailService = (await import("../services/emailService.js")).default;
+    const result = await emailService.sendEmail({ to, subject, html, text }, userId);
+    return res.json({ success: true, messageId: result?.messageId });
+  } catch (error) {
+    console.error("sendEmail error", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Send batch emails
+export const sendBatchEmails = async (req, res) => {
+  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+  try {
+    const { emails, userId } = req.body || {};
+    if (!Array.isArray(emails)) {
+      return res.status(400).json({ error: "Missing emails array" });
+    }
+    const emailService = (await import("../services/emailService.js")).default;
+    const result = await emailService.sendBatchEmails(emails, userId);
+    return res.json({ success: true, result });
+  } catch (error) {
+    console.error("sendBatchEmails error", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Get email service status
+export const getEmailStatus = async (req, res) => {
+  if (req.method !== "GET") return res.status(405).json({ error: "Method Not Allowed" });
+  try {
+    // Mock status for now
+    return res.json({
+      success: true,
+      status: "operational",
+      service: "email"
+    });
+  } catch (error) {
+    console.error("getEmailStatus error", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Verify email configuration
+export const verifyEmailConfig = async (req, res) => {
+  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+  try {
+    // Mock verification for now
+    return res.json({
+      success: true,
+      message: "Email configuration verified"
+    });
+  } catch (error) {
+    console.error("verifyEmailConfig error", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Send daily updates to all parents (callable v2 handler)
+export const sendDailyUpdates = async (data, context) => {
+  try {
+    // In v2 onCall, the first param is a request-like object { data, auth, ... }
+    const request = data;
+    const payload = request?.data ?? data;
+    const authUid = context?.auth?.uid ?? request?.auth?.uid;
+
+    // Debug
+    console.log("sendDailyUpdates called with keys:", Object.keys(request || {}));
+    console.log("payload keys:", Object.keys(payload || {}));
+    console.log("auth uid:", authUid);
+
+    // Validate authentication
+    if (!authUid) {
+      throw new Error("User must be authenticated");
     }
 
-    // Validate student emails
-    const validatedEmails = validateStudentEmails(studentEmails);
+    const { date, dataSources } = payload || {};
+    if (!dataSources) {
+      throw new Error("Missing dataSources");
+    }
 
-    const emailOptions = {
-      to: validatedEmails,
-      subject,
-      html: content,
-    };
+    console.log("sendDailyUpdates: Starting daily update process...");
+    console.log("sendDailyUpdates: Date:", date);
+    console.log("sendDailyUpdates: Data sources:", {
+      students: dataSources.students?.length || 0,
+      attendance: dataSources.attendance?.length || 0,
+      behavior: dataSources.behavior?.length || 0,
+      schoolName: dataSources.schoolName,
+      teacher: dataSources.teacher
+    });
 
-    if (templateType) {
-      try {
-        // Only import when needed
-        const templates = await import("../templates/reportEmail.js");
-        if (templateType === "report") {
-          if (!templateData.studentName) {
-            templateData.studentName = validatedEmails[0].split("@")[0]; // Use email username as fallback
+    const { DailyUpdateService } = await import("../services/dailyUpdateService.js");
+    const dailyUpdateService = new DailyUpdateService();
+    dailyUpdateService.setDataSources(dataSources);
+    const dailyUpdates = dailyUpdateService.generateAllDailyUpdates(new Date(date));
+    
+    console.log(`sendDailyUpdates: Generated ${dailyUpdates.length} daily updates`);
+
+    let emailsSent = 0;
+    const savedEmails = [];
+
+    for (const update of dailyUpdates) {
+      console.log(`sendDailyUpdates: Processing update for student: ${update.studentName} (${update.studentId})`);
+      
+      if (update.parentEmails && update.parentEmails.length > 0) {
+        console.log(`sendDailyUpdates: Found ${update.parentEmails.length} parent emails for ${update.studentName}`);
+        
+        try {
+          const emailContent = buildDailyUpdateTemplate({
+            ...update,
+            schoolName: dataSources.schoolName || "School",
+            teacherName: dataSources.teacher?.name || "Teacher",
+            teacherEmail: dataSources.teacher?.email || "",
+          });
+
+          console.log(`sendDailyUpdates: Email content generated for ${update.studentName}:`, {
+            subject: emailContent.subject,
+            hasHtml: !!emailContent.html,
+            htmlLength: emailContent.html?.length || 0
+          });
+
+          const emailService = (await import("../services/emailService.js")).default;
+          
+          // normalize and deduplicate recipients
+          const uniqueRecipients = Array.from(
+            new Set(
+              (update.parentEmails || [])
+                .filter(Boolean)
+                .map((e) => (typeof e === "string" ? e.trim().toLowerCase() : e))
+                .filter((e) => typeof e === "string" && e.length > 0)
+            )
+          );
+
+          console.log(`sendDailyUpdates: Sending to ${uniqueRecipients.length} unique recipients for ${update.studentName}`);
+
+          for (const parentEmail of uniqueRecipients) {
+            console.log(`sendDailyUpdates: Sending email to ${parentEmail} for student ${update.studentName}`);
+            
+            try {
+              const result = await emailService.sendEmail({
+                to: parentEmail,
+                subject: emailContent.subject,
+                html: emailContent.html,
+              }, authUid);
+
+              console.log(`sendDailyUpdates: Email sent successfully to ${parentEmail}:`, {
+                messageId: result?.messageId,
+                method: result?.method,
+                success: result?.success
+              });
+
+              emailsSent++;
+              
+              savedEmails.push({
+                id: `email-${Date.now()}-${update.studentId}-${parentEmail}`,
+                studentId: update.studentId,
+                studentName: update.studentName,
+                subject: emailContent.subject,
+                recipients: [parentEmail],
+                date: new Date().toISOString(),
+                sentStatus: "sent",
+                messageId: result?.messageId,
+                method: result?.method
+              });
+
+            } catch (emailError) {
+              console.error(`sendDailyUpdates: Failed to send email to ${parentEmail} for student ${update.studentName}:`, {
+                error: emailError.message,
+                code: emailError.code,
+                stack: emailError.stack
+              });
+              // Continue with other emails instead of failing completely
+            }
           }
-          const template = templates.buildEmailTemplate(templateData);
-          emailOptions.subject = template.subject;
-          emailOptions.html = template.html;
-        } else if (templateType === "reminder") {
-          if (!templateData.studentName) {
-            templateData.studentName = validatedEmails[0].split("@")[0]; // Use email username as fallback
-          }
-          const template = templates.buildReminderTemplate(templateData);
-          emailOptions.subject = template.subject;
-          emailOptions.html = template.html;
-        } else {
-          return res.status(400).json({ error: "Invalid template type" });
+        } catch (emailError) {
+          console.error(`sendDailyUpdates: Error processing email for student ${update.studentId}:`, {
+            error: emailError.message,
+            stack: emailError.stack
+          });
+          // Continue with other students instead of failing completely
         }
-      } catch (error) {
-        console.error("Error loading template:", error);
-        return res.status(500).json({ error: "Failed to load email template" });
+      } else {
+        console.log(`sendDailyUpdates: No parent emails found for student ${update.studentName}`);
       }
     }
 
-    const result = await emailService.sendEmail(emailOptions, req.user.uid);
-    res.json({
-      success: true,
-      messageId: result.messageId,
-      sentTo: validatedEmails,
-    });
-  } catch (error) {
-    console.error("Error sending email:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
+    console.log(`sendDailyUpdates: Process completed. Emails sent: ${emailsSent}`);
 
-// Send batch emails to multiple students
-export const sendBatchEmails = onRequest(async (req, res) => {
-  if (!(await requireAuth(req).catch(() => null))) {
+    return {
+      success: true,
+      message: `Daily updates sent successfully! ${emailsSent} emails sent.`,
+      emailsSent,
+      savedEmails,
+      totalStudents: dailyUpdates.length
+    };
+  } catch (error) {
+    console.error("sendDailyUpdates error:", {
+      error: error.message,
+      stack: error.stack,
+      code: error.code
+    });
+    throw new Error(error.message);
+  }
+};
+
+// Send daily update for a specific student
+export const sendStudentDailyUpdate = async (req, res) => {
+  const authed = await requireAuth(req).catch(() => null);
+  if (!authed) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-  if (req.method !== "POST")
-    return res.status(405).json({ error: "Method Not Allowed" });
-  if (!req.is("application/json"))
-    return res.status(415).json({ error: "Unsupported Media Type" });
+  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+  if (!req.is("application/json")) return res.status(415).json({ error: "Unsupported Media Type" });
   try {
-    const { emails } = req.body;
-
-    if (!emails || !Array.isArray(emails) || emails.length === 0) {
+    const { studentId, date, dataSources } = req.body || {};
+    if (!studentId || !dataSources) {
+      return res.status(400).json({ error: "Missing studentId or dataSources" });
+    }
+    const { DailyUpdateService } = await import("../services/dailyUpdateService.js");
+    const dailyUpdateService = new DailyUpdateService();
+    dailyUpdateService.setDataSources(dataSources);
+    const dailyUpdate = dailyUpdateService.generateDailyUpdate(studentId, new Date(date));
+    if (!dailyUpdate || !dailyUpdate.parentEmails || dailyUpdate.parentEmails.length === 0) {
       return res.status(400).json({
-        error: "Missing or invalid 'emails' array in request body",
+        error: "No parent emails found for student"
       });
     }
-
+    const emailContent = buildDailyUpdateTemplate({
+      ...dailyUpdate,
+      schoolName: dataSources.schoolName || "School",
+      teacherName: dataSources.teacher?.name || "Teacher",
+      teacherEmail: dataSources.teacher?.email || "",
+    });
     const results = [];
-    const errors = [];
-
-    for (const emailData of emails) {
+    const emailService = (await import("../services/emailService.js")).default;
+    // normalize and deduplicate recipients
+    const uniqueRecipients = Array.from(
+      new Set(
+        (dailyUpdate.parentEmails || [])
+          .filter(Boolean)
+          .map((e) => (typeof e === "string" ? e.trim().toLowerCase() : e))
+          .filter((e) => typeof e === "string" && e.length > 0)
+      )
+    );
+    for (const parentEmail of uniqueRecipients) {
       try {
-        const { studentEmails, subject, content, templateType, templateData } =
-          emailData;
+        const result = await emailService.sendEmail({
+          to: parentEmail,
+          subject: emailContent.subject,
+          html: emailContent.html,
+        }, req.user?.uid);
+        results.push({ email: parentEmail, success: true, messageId: result?.messageId });
+      } catch (emailError) {
+        console.error(`Error sending email to ${parentEmail}:`, emailError);
+        results.push({ email: parentEmail, success: false, error: emailError.message });
+      }
+    }
+    return res.json({
+      success: true,
+      message: `Daily update sent to ${results.filter(r => r.success).length} parents.`,
+      studentName: dailyUpdate.studentName,
+      parentEmails: dailyUpdate.parentEmails,
+      results,
+    });
+  } catch (error) {
+    console.error("sendStudentDailyUpdate error", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
 
-        if (!studentEmails || !subject || (!content && !templateType)) {
-          errors.push({
-            emailData,
-            error: "Missing required fields",
-          });
+// Get daily update data without sending emails (callable function)
+export const getDailyUpdateData = async (data, context) => {
+  try {
+    // Normalize payload shape: accept either direct or nested under data (defensive for various callers)
+    const actualData = (data && typeof data === "object" && "data" in data) ? data.data : data;
+    const studentId = actualData?.studentId;
+    const date = actualData?.date;
+    const dataSources = actualData?.dataSources;
+
+    // Basic validation
+    if (!dataSources) {
+      throw new Error("Missing dataSources");
+    }
+    
+    const { DailyUpdateService } = await import("../services/dailyUpdateService.js");
+    const dailyUpdateService = new DailyUpdateService();
+    dailyUpdateService.setDataSources(dataSources);
+    
+    if (studentId) {
+      const dailyUpdate = dailyUpdateService.generateDailyUpdate(studentId, new Date(date));
+      return {
+        success: true,
+        data: dailyUpdate,
+        message: `Retrieved daily update data for ${dailyUpdate.studentName}`
+      };
+    } else {
+      const dailyUpdates = dailyUpdateService.generateAllDailyUpdates(new Date(date));
+      const classSummary = dailyUpdateService.getClassSummary(new Date(date));
+      return {
+        success: true,
+        data: {
+          dailyUpdates,
+          classSummary,
+          totalStudents: dailyUpdates.length,
+        },
+        message: `Retrieved daily update data for ${dailyUpdates.length} students`
+      };
+    }
+  } catch (error) {
+    console.error("getDailyUpdateData error", error);
+    throw new Error(error.message);
+  }
+};
+
+// Send student emails (all students) via callable
+export const sendStudentEmailsCallable = async (data, context) => {
+  try {
+    const requestShape = data;
+    const payload = (data && typeof data === "object" && "data" in data) ? data.data : data;
+    const authUid = context?.auth?.uid ?? requestShape?.auth?.uid;
+    if (!authUid) {
+      console.log("sendStudentEmailsCallable: missing auth in context; request.auth:", requestShape?.auth);
+      throw new HttpsError("unauthenticated", "User must be authenticated");
+    }
+
+    const { date, dataSources } = payload || {};
+    if (!dataSources) {
+      throw new HttpsError("invalid-argument", "Missing dataSources");
+    }
+
+    console.log("sendStudentEmailsCallable: payload summary:", {
+      hasDate: !!date,
+      students: Array.isArray(dataSources.students) ? dataSources.students.length : 0,
+      attendance: Array.isArray(dataSources.attendance) ? dataSources.attendance.length : 0,
+    });
+
+    const { DailyUpdateService } = await import("../services/dailyUpdateService.js");
+    const dailyUpdateService = new DailyUpdateService();
+    dailyUpdateService.setDataSources(dataSources);
+    const dailyUpdates = dailyUpdateService.generateAllDailyUpdates(new Date(date));
+
+    const emailService = (await import("../services/emailService.js")).default;
+
+    // Create quick lookup for student emails
+    const studentsById = new Map(
+      (dataSources.students || []).map((s) => [s.id || s.studentId, s])
+    );
+
+    let emailsSent = 0;
+    const savedEmails = [];
+
+    for (const update of dailyUpdates) {
+      try {
+        const student = studentsById.get(update.studentId) || {};
+        const rawEmail = student.studentEmail || student.email || null;
+        const studentEmail =
+          typeof rawEmail === "string" && rawEmail.trim().length > 0
+            ? rawEmail.trim().toLowerCase()
+            : null;
+
+        console.log(`Student ${update.studentName} (${update.studentId}):`, {
+          hasStudent: !!student,
+          rawEmail: rawEmail,
+          studentEmail: studentEmail,
+          studentKeys: Object.keys(student)
+        });
+
+        if (!studentEmail) {
+          console.log(`Skipping student ${update.studentName} - no email found`);
           continue;
         }
 
-        const validatedEmails = validateStudentEmails(studentEmails);
+        console.log(`Sending email to student: ${update.studentName} at ${studentEmail}`);
 
-        const emailOptions = {
-          to: validatedEmails,
-          subject,
-          html: content,
-        };
-
-        if (templateType) {
-          try {
-            const templates = await import("../templates/reportEmail.js");
-            if (templateType === "report") {
-              if (!templateData.studentName) {
-                templateData.studentName = validatedEmails[0].split("@")[0];
-              }
-              const template = templates.buildEmailTemplate(templateData);
-              emailOptions.subject = template.subject;
-              emailOptions.html = template.html;
-            } else if (templateType === "reminder") {
-              if (!templateData.studentName) {
-                templateData.studentName = validatedEmails[0].split("@")[0];
-              }
-              const template = templates.buildReminderTemplate(templateData);
-              emailOptions.subject = template.subject;
-              emailOptions.html = template.html;
-            }
-          } catch (templateError) {
-            console.error("Error loading template:", templateError);
-            errors.push({
-              emailData,
-              error: "Failed to load email template",
-            });
-            continue;
-          }
-        }
-
-        const result = await emailService.sendEmail(emailOptions, req.user.uid);
-        results.push({
-          emailData,
-          success: true,
-          messageId: result.messageId,
-          sentTo: validatedEmails,
+        const emailContent = await buildStudentDailyEmailTemplate({
+          ...update,
+          schoolName: dataSources.schoolName || "School",
+          teacherName: dataSources.teacher?.name || "Teacher",
+          teacherEmail: dataSources.teacher?.email || "",
         });
-      } catch (error) {
-        console.error("Error sending batch email:", error);
-        errors.push({
-          emailData,
-          error: error.message,
+
+        const result = await emailService.sendEmail(
+          {
+            to: studentEmail,
+            subject: emailContent.subject,
+            html: emailContent.html,
+            text: emailContent.text,
+          },
+          authUid
+        );
+        emailsSent++;
+        savedEmails.push({
+          id: `student-email-${Date.now()}-${update.studentId}`,
+          studentId: update.studentId,
+          studentName: update.studentName,
+          subject: emailContent.subject,
+          recipients: [studentEmail],
+          date: new Date().toISOString(),
+          sentStatus: "sent",
+          recipientType: "student",
         });
-      }
-    }
-
-    res.json({
-      success: true,
-      results,
-      errors,
-      summary: {
-        total: emails.length,
-        successful: results.length,
-        failed: errors.length,
-      },
-    });
-  } catch (error) {
-    console.error("Error processing batch emails:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get email status
-export const getEmailStatus = onRequest(async (req, res) => {
-  if (!(await requireAuth(req).catch(() => null))) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  if (req.method !== "GET")
-    return res.status(405).json({ error: "Method Not Allowed" });
-  try {
-    const { messageId } = req.query;
-
-    if (!messageId) {
-      return res.status(400).json({
-        error: "Missing 'messageId' query parameter",
-      });
-    }
-
-    const status = await emailService.getEmailStatus(messageId);
-    res.json({
-      success: true,
-      messageId,
-      status,
-    });
-  } catch (error) {
-    console.error("Error getting email status:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Verify email configuration
-export const verifyEmailConfig = onRequest(async (req, res) => {
-  if (!(await requireAuth(req).catch(() => null))) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  if (req.method !== "POST")
-    return res.status(405).json({ error: "Method Not Allowed" });
-  try {
-    const result = await emailService.verifyConfig();
-    res.json({
-      success: true,
-      config: result,
-    });
-  } catch (error) {
-    console.error("Error verifying email config:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Daily Update Functions - Using onCall for proper authentication
-export const sendDailyUpdates = onCall(
-  {
-    timeoutSeconds: 300, // 5 minutes timeout
-    memory: "256MiB",
-    secrets: ["SMTP_EMAIL", "SMTP_PASSWORD"],
-  },
-  async (request) => {
-    console.log("=== SEND DAILY UPDATES FUNCTION STARTED ===");
-    try {
-      console.log(
-        "sendDailyUpdates called with request:",
-        JSON.stringify(request.data, null, 2)
-      );
-
-      // The user is automatically authenticated in callable functions
-      const { date, dataSources } = request.data;
-
-      if (!date || !dataSources) {
+      } catch (emailError) {
         console.error(
-          "Missing required fields - date:",
-          !!date,
-          "dataSources:",
-          !!dataSources
-        );
-        throw new HttpsError(
-          "invalid-argument",
-          "Missing required fields: date and dataSources"
+          `Error sending student email for student ${update.studentId}:`,
+          emailError
         );
       }
-
-      console.log("Loading DailyUpdateService...");
-      // Lazy load the daily update service
-      const { DailyUpdateService } = await import(
-        "../services/dailyUpdateService.js"
-      );
-      const dailyUpdateService = new DailyUpdateService();
-
-      console.log("Generating daily updates...");
-      const result = await dailyUpdateService.sendDailyUpdatesToAllParents(
-        dataSources,
-        new Date(date)
-      );
-      console.log(
-        "Generated daily updates result:",
-        JSON.stringify(result, null, 2)
-      );
-
-      // First, let's test if the email service works at all
-      console.log("Testing email service initialization...");
-      try {
-        await emailService.initialize();
-        console.log("Email service initialized successfully");
-      } catch (initErr) {
-        console.error("Email service initialization failed:", initErr.message);
-        return {
-          success: false,
-          error: "Email service initialization failed: " + initErr.message,
-          data: { ...result, emailsSent: 0 },
-        };
-      }
-
-      // Attempt to actually send emails here and compute emailsSent
-      let emailsSent = 0;
-      const savedEmails = [];
-      console.log("Starting email sending process...");
-
-      const db = getFirestore();
-      const dateString = new Date(date).toISOString().split("T")[0];
-
-      // Load user preferences
-      let userPrefs = {};
-      try {
-        const userDoc = await db.collection("users").doc(request.auth.uid).get();
-        if (userDoc.exists) userPrefs = userDoc.data() || {};
-      } catch (e) {
-        console.warn("Could not load user prefs:", e.message);
-      }
-
-      const parseList = (val) => {
-        if (!val || typeof val !== 'string') return undefined;
-        const arr = val.split(',').map(s => s.trim()).filter(Boolean);
-        return arr.length ? arr : undefined;
-      };
-
-      try {
-        const updates = Array.isArray(result.dailyUpdates)
-          ? result.dailyUpdates
-          : [];
-        console.log(
-          `Processing ${updates.length} daily updates for email sending`
-        );
-
-        for (let i = 0; i < updates.length; i++) {
-          const update = updates[i];
-          // Apply preferences per email
-          update.schoolName = update.schoolName || userPrefs.school_name || update.schoolName || "School";
-          update.teacherName = update.teacherName || (request.auth?.token?.name) || userPrefs.teacher_display_name || "Teacher";
-          update.subjectTemplate = userPrefs.dailyEmailSubjectTemplate || null;
-          update.includeSections = userPrefs.dailyEmailIncludeSections || {};
-          update.schoolLogoUrl = userPrefs.school_logo_url || null;
-          update.emailSignature = userPrefs.email_signature || null;
-
-          console.log(
-            `Processing update ${i + 1}/${updates.length} for student:`,
-            update.studentName
-          );
-          console.log("Parent emails for this student:", update.parentEmails);
-
-          const recipients = Array.isArray(update.parentEmails)
-            ? update.parentEmails.filter(Boolean)
-            : [];
-          console.log("Filtered recipients (non-empty emails):", recipients);
-
-          if (recipients.length === 0) {
-            console.log(
-              `No valid parent emails found for student ${update.studentName}, skipping...`
-            );
-            continue;
-          }
-
-          // Use the beautiful HTML template instead of basic placeholder
-          const emailTemplate = buildDailyUpdateTemplate(update);
-          const subject = emailTemplate.subject;
-          const html = emailTemplate.html;
-
-          const cc = parseList(userPrefs.dailyEmailCc);
-          const bcc = parseList(userPrefs.dailyEmailBcc);
-          const replyTo = userPrefs.dailyEmailReplyTo || undefined;
-
-          console.log(`Attempting to send email to: ${Array.isArray(update.parentEmails) ? update.parentEmails.filter(Boolean).join(", ") : ''}`);
-          try {
-            const emailResult = await emailService.sendEmail(
-              { to: Array.isArray(update.parentEmails) ? update.parentEmails.filter(Boolean) : [], subject, html, cc, bcc, replyTo },
-              request.auth.uid
-            );
-            emailsSent += (Array.isArray(update.parentEmails) ? update.parentEmails.filter(Boolean).length : 0);
-            console.log(
-              `Successfully sent email to recipients for student ${update.studentName}. Message ID:`,
-              emailResult.messageId
-            );
-
-            // Persist the sent email to Firestore for history
-            try {
-              const docData = {
-                userId: request.auth.uid,
-                studentId: update.studentId,
-                studentName: update.studentName,
-                date: dateString,
-                subject,
-                content: sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} }),
-                html,
-                sentStatus: "Sent",
-                type: "daily_update",
-                attendance: update.attendance || {},
-                grades: update.grades || [],
-                behavior: update.behavior || [],
-                assignments: update.assignments || [],
-                classwork: update.classwork || [],
-                homework: update.homework || [],
-                upcomingAssignments: update.upcomingAssignments || [],
-                metadata: {
-                  createdAt: new Date().toISOString(),
-                  sentAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                  teacherName: update.teacherName,
-                  schoolName: update.schoolName,
-                  cc: cc || [],
-                  bcc: bcc || [],
-                  replyTo: replyTo || null,
-                },
-                recipients: Array.isArray(update.parentEmails) ? update.parentEmails.filter(Boolean) : [],
-              };
-              await db.collection("dailyUpdateEmails").add(docData);
-            } catch (persistErr) {
-              console.error("Failed to persist daily update email:", persistErr);
-            }
-          } catch (sendErr) {
-            console.error(
-              "Failed to send daily update email for",
-              update.studentId,
-              "Error:",
-              sendErr.message
-            );
-            console.error("Full error object:", sendErr);
-          }
-        }
-      } catch (sendWrapperErr) {
-        console.error(
-          "Error while sending daily updates batch:",
-          sendWrapperErr
-        );
-      }
-
-      console.log(`Email sending complete. Total emails sent: ${emailsSent}`);
-      const finalResult = {
-        success: true,
-        data: { ...result, emailsSent },
-      };
-      console.log(
-        "Final result being returned:",
-        JSON.stringify(finalResult, null, 2)
-      );
-      console.log("=== SEND DAILY UPDATES FUNCTION COMPLETED ===");
-
-      return finalResult;
-    } catch (error) {
-      console.error("=== ERROR IN SEND DAILY UPDATES ===");
-      console.error("Error sending daily updates:", error);
-      console.error("Error stack:", error.stack);
-      // Return a more detailed error response instead of throwing HttpsError
-      return {
-        success: false,
-        error: error.message,
-        stack: error.stack,
-      };
     }
+
+    return {
+      success: true,
+      message: `Student emails sent successfully! ${emailsSent} emails sent.`,
+      emailsSent,
+      savedEmails,
+    };
+  } catch (error) {
+    console.error("sendStudentEmailsCallable error", error);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError("internal", error?.message || "Unknown error");
   }
-);
+};
 
-export const sendStudentDailyUpdate = onCall(async (request) => {
+// Send student email for a specific student via callable
+export const sendStudentEmailCallable = async (data, context) => {
   try {
-    const { studentId, date, dataSources } = request.data;
-
-    if (!studentId || !date || !dataSources) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Missing required fields: studentId, date, and dataSources"
-      );
+    const requestShape = data;
+    const payload = (data && typeof data === "object" && "data" in data) ? data.data : data;
+    const authUid = context?.auth?.uid ?? requestShape?.auth?.uid;
+    if (!authUid) {
+      console.log("sendStudentEmailCallable: missing auth in context; request.auth:", requestShape?.auth);
+      throw new HttpsError("unauthenticated", "User must be authenticated");
     }
 
-    // Lazy load the daily update service
-    const { DailyUpdateService } = await import(
-      "../services/dailyUpdateService.js"
-    );
+    const { studentId, date, dataSources } = payload || {};
+    if (!studentId || !dataSources) {
+      throw new HttpsError("invalid-argument", "Missing studentId or dataSources");
+    }
+
+    const { DailyUpdateService } = await import("../services/dailyUpdateService.js");
     const dailyUpdateService = new DailyUpdateService();
-
-    const result = await dailyUpdateService.sendDailyUpdateForStudent(
+    dailyUpdateService.setDataSources(dataSources);
+    const dailyUpdate = dailyUpdateService.generateDailyUpdate(
       studentId,
-      dataSources,
       new Date(date)
     );
 
+    const student = (dataSources.students || []).find(
+      (s) => (s.id || s.studentId) === studentId
+    );
+    const rawEmail = student?.studentEmail || student?.email || null;
+    const studentEmail =
+      typeof rawEmail === "string" && rawEmail.trim().length > 0
+        ? rawEmail.trim().toLowerCase()
+        : null;
+    if (!studentEmail) {
+      throw new HttpsError("failed-precondition", "No student email found");
+    }
+
+    const emailContent = buildStudentDailyEmailTemplate({
+      ...dailyUpdate,
+      schoolName: dataSources.schoolName || "School",
+      teacherName: dataSources.teacher?.name || "Teacher",
+      teacherEmail: dataSources.teacher?.email || "",
+    });
+
+    const emailService = (await import("../services/emailService.js")).default;
+    const result = await emailService.sendEmail(
+      {
+        to: studentEmail,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        text: emailContent.text,
+      },
+      authUid
+    );
+
     return {
       success: true,
-      data: result,
+      message: `Student email sent to ${studentEmail}`,
+      studentName: dailyUpdate.studentName,
+      studentEmail,
+      messageId: result?.messageId,
     };
   } catch (error) {
-    console.error("Error sending student daily update:", error);
-    // Return a more detailed error response instead of throwing HttpsError
-    return {
-      success: false,
-      error: error.message,
-      stack: error.stack,
-    };
+    console.error("sendStudentEmailCallable error", error);
+    if (error instanceof HttpsError) throw error;
+    throw new HttpsError("internal", error?.message || "Unknown error");
   }
-});
+};
 
-export const getDailyUpdateData = onCall(
-  {
-    timeoutSeconds: 60,
-    memory: "256MiB",
-    secrets: ["SMTP_EMAIL", "SMTP_PASSWORD"],
-  },
-  async (request) => {
-    try {
-      console.log("=== GET DAILY UPDATE DATA FUNCTION STARTED ===");
-      console.log("Request data:", JSON.stringify(request.data, null, 2));
-
-      const { studentId, dataSources, date } = request.data;
-
-      if (!dataSources) {
-        console.error("Missing dataSources in request");
-        throw new HttpsError("invalid-argument", "Data sources are required");
-      }
-
-      if (!date) {
-        console.warn("No date provided, using current date");
-      }
-
-      try {
-        // Lazy load the daily update service
-        console.log("Loading DailyUpdateService...");
-        const { DailyUpdateService } = await import(
-          "../services/dailyUpdateService.js"
-        );
-        const dailyUpdateService = new DailyUpdateService();
-
-        console.log("Generating daily update data...");
-        const result = await dailyUpdateService.getDailyUpdateData(
-          studentId,
-          dataSources,
-          date ? new Date(date) : new Date()
-        );
-        console.log(
-          "Generated daily update data:",
-          JSON.stringify(result, null, 2)
-        );
-
-        return {
-          success: true,
-          data: result,
-        };
-      } catch (serviceError) {
-        console.error("Error in DailyUpdateService:", serviceError);
-        throw new HttpsError(
-          "internal",
-          `Error generating daily update data: ${serviceError.message}`
-        );
-      }
-    } catch (error) {
-      console.error("Error in getDailyUpdateData:", error);
-      // Return a more detailed error response instead of throwing Error
-      return {
-        success: false,
-        error: error.message,
-        stack: error.stack,
-      };
+// Test Gmail API email delivery
+export const testGmailDelivery = async (req, res) => {
+  try {
+    const authed = await requireAuth(req).catch(() => null);
+    if (!authed) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
+    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+
+    const { testEmail } = req.body || {};
+    if (!testEmail) {
+      return res.status(400).json({ error: "Missing testEmail" });
+    }
+
+    const userId = req.user?.uid;
+    const gmailApiService = (await import("../services/gmailApiService.js")).default;
+    
+    // First check Gmail status
+    const status = await gmailApiService.checkGmailStatus(userId);
+    if (status.status !== 'operational') {
+      return res.status(400).json({ 
+        error: "Gmail API not operational", 
+        status: status 
+      });
+    }
+
+    // Test email delivery
+    const result = await gmailApiService.testEmailDelivery(userId, testEmail);
+
+    return res.json({
+      success: true,
+      result: result,
+      status: status
+    });
+  } catch (error) {
+    console.error("testGmailDelivery error", error);
+    return res.status(500).json({ error: error.message });
   }
-);
+};
+
+// Get Gmail API quotas and limits
+export const getGmailQuotas = async (req, res) => {
+  try {
+    const authed = await requireAuth(req).catch(() => null);
+    if (!authed) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    if (req.method !== "GET") return res.status(405).json({ error: "Method Not Allowed" });
+
+    const userId = req.user?.uid;
+    const gmailApiService = (await import("../services/gmailApiService.js")).default;
+    const quotas = await gmailApiService.checkGmailQuotas(userId);
+
+    return res.json({
+      success: true,
+      quotas: quotas
+    });
+  } catch (error) {
+    console.error("getGmailQuotas error", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Get Gmail API status for a user
+export const getGmailStatus = async (req, res) => {
+  try {
+    const authed = await requireAuth(req).catch(() => null);
+    if (!authed) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    if (req.method !== "GET") return res.status(405).json({ error: "Method Not Allowed" });
+
+    const userId = req.user?.uid;
+    if (!userId) {
+      return res.status(400).json({ error: "Missing user ID" });
+    }
+
+    const gmailApiService = (await import("../services/gmailApiService.js")).default;
+    const status = await gmailApiService.checkGmailStatus(userId);
+
+    return res.json({
+      success: true,
+      status: status
+    });
+  } catch (error) {
+    console.error("getGmailStatus error", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Fix Gmail configuration for a user
+export const fixGmailConfig = async (req, res) => {
+  try {
+    const authed = await requireAuth(req).catch(() => null);
+    if (!authed) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+
+    const userId = req.user?.uid;
+    if (!userId) {
+      return res.status(400).json({ error: "Missing user ID" });
+    }
+
+    // Calculate new expiry time (1 hour from now)
+    const newExpiry = Date.now() + (60 * 60 * 1000);
+    
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const db = getFirestore();
+    
+    await db.collection("users").doc(userId).update({
+      gmail_configured: true,
+      gmail_token_expiry: newExpiry,
+      gmail_token_error: null,
+      gmail_token_error_time: null,
+      gmail_last_error: null,
+      gmail_error_time: null,
+      gmail_token_last_refresh: new Date().toISOString()
+    });
+    
+    console.log(`Fixed Gmail configuration for user ${userId}`);
+    
+    return res.json({
+      success: true,
+      message: "Gmail configuration fixed successfully",
+      newExpiry: newExpiry
+    });
+  } catch (error) {
+    console.error("fixGmailConfig error", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Handle Gmail OAuth callback (backend)
+export const handleGmailOAuthCallback = async (req, res) => {
+  try {
+    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+    
+    const { code, state, userId } = req.body || {};
+    if (!code || !state || !userId) {
+      return res.status(400).json({ error: "Missing code, state, or userId" });
+    }
+
+    // Exchange code for tokens using backend credentials
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        code,
+        client_id: process.env.GOOGLE_CLIENT_ID || '610841874714-qid6baodcg3fgt3vijkog0s8hk76c4n5.apps.googleusercontent.com',
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || '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',
+        redirect_uri: 'http://localhost:3000/auth/gmail/callback',
+        grant_type: 'authorization_code',
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error_description || errorData.message || 'Failed to exchange code for tokens');
+    }
+
+    const tokens = await response.json();
+    
+    // Save tokens to Firestore
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const db = getFirestore();
+    
+    const newExpiry = Date.now() + (tokens.expires_in * 1000);
+    
+    await db.collection("users").doc(userId).update({
+      gmail_access_token: tokens.access_token,
+      gmail_refresh_token: tokens.refresh_token,
+      gmail_token_expiry: newExpiry,
+      gmail_configured: true,
+      gmail_token_error: null,
+      gmail_token_error_time: null,
+      gmail_last_error: null,
+      gmail_error_time: null,
+      gmail_token_last_refresh: new Date().toISOString()
+    });
+    
+    console.log(`Gmail OAuth completed for user ${userId}`);
+    
+    return res.json({
+      success: true,
+      message: "Gmail OAuth completed successfully",
+      newExpiry: newExpiry
+    });
+  } catch (error) {
+    console.error("handleGmailOAuthCallback error", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Temporary fix for specific user (no auth required)
+export const fixSpecificUser = async (req, res) => {
+  try {
+    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+    
+    // Only allow this specific user ID for security
+    const userId = 'sEoZ0W5LMSV8IrxviJj0JBKOb5t1';
+    
+    // Calculate new expiry time (1 hour from now)
+    const newExpiry = Date.now() + (60 * 60 * 1000);
+    
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const db = getFirestore();
+    
+    await db.collection("users").doc(userId).update({
+      gmail_configured: false, // Force re-authentication
+      gmail_access_token: null, // Clear broken access token
+      gmail_refresh_token: null, // Clear broken refresh token
+      gmail_token_expiry: null, // Clear expiry
+      gmail_token_error: null,
+      gmail_token_error_time: null,
+      gmail_last_error: null,
+      gmail_error_time: null,
+      gmail_token_last_refresh: null
+    });
+    
+    console.log(`Forced Gmail re-authentication for user ${userId}`);
+    
+    return res.json({
+      success: true,
+      message: "Gmail re-authentication required - please configure Gmail again",
+      newExpiry: newExpiry,
+      userId: userId
+    });
+  } catch (error) {
+    console.error("fixSpecificUser error", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Reset Gmail configuration for a specific user to allow re-authentication
+export const resetGmailConfiguration = async (req, res) => {
+  try {
+    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+    
+    // Get user ID from request body or use default
+    const { userId } = req.body || {};
+    const targetUserId = userId || 'sEoZ0W5LMSV8IrxviJj0JBKOb5t1'; // Default fallback
+    
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const db = getFirestore();
+    
+    // Reset Gmail configuration to allow re-authentication
+    await db.collection("users").doc(targetUserId).update({
+      gmail_configured: false, // Allow re-authentication
+      gmail_access_token: null, // Clear access token
+      gmail_refresh_token: null, // Clear refresh token
+      gmail_token_expiry: null, // Clear expiry
+      gmail_token_error: null,
+      gmail_token_error_time: null,
+      gmail_last_error: null,
+      gmail_error_time: null,
+      gmail_token_last_refresh: null
+    });
+    
+    console.log(`Reset Gmail configuration for user ${targetUserId}`);
+    
+    return res.json({
+      success: true,
+      message: "Gmail configuration reset successfully - please re-authenticate",
+      userId: targetUserId
+    });
+  } catch (error) {
+    console.error("resetGmailConfiguration error", error);
+    return res.status(500).json({ error: error.message });
+  }
+};

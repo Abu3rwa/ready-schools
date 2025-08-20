@@ -390,23 +390,63 @@ export const recordBulkAttendance = async (date, attendanceRecords) => {
     const userId = getCurrentUserId();
     if (!userId) throw new Error("User not authenticated.");
 
+    // Validate input data
+    if (!date) throw new Error("Date is required for attendance records.");
+    if (!Array.isArray(attendanceRecords) || attendanceRecords.length === 0) {
+      throw new Error("Attendance records array is required and cannot be empty.");
+    }
+
+    // Validate each attendance record
+    const validationErrors = [];
+    attendanceRecords.forEach((record, index) => {
+      if (!record.studentId) {
+        validationErrors.push(`Record ${index + 1}: Missing studentId`);
+      }
+      if (!record.status) {
+        validationErrors.push(`Record ${index + 1}: Missing status`);
+      }
+    });
+
+    if (validationErrors.length > 0) {
+      throw new Error(`Validation errors: ${validationErrors.join(', ')}`);
+    }
+
     const attendanceCol = collection(db, "attendance");
     const newRecords = attendanceRecords.map((record) => ({
       ...record,
       date,
       userId,
+      timeEntered: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }));
+
+    console.log('Preparing to save attendance records:', {
+      date,
+      userId,
+      recordCount: newRecords.length,
+      sampleRecord: newRecords[0]
+    });
+
     const { writeBatch } = await import("firebase/firestore");
     const batch = writeBatch(db);
+    
     newRecords.forEach((record) => {
       const docRef = doc(attendanceCol);
       batch.set(docRef, record);
     });
+    
     await batch.commit();
+    console.log('Successfully saved attendance records:', newRecords.length);
     return { success: true, recorded: newRecords.length, errors: [] };
   } catch (error) {
     console.error("Error recording bulk attendance in Firestore:", error);
-    throw new Error("Failed to record bulk attendance.");
+    console.error("Error details:", {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
+    throw new Error(`Failed to record bulk attendance: ${error.message}`);
   }
 };
 

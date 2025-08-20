@@ -177,7 +177,15 @@ const EnhancedStudentCard = ({
               <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                 <EmailIcon fontSize="small" color="action" />
                 <Typography variant="body2" noWrap>
-                  {student.parentEmail1 || "No email provided"}
+                  {student.parentEmail1 || "No parent email provided"}
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={12}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <EmailIcon fontSize="small" color="action" />
+                <Typography variant="body2" noWrap>
+                  {student.studentEmail || student.email || "No student email provided"}
                 </Typography>
               </Box>
             </Grid>

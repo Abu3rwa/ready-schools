@@ -81,18 +81,73 @@ const CategoryGradeTable = ({
   const gradeBookData = useMemo(() => {
     if (!gradeBook) return { grades: [], assignments: [], students: [] };
 
+    console.log('CategoryGradeTable Debug:', {
+      gradeBookId: gradeBook.id,
+      gradeBookSubject: gradeBook.subject,
+      totalAssignments: assignments.length,
+      totalGrades: grades.length,
+      totalStudents: students.length,
+      assignments: assignments.map(a => ({
+        id: a.id,
+        name: a.name,
+        subject: a.subject,
+        gradebookId: a.gradebookId,
+        category: a.category
+      })),
+      grades: grades.map(g => ({
+        id: g.id,
+        assignmentId: g.assignmentId,
+        studentId: g.studentId,
+        score: g.score,
+        subject: g.subject
+      }))
+    });
+
+    // Filter assignments by gradebookId first, then fallback to subject
     const gradeBookAssignments = assignments.filter(
-      (assignment) => assignment.subject === gradeBook.subject
+      (assignment) => 
+        assignment.gradebookId === gradeBook.id || 
+        (assignment.subject === gradeBook.subject && !assignment.gradebookId)
     );
+
+    console.log('Filtered assignments:', {
+      gradeBookAssignments: gradeBookAssignments.map(a => ({
+        id: a.id,
+        name: a.name,
+        subject: a.subject,
+        gradebookId: a.gradebookId,
+        category: a.category
+      }))
+    });
 
     const gradeBookGrades = grades.filter((grade) => {
       const assignment = gradeBookAssignments.find((a) => a.id === grade.assignmentId);
-      return assignment && assignment.subject === gradeBook.subject;
+      return assignment && (
+        assignment.gradebookId === gradeBook.id || 
+        (assignment.subject === gradeBook.subject && !assignment.gradebookId)
+      );
+    });
+
+    console.log('Filtered grades:', {
+      gradeBookGrades: gradeBookGrades.map(g => ({
+        id: g.id,
+        assignmentId: g.assignmentId,
+        studentId: g.studentId,
+        score: g.score
+      }))
     });
 
     const gradeBookStudents = students.filter((student) =>
       gradeBookGrades.some((grade) => grade.studentId === student.id)
     );
+
+    console.log('Filtered students:', {
+      gradeBookStudents: gradeBookStudents.map(s => ({
+        id: s.id,
+        firstName: s.firstName,
+        lastName: s.lastName
+      }))
+    });
 
     return {
       grades: gradeBookGrades,
@@ -246,8 +301,9 @@ const CategoryGradeTable = ({
       return grade.score;
     }
 
-    const percentage = (score / maxPoints) * 100;
-    return `${score} / ${maxPoints} (${percentage.toFixed(1)}%)`;
+    // Score is stored as percentage, so convert to points for display
+    const pointsEarned = (score / 100) * maxPoints;
+    return `${pointsEarned.toFixed(1)} / ${maxPoints} (${score.toFixed(1)}%)`;
   };
 
   const getGradeColor = (grade, assignment) => {
@@ -256,13 +312,13 @@ const CategoryGradeTable = ({
     }
 
     const score = parseFloat(grade.score);
-    const maxPoints = parseFloat(assignment.points);
 
-    if (isNaN(score) || isNaN(maxPoints)) {
+    if (isNaN(score)) {
       return "default";
     }
 
-    const percentage = (score / maxPoints) * 100;
+    // Score is already stored as percentage
+    const percentage = score;
 
     if (percentage >= 90) return "success";
     if (percentage >= 80) return "primary";
@@ -402,7 +458,8 @@ const CategoryGradeTable = ({
 
                     const categoryCalculation = calculateCategoryAverage(
                       categoryGrades,
-                      category
+                      category,
+                      gradeBookData.assignments
                     );
 
                     return (

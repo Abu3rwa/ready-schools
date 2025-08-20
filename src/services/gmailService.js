@@ -15,6 +15,30 @@ class GmailService {
       if (!userDoc.exists()) return null;
       
       const userData = userDoc.data();
+      
+      // First check if Gmail is configured
+      if (!userData.gmail_configured) {
+        console.log('Gmail not configured for this user');
+        return null;
+      }
+      
+      // Check if tokens exist and are not expired
+      if (!userData.gmail_access_token || !userData.gmail_refresh_token) {
+        console.log('Gmail tokens missing - user needs to re-authenticate');
+        return null;
+      }
+      
+      // Check if there's a token error that needs to be addressed
+      if (userData.gmail_token_error) {
+        console.log('Gmail token error:', userData.gmail_token_error);
+        return null;
+      }
+      
+      if (userData.gmail_token_expiry && Date.now() >= userData.gmail_token_expiry) {
+        console.log('Gmail tokens expired');
+        return null;
+      }
+      
       return {
         accessToken: userData.gmail_access_token,
         refreshToken: userData.gmail_refresh_token,
@@ -32,11 +56,25 @@ class GmailService {
         gmail_access_token: tokens.access_token,
         gmail_refresh_token: tokens.refresh_token,
         gmail_token_expiry: Date.now() + (tokens.expires_in * 1000),
-        gmail_configured: true
+        gmail_configured: true,
+        gmail_token_error: null,
+        gmail_token_error_time: null,
+        gmail_token_last_refresh: new Date().toISOString()
       });
     } catch (error) {
       console.error('Error saving Gmail tokens:', error);
       throw new Error('Failed to save Gmail configuration');
+    }
+  }
+
+  async clearGmailError(userId) {
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        gmail_token_error: null,
+        gmail_token_error_time: null
+      });
+    } catch (error) {
+      console.error('Error clearing Gmail error:', error);
     }
   }
 
@@ -110,7 +148,9 @@ class GmailService {
     // Construct OAuth URL
     const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
     authUrl.searchParams.append('client_id', this.CLIENT_ID);
-    authUrl.searchParams.append('redirect_uri', `${window.location.origin}/auth/gmail/callback`);
+    // Use localhost redirect URI for local development
+    const redirectUri = `${window.location.origin}/auth/gmail/callback`;
+    authUrl.searchParams.append('redirect_uri', redirectUri);
     authUrl.searchParams.append('response_type', 'code');
     authUrl.searchParams.append('scope', this.SCOPES.join(' '));
     authUrl.searchParams.append('access_type', 'offline');
@@ -129,35 +169,67 @@ class GmailService {
     }
     sessionStorage.removeItem('gmail_auth_state');
 
-    // Check if client secret is available
-    const clientSecret = process.env.REACT_APP_GOOGLE_CLIENT_SECRET;
-    if (!clientSecret) {
-      throw new Error('Google Client Secret not configured. Please contact administrator.');
+    const userId = this.auth.currentUser?.uid;
+    if (!userId) throw new Error('User not authenticated');
+
+    try {
+      // For local development, handle OAuth directly in frontend
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        console.log('Using frontend OAuth handling for local development');
+        
+        // Exchange code for tokens directly
+        const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            code,
+            client_id: this.CLIENT_ID,
+            client_secret: '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', // Note: In production, this should be in backend
+            redirect_uri: `${window.location.origin}/auth/gmail/callback`,
+            grant_type: 'authorization_code',
+          })
+        });
+
+        if (!tokenResponse.ok) {
+          const errorData = await tokenResponse.json().catch(() => ({}));
+          throw new Error(errorData.error_description || errorData.message || 'Failed to exchange code for tokens');
+        }
+
+        const tokens = await tokenResponse.json();
+        
+        // Save tokens to Firestore
+        await this.saveGmailTokens(userId, tokens);
+        
+        console.log('Gmail OAuth completed successfully');
+        return { success: true, message: 'Gmail OAuth completed successfully' };
+      } else {
+        // Use backend for production
+        const response = await fetch('https://us-central1-smile3-8c8c5.cloudfunctions.net/handleGmailOAuthCallback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            code,
+            state,
+            userId
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to complete Gmail OAuth');
+        }
+
+        const result = await response.json();
+        return result;
+      }
+    } catch (error) {
+      console.error('OAuth callback error:', error);
+      throw error;
     }
-
-    // Exchange code for tokens
-    const response = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        code,
-        client_id: this.CLIENT_ID,
-        client_secret: clientSecret,
-        redirect_uri: `${window.location.origin}/auth/gmail/callback`,
-        grant_type: 'authorization_code',
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error_description || errorData.message || 'Failed to exchange code for tokens');
-    }
-
-    const tokens = await response.json();
-    await this.saveGmailTokens(this.auth.currentUser.uid, tokens);
-    return tokens;
   }
 }
 

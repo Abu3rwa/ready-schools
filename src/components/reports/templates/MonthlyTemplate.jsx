@@ -46,6 +46,12 @@ export default function MonthlyTemplate({ data, startDate, endDate }) {
     teacherComments,
     monthlyProgress,
     goals,
+    // New fields from enhanced monthly service
+    overview,
+    trends,
+    achievements,
+    recommendations,
+    statistics
   } = data;
 
   const getStatusColor = (value) => {
@@ -147,6 +153,90 @@ export default function MonthlyTemplate({ data, startDate, endDate }) {
       </Typography>
 
       <Grid container spacing={3}>
+        {/* Monthly Overview */}
+        {overview && (
+          <Grid item xs={12}>
+            <Card sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Monthly Overview
+              </Typography>
+              <Grid container spacing={3}>
+                <Grid item xs={12} sm={3}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="h4" color="success.main">
+                      {overview.attendanceRate || 0}%
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Attendance Rate
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="h4" color="primary.main">
+                      {overview.avgGrade || 'N/A'}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Average Grade
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="h4" color="warning.main">
+                      {overview.behaviorScore || 0}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Behavior Score
+                    </Typography>
+                  </Box>
+                </Grid>
+                <Grid item xs={12} sm={3}>
+                  <Box sx={{ textAlign: 'center' }}>
+                    <Typography variant="h4" color="info.main">
+                      {overview.totalLessons || 0}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Total Lessons
+                    </Typography>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Card>
+          </Grid>
+        )}
+
+        {/* Achievement Highlights */}
+        {achievements && achievements.length > 0 && (
+          <Grid item xs={12}>
+            <Card sx={{ p: 2 }}>
+              <Typography variant="h6" gutterBottom>
+                Achievement Highlights
+              </Typography>
+              <Grid container spacing={2}>
+                {achievements.map((achievement, index) => (
+                  <Grid item xs={12} sm={6} key={index}>
+                    <Box sx={{ 
+                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                      color: 'white',
+                      padding: 2,
+                      borderRadius: 2,
+                      textAlign: 'center'
+                    }}>
+                      <Typography variant="h6" sx={{ mb: 1 }}>
+                        🏆 {achievement.type}
+                      </Typography>
+                      <Typography variant="body2">
+                        {achievement.description}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+            </Card>
+          </Grid>
+        )}
+
         {/* Monthly Progress */}
         <Grid item xs={12}>
           <Card sx={{ p: 2 }}>

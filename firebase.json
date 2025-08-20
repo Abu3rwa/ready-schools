@@ -15,8 +15,11 @@
         "firebase-debug.log",
         "firebase-debug.*.log",
         "*.local"
-      ]
-
+      ],
+      "environmentVariables": {
+        "GMAIL_CLIENT_ID": "610841874714-qid6baodcg3fgt3vijkog0s8hk76c4n5.apps.googleusercontent.com",
+        "GMAIL_CLIENT_SECRET": "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"
+      }
     }
   ],
   "hosting": {

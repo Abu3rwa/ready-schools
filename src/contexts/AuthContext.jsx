@@ -50,6 +50,9 @@ export const AuthProvider = ({ children }) => {
             gmail_access_token: null,
             gmail_refresh_token: null,
             gmail_token_expiry: null,
+            gmail_token_last_refresh: null,
+            gmail_token_error: null,
+            gmail_token_error_time: null,
           });
 
           // Initialize default frameworks for new user
@@ -112,6 +115,31 @@ export const AuthProvider = ({ children }) => {
     return !!currentUser;
   };
 
+  // Update Gmail tokens
+  const updateGmailTokens = async (tokens) => {
+    if (!currentUser) {
+      throw new Error("No authenticated user");
+    }
+    
+    try {
+      const userRef = doc(db, "users", currentUser.uid);
+      await setDoc(userRef, {
+        gmail_configured: true,
+        gmail_access_token: tokens.access_token,
+        gmail_refresh_token: tokens.refresh_token,
+        gmail_token_expiry: tokens.expiry_date,
+        gmail_token_last_refresh: new Date().toISOString(),
+        gmail_token_error: null,
+        gmail_token_error_time: null,
+      }, { merge: true });
+      
+      console.log("Gmail tokens updated successfully");
+    } catch (error) {
+      console.error("Error updating Gmail tokens:", error);
+      throw error;
+    }
+  };
+
   // Sign in with Google
   const signInWithGoogle = async () => {
     setLoading(true);
@@ -121,6 +149,8 @@ export const AuthProvider = ({ children }) => {
       // Add scopes for additional permissions if needed
       provider.addScope("https://www.googleapis.com/auth/userinfo.email");
       provider.addScope("https://www.googleapis.com/auth/userinfo.profile");
+      // Add Gmail send permission - THIS IS THE MISSING PIECE!
+      provider.addScope("https://www.googleapis.com/auth/gmail.send");
 
       // Keep it simple: let Firebase handle redirects; only prompt account selection
       provider.setCustomParameters({
@@ -150,6 +180,7 @@ export const AuthProvider = ({ children }) => {
     signOut,
     signInWithGoogle,
     isAuthenticated,
+    updateGmailTokens,
   };
 
   return (

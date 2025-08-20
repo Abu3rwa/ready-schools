@@ -50,6 +50,7 @@ const EnhancedStudentForm = ({
     parentEmail2: "",
     parentPhone1: "",
     parentPhone2: "",
+    studentEmail: "", // Student's own email address
 
     // Academic Information
     academicYear: "",
@@ -125,6 +126,7 @@ const EnhancedStudentForm = ({
         parentEmail2: student.parentEmail2 || "",
         parentPhone1: student.phone || "",
         parentPhone2: student.parentPhone2 || "",
+        studentEmail: student.studentEmail || student.email || "", // Support both field names for backward compatibility
         academicYear: student.academicYear || "",
         learningStyle: student.learningStyle || "",
         specialNeeds: student.specialNeeds || [],
@@ -149,6 +151,7 @@ const EnhancedStudentForm = ({
         parentEmail2: "",
         parentPhone1: "",
         parentPhone2: "",
+        studentEmail: "",
         academicYear: new Date().getFullYear().toString(),
         learningStyle: "",
         specialNeeds: [],
@@ -190,8 +193,6 @@ const EnhancedStudentForm = ({
     if (!formData.lastName.trim()) newErrors.lastName = "Last name is required";
     if (!formData.parentEmail1.trim())
       newErrors.parentEmail1 = "Primary parent email is required";
-    if (!formData.parentPhone1.trim())
-      newErrors.parentPhone1 = "Primary parent phone is required";
     if (!formData.gradeLevel) newErrors.gradeLevel = "Grade level is required";
 
     // Email validation
@@ -201,6 +202,9 @@ const EnhancedStudentForm = ({
     }
     if (formData.parentEmail2 && !emailRegex.test(formData.parentEmail2)) {
       newErrors.parentEmail2 = "Invalid email format";
+    }
+    if (formData.studentEmail && !emailRegex.test(formData.studentEmail)) {
+      newErrors.studentEmail = "Invalid email format";
     }
 
     // Phone validation
@@ -224,6 +228,7 @@ const EnhancedStudentForm = ({
 
   const handleSubmit = () => {
     if (validateForm()) {
+      console.log('Form data being submitted:', formData);
       onSubmit(formData);
     }
   };
@@ -309,7 +314,7 @@ const EnhancedStudentForm = ({
         </Box>
       </DialogTitle>
 
-      <DialogContent>
+      <DialogContent sx={{ maxHeight: '80vh', overflow: 'auto' }}>
         <Grid container spacing={3} sx={{ mt: 1 }}>
           {/* Personal Details Section */}
           <Grid item xs={12}>
@@ -474,6 +479,21 @@ const EnhancedStudentForm = ({
           <Grid item xs={12} sm={6}>
             <TextField
               fullWidth
+              label="Student Email"
+              type="email"
+              value={formData.studentEmail}
+              onChange={(e) =>
+                handleInputChange("studentEmail", e.target.value)
+              }
+              error={!!errors.studentEmail}
+              helperText={errors.studentEmail}
+              placeholder="student@school.edu"
+            />
+          </Grid>
+
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
               label="Primary Parent Phone"
               value={formData.parentPhone1}
               onChange={(e) =>
@@ -481,7 +501,6 @@ const EnhancedStudentForm = ({
               }
               error={!!errors.parentPhone1}
               helperText={errors.parentPhone1}
-              required
             />
           </Grid>
 

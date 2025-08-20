@@ -70,7 +70,7 @@ const Students = () => {
     firstName: "",
     lastName: "",
     parentEmail1: "",
-    studentEdmail: "",
+    studentEmail: "",
     phone: "",
     medicalNotes: "",
   });
@@ -294,6 +294,30 @@ const Students = () => {
     return { grades, attendance, behavior };
   };
 
+  // Helper function to get subject grade
+  const getSubjectGrade = (student, subjectName) => {
+    const grades = getStudentDetails(student)?.grades;
+    if (!grades || !grades.subjects) return "N/A";
+    
+    // Try exact match first
+    if (grades.subjects[subjectName]) return grades.subjects[subjectName];
+    
+    // Try case-insensitive match
+    const subjectKey = Object.keys(grades.subjects).find(
+      key => key.toLowerCase() === subjectName.toLowerCase()
+    );
+    
+    return subjectKey ? grades.subjects[subjectKey] : "N/A";
+  };
+
+  // Helper function to get all subjects for a student
+  const getStudentSubjects = (student) => {
+    const grades = getStudentDetails(student)?.grades;
+    if (!grades || !grades.subjects) return [];
+    
+    return Object.keys(grades.subjects);
+  };
+
   // Get initials for avatar
   const getInitials = (firstName, lastName) => {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`;
@@ -509,7 +533,7 @@ const Students = () => {
                                 color: 'text.secondary'
                               }}
                             >
-                              {student.studentEdmail}
+                              {student.studentEmail || student.email || "No student email"}
                             </Typography>
                           }
                         />
@@ -844,7 +868,7 @@ const Students = () => {
                                 Student Email
                               </Typography>
                               <Typography variant="body1" sx={{ wordBreak: 'break-word' }}>
-                                {selectedStudent.studentEdmail || "No student email"}
+                                {selectedStudent.studentEmail || selectedStudent.email || "No student email"}
                           </Typography>
                         </Box>
                           </Box>
@@ -962,64 +986,67 @@ const Students = () => {
                           </Typography>
                         </Paper>
                       </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Paper
-                          elevation={1}
-                          sx={{
-                            p: 2,
-                            textAlign: "center",
-                            bgcolor: "info.light",
-                            color: "white",
-                            borderRadius: 2,
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'center'
-                          }}
-                        >
-                          <SchoolIcon sx={{ fontSize: { xs: 32, sm: 40 }, mb: 1 }} />
-                          <Typography variant="h6" sx={{ mb: 1 }}>English</Typography>
-                          <Typography 
-                            variant="h4"
-                            sx={{ 
-                              fontWeight: 'bold',
-                              fontSize: { xs: '1.75rem', sm: '2rem' }
+                      {getStudentSubjects(selectedStudent).map((subject, index) => {
+                        const colors = [
+                          "info.light",
+                          "secondary.light", 
+                          "success.light",
+                          "warning.light",
+                          "error.light"
+                        ];
+                        const color = colors[index % colors.length];
+                        
+                        return (
+                          <Grid item xs={12} sm={6} key={subject}>
+                            <Paper
+                              elevation={1}
+                              sx={{
+                                p: 2,
+                                textAlign: "center",
+                                bgcolor: color,
+                                color: "white",
+                                borderRadius: 2,
+                                height: '100%',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'center'
+                              }}
+                            >
+                              <SchoolIcon sx={{ fontSize: { xs: 32, sm: 40 }, mb: 1 }} />
+                              <Typography variant="h6" sx={{ mb: 1 }}>{subject}</Typography>
+                              <Typography 
+                                variant="h4"
+                                sx={{ 
+                                  fontWeight: 'bold',
+                                  fontSize: { xs: '1.75rem', sm: '2rem' }
+                                }}
+                              >
+                                {getSubjectGrade(selectedStudent, subject)}%
+                              </Typography>
+                            </Paper>
+                          </Grid>
+                        );
+                      })}
+                      {getStudentSubjects(selectedStudent).length === 0 && (
+                        <Grid item xs={12}>
+                          <Paper
+                            elevation={1}
+                            sx={{
+                              p: 3,
+                              textAlign: "center",
+                              bgcolor: "grey.100",
+                              borderRadius: 2
                             }}
                           >
-                            {getStudentDetails(selectedStudent)?.grades.english || "N/A"}%
-                          </Typography>
-                        </Paper>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Paper
-                          elevation={1}
-                          sx={{
-                            p: 2,
-                            textAlign: "center",
-                            bgcolor: "secondary.light",
-                            color: "white",
-                            borderRadius: 2,
-                            height: '100%',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'center'
-                          }}
-                        >
-                          <SchoolIcon sx={{ fontSize: { xs: 32, sm: 40 }, mb: 1 }} />
-                          <Typography variant="h6" sx={{ mb: 1 }}>
-                                  Social Studies
-                                </Typography>
-                          <Typography 
-                            variant="h4"
-                            sx={{ 
-                              fontWeight: 'bold',
-                              fontSize: { xs: '1.75rem', sm: '2rem' }
-                            }}
-                          >
-                            {getStudentDetails(selectedStudent)?.grades.socialStudies || "N/A"}%
-                          </Typography>
-                        </Paper>
-                      </Grid>
+                            <Typography variant="h6" color="textSecondary">
+                              No subject grades available
+                            </Typography>
+                            <Typography variant="body2" color="textSecondary">
+                              Grades will appear here once assignments are graded
+                            </Typography>
+                          </Paper>
+                        </Grid>
+                      )}
                     </Grid>
                   </Box>
                 )}

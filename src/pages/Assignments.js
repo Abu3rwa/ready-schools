@@ -52,9 +52,13 @@ import EnhancedAssignmentCard from "../components/assignments/EnhancedAssignment
 import EnhancedAssignmentForm from "../components/assignments/EnhancedAssignmentForm";
 import AssignmentTemplates from "../components/assignments/AssignmentTemplates";
 import CategoryManager from "../components/assignments/CategoryManager";
+import AssignmentGradingDialog from "../components/assignments/AssignmentGradingDialog";
 import dayjs from "dayjs";
 import { getSubjects as getManagedSubjects } from "../services/subjectsService";
-import { getStandards, getStandardsMappings } from "../services/standardsService";
+import {
+  getStandards,
+  getStandardsMappings,
+} from "../services/standardsService";
 import {
   Add as AddIcon,
   Search as SearchIcon,
@@ -87,9 +91,15 @@ const Assignments = () => {
     createFromTemplate,
     saveAsTemplate,
   } = useAssignments();
-  const { grades, deleteGradesByAssignment } = useGrades();
+  const {
+    grades,
+    deleteGradesByAssignment,
+    addGrade,
+    updateGrade,
+    deleteGrade,
+  } = useGrades();
   const { students } = useStudents();
-  const { currentGradeBook } = useGradeBooks();
+  const { currentGradeBook, gradeBooks } = useGradeBooks();
 
   // State for UI
   const [searchTerm, setSearchTerm] = useState("");
@@ -98,17 +108,24 @@ const Assignments = () => {
   const [openAddDialog, setOpenAddDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [openGradingDialog, setOpenGradingDialog] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [managedSubjects, setManagedSubjects] = useState([]);
   const [standardsBySubject, setStandardsBySubject] = useState({});
-  const [mappedStandardIdsByAssignment, setMappedStandardIdsByAssignment] = useState({});
+  const [mappedStandardIdsByAssignment, setMappedStandardIdsByAssignment] =
+    useState({});
 
   // Build subjects options: prefer teacher-managed subjects; fallback to subjects seen in assignments
   const subjectsOptions = useMemo(() => {
     if (managedSubjects && managedSubjects.length > 0) {
-      return managedSubjects.map((s) => ({ value: s.code || s.name, label: s.name }));
+      return managedSubjects.map((s) => ({
+        value: s.code || s.name,
+        label: s.name,
+      }));
     }
-    const uniques = Array.from(new Set(assignments.map((a) => a.subject).filter(Boolean)));
+    const uniques = Array.from(
+      new Set(assignments.map((a) => a.subject).filter(Boolean))
+    );
     return uniques.map((u) => ({ value: u, label: u }));
   }, [managedSubjects, assignments]);
 
@@ -181,18 +198,45 @@ const Assignments = () => {
     if (!assignments || !grades || !students) return {};
     
     return assignments.reduce((acc, assignment) => {
-      const assignmentGrades = grades.filter(g => g.assignmentId === assignment.id);
-      const completionRate = students.length > 0 ? (assignmentGrades.length / students.length) * 100 : 0;
-      const averageGrade = assignmentGrades.length > 0 
-        ? assignmentGrades.reduce((sum, g) => sum + g.score, 0) / assignmentGrades.length 
-        : 0;
-      
+      // Deduplicate grades by studentId for this assignment
+      const assignmentGrades = grades.filter(
+        (g) => g.assignmentId === assignment.id
+      );
+      const uniqueGradesMap = {};
+      assignmentGrades.forEach((g) => {
+        if (!uniqueGradesMap[g.studentId]) {
+          uniqueGradesMap[g.studentId] = g;
+        }
+      });
+      const uniqueGrades = Object.values(uniqueGradesMap);
+      const gradedCount = uniqueGrades.length;
+      const totalStudents = students.length;
+
+      // Calculate completion rate (capped at 100%)
+      const completionRate =
+        totalStudents > 0
+          ? Math.min((gradedCount / totalStudents) * 100, 100)
+          : 0;
+
+            // Calculate average grade as percentage
+      const averageGrade =
+        uniqueGrades.length > 0
+          ? (uniqueGrades.reduce((sum, g) => {
+              // Convert raw points to percentage: (score / points) * 100
+              if (g.points && g.points > 0) {
+                return sum + (g.score / g.points) * 100;
+              } else {
+                // Fallback: if no points, treat score as percentage
+                return sum + g.score;
+              }
+            }, 0) / uniqueGrades.length)
+          : 0;
       acc[assignment.id] = {
         completionRate,
         averageGrade,
-        gradedCount: assignmentGrades.length,
-        totalStudents: students.length,
-        needsGrading: students.length - assignmentGrades.length
+        gradedCount,
+        totalStudents,
+        needsGrading: Math.max(0, totalStudents - gradedCount),
       };
       return acc;
     }, {});
@@ -258,15 +302,47 @@ const Assignments = () => {
     // Find the gradebook for this subject
     const subject = assignment.subject;
     if (subject) {
-      navigate(`/gradebooks?subject=${encodeURIComponent(subject)}&assignment=${assignment.id}`);
+      navigate(
+        `/gradebooks?subject=${encodeURIComponent(subject)}&assignment=${
+          assignment.id
+        }`
+      );
     } else {
-      navigate('/gradebooks');
+      navigate("/gradebooks");
+    }
+  };
+
+  // Open grading dialog for an assignment
+  const handleOpenGradingDialog = (assignment) => {
+    setSelectedAssignment(assignment);
+    setOpenGradingDialog(true);
+  };
+
+  // Save grades for an assignment
+  const handleSaveGrades = async (gradesToSave, gradesToDelete = []) => {
+    try {
+      // Save or update grades
+      for (const { gradeData, isUpdate, existingGradeId } of gradesToSave) {
+        if (isUpdate) {
+          await updateGrade(existingGradeId, gradeData);
+        } else {
+          await addGrade(gradeData);
+        }
+      }
+
+      // Delete cleared grades
+      for (const gradeId of gradesToDelete) {
+        await deleteGrade(gradeId);
+      }
+    } catch (error) {
+      console.error("Error saving grades:", error);
+      throw error;
     }
   };
 
   // Navigate to gradebook overview
   const handleNavigateToGradebookOverview = () => {
-    navigate('/gradebooks');
+    navigate("/gradebooks");
   };
 
   // Toggle view mode
@@ -352,18 +428,18 @@ const Assignments = () => {
   // Get assignment status
   const getAssignmentStatus = (assignment) => {
     const stats = assignmentStats[assignment.id];
-    if (!stats) return { status: 'Unknown', color: 'default' };
+    if (!stats) return { status: "Unknown", color: "default" };
     
     if (stats.needsGrading > 0) {
       if (isPastDue(assignment.dueDate)) {
-        return { status: 'Overdue', color: 'error' };
+        return { status: "Overdue", color: "error" };
       } else if (stats.completionRate < 50) {
-        return { status: 'Needs Grading', color: 'warning' };
+        return { status: "Needs Grading", color: "warning" };
       } else {
-        return { status: 'In Progress', color: 'info' };
+        return { status: "In Progress", color: "info" };
       }
     } else {
-      return { status: 'Completed', color: 'success' };
+      return { status: "Completed", color: "success" };
     }
   };
 
@@ -437,7 +513,7 @@ const Assignments = () => {
         <Paper sx={{ p: 2, mb: 3 }}>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={8}>
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
                 <Chip 
                   label={`${assignments.length} Assignments`} 
                   color="primary" 
@@ -465,7 +541,7 @@ const Assignments = () => {
               </Box>
             </Grid>
             <Grid item xs={12} md={4}>
-              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+              <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end" }}>
                 <Button
                   variant="outlined"
                   startIcon={<AssessmentIcon />}
@@ -485,6 +561,30 @@ const Assignments = () => {
             </Grid>
           </Grid>
         </Paper>
+
+        {/* No Gradebooks Warning */}
+        {gradeBooks.length === 0 && (
+          <Alert
+            severity="info"
+            sx={{ mb: 3 }}
+            action={
+            <Button 
+              color="inherit" 
+              size="small" 
+                onClick={() => navigate("/gradebooks")}
+            >
+              Create Gradebook
+            </Button>
+            }
+          >
+            <Typography variant="body2">
+              <strong>No gradebooks found.</strong> You need to create a
+              gradebook before you can create assignments. Gradebooks help
+              organize your assignments by subject and define grading
+              categories.
+            </Typography>
+          </Alert>
+        )}
 
         {/* Tabs */}
         <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
@@ -600,6 +700,7 @@ const Assignments = () => {
             onEditAssignment={handleOpenEditDialog}
             onDeleteAssignment={handleOpenDeleteDialog}
             onNavigateToGradebook={handleNavigateToGradebook}
+            onOpenGradingDialog={handleOpenGradingDialog}
             getAssignmentStatus={getAssignmentStatus}
           />
         )}
@@ -768,6 +869,16 @@ const Assignments = () => {
             {snackbar.message}
           </Alert>
         </Snackbar>
+
+        {/* Assignment Grading Dialog */}
+        <AssignmentGradingDialog
+          open={openGradingDialog}
+          onClose={() => setOpenGradingDialog(false)}
+          assignment={selectedAssignment}
+          students={students}
+          grades={grades}
+          onSaveGrades={handleSaveGrades}
+        />
       </Box>
     </LocalizationProvider>
   );
@@ -783,7 +894,8 @@ const AssignmentsTab = ({
   onEditAssignment,
   onDeleteAssignment,
   onNavigateToGradebook,
-  getAssignmentStatus
+  onOpenGradingDialog,
+  getAssignmentStatus,
 }) => {
   // Check if date is past due (moved here to fix scope issue)
   const isPastDue = (dateString) => {
@@ -795,10 +907,15 @@ const AssignmentsTab = ({
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h6">
-          Assignments ({assignments.length})
-        </Typography>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3,
+        }}
+      >
+        <Typography variant="h6">Assignments ({assignments.length})</Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -861,9 +978,13 @@ const AssignmentsTab = ({
                         {new Date(assignment.dueDate).toLocaleDateString()}
                     </Typography>
                       <Chip
-                        label={isPastDue(assignment.dueDate) ? 'Overdue' : 'On Time'}
+                        label={
+                          isPastDue(assignment.dueDate) ? "Overdue" : "On Time"
+                        }
                         size="small"
-                        color={isPastDue(assignment.dueDate) ? 'error' : 'success'}
+                        color={
+                          isPastDue(assignment.dueDate) ? "error" : "success"
+                        }
                         variant="outlined"
                       />
                     </Box>
@@ -876,7 +997,13 @@ const AssignmentsTab = ({
                   <TableCell>
                     {stats && (
                       <Box sx={{ minWidth: 120 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            mb: 1,
+                          }}
+                        >
                           <Typography variant="caption">
                             {stats.gradedCount}/{stats.totalStudents}
                           </Typography>
@@ -887,7 +1014,9 @@ const AssignmentsTab = ({
                         <LinearProgress 
                           variant="determinate" 
                           value={stats.completionRate} 
-                          color={stats.completionRate === 100 ? 'success' : 'primary'}
+                          color={
+                            stats.completionRate === 100 ? "success" : "primary"
+                          }
                           sx={{ height: 8, borderRadius: 4 }}
                         />
                         {stats.averageGrade > 0 && (
@@ -907,22 +1036,25 @@ const AssignmentsTab = ({
                     />
                   </TableCell>
                   <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
                       <Tooltip title="View Details">
                         <IconButton size="small">
                           <VisibilityIcon />
                         </IconButton>
                       </Tooltip>
                       <Tooltip title="Edit Assignment">
-                        <IconButton size="small" onClick={() => onEditAssignment(assignment)}>
+                        <IconButton
+                          size="small"
+                          onClick={() => onEditAssignment(assignment)}
+                        >
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Grade in Gradebook">
+                      <Tooltip title="Grade Assignment">
                         <IconButton
                           size="small"
                           color="primary"
-                          onClick={() => onNavigateToGradebook(assignment)}
+                          onClick={() => onOpenGradingDialog(assignment)}
                         >
                           <GradeIcon />
                         </IconButton>

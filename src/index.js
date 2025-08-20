@@ -19,6 +19,7 @@ import { GmailProvider } from "./contexts/GmailContext";
 import { GoogleSheetsProvider } from "./contexts/GoogleSheetsContext";
 import { StandardsGradingProvider } from "./contexts/StandardsGradingContext";
 import { GradeBookProvider } from "./contexts/GradeBookContext";
+import { LessonProvider } from "./contexts/LessonContext";
 import { SubjectsProvider } from "./contexts/SubjectsContext";
 import { AcademicPeriodsProvider } from "./contexts/AcademicPeriodsContext";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -44,15 +45,17 @@ root.render(
                             <AcademicPeriodsProvider>
                               <SubjectsProvider>
                                 <GradeBookProvider>
-                                  <GmailProvider>
-                                    <EmailProvider>
+                                  <LessonProvider>
+                                    <GmailProvider>
+                                      <EmailProvider>
                                       <LocalizationProvider dateAdapter={AdapterDayjs}>
                                         <Router>
                                           <App />
                                         </Router>
                                       </LocalizationProvider>
-                                    </EmailProvider>
-                                  </GmailProvider>
+                                                                          </EmailProvider>
+                                    </GmailProvider>
+                                  </LessonProvider>
                                 </GradeBookProvider>
                               </SubjectsProvider>
                             </AcademicPeriodsProvider>

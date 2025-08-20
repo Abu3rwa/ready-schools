@@ -40,6 +40,7 @@ import { useCommunication } from "../contexts/CommunicationContext";
 import { useAuth } from "../contexts/AuthContext";
 import Loading from "../components/common/Loading";
 
+
 // Chart.js components
 import {
   Chart as ChartJS,
@@ -88,6 +89,24 @@ const Dashboard = () => {
   const { behavior, loading: behaviorLoading } = useBehavior();
   const { communications, loading: communicationsLoading } = useCommunication();
 
+  // Helper function to get consistent colors for subjects
+  const getSubjectColor = (subject) => {
+    const colorMap = {
+      'ELA': '#1976d2',      // Blue
+      'English': '#1976d2',  // Blue
+      'Math': '#2e7d32',     // Green
+      'Mathematics': '#2e7d32', // Green
+      'Science': '#ed6c02',  // Orange
+      'Social Studies': '#9c27b0', // Purple
+      'History': '#9c27b0',  // Purple
+      'Art': '#d32f2f',      // Red
+      'Music': '#d32f2f',    // Red
+      'PE': '#388e3c',       // Dark Green
+      'Physical Education': '#388e3c', // Dark Green
+    };
+    return colorMap[subject] || '#666666'; // Default gray
+  };
+
   const englishGrades = useMemo(
     () => (grades ? grades.filter((g) => g.subject === "English") : []),
     [grades]
@@ -100,15 +119,70 @@ const Dashboard = () => {
   // Overall class average across all available grades (dynamic subjects)
   const classAverage = useMemo(() => {
     const valid = (grades || []).filter(
-      (g) =>
-        typeof g.score === "number" &&
-        typeof g.points === "number" &&
-        g.points > 0
+      (g) => typeof g.score === "number"
     );
-    if (valid.length === 0) return 0;
-    const sum = valid.reduce((acc, g) => acc + (g.score / g.points) * 100, 0);
+    if (valid.length === 0) return null;
+    
+    const sum = valid.reduce((acc, g) => {
+      if (g.points && g.points > 0) {
+        // Calculate percentage: (score / points) * 100
+        return acc + (g.score / g.points) * 100;
+      } else {
+        // For grades without points, we need to look up the assignment
+        const assignment = assignments.find(a => a.id === g.assignmentId);
+        if (assignment && assignment.points && assignment.points > 0) {
+          // Calculate percentage using assignment points
+          return acc + (g.score / assignment.points) * 100;
+        } else {
+          // Skip grades where we can't determine points
+          return acc;
+        }
+      }
+    }, 0);
+    
     return Math.round(sum / valid.length);
-  }, [grades]);
+  }, [grades, assignments]);
+
+  // Subject-specific class averages
+  const subjectAverages = useMemo(() => {
+    if (!grades || grades.length === 0) return {};
+    
+    const subjectGroups = {};
+    
+    grades.forEach(grade => {
+      if (typeof grade.score === "number") {
+        if (!subjectGroups[grade.subject]) {
+          subjectGroups[grade.subject] = [];
+        }
+        subjectGroups[grade.subject].push(grade);
+      }
+    });
+    
+    const averages = {};
+    Object.entries(subjectGroups).forEach(([subject, subjectGrades]) => {
+      if (subjectGrades.length > 0) {
+        const sum = subjectGrades.reduce((acc, g) => {
+          if (g.points && g.points > 0) {
+            // Calculate percentage: (score / points) * 100
+            return acc + (g.score / g.points) * 100;
+          } else {
+            // For grades without points, we need to look up the assignment
+            const assignment = assignments.find(a => a.id === g.assignmentId);
+            if (assignment && assignment.points && assignment.points > 0) {
+              // Calculate percentage using assignment points
+              return acc + (g.score / assignment.points) * 100;
+            } else {
+              // Skip grades where we can't determine points
+              return acc;
+            }
+          }
+        }, 0);
+        averages[subject] = Math.round(sum / subjectGrades.length);
+      }
+    });
+    
+    return averages;
+  }, [grades, assignments]);
 
   const [classAverages, setClassAverages] = useState({
     english: 0,
@@ -142,14 +216,14 @@ const Dashboard = () => {
         const englishAvg =
           englishGrades.length > 0
             ? englishGrades.reduce(
-                (sum, grade) => sum + (grade.score / grade.points) * 100,
+                (sum, grade) => sum + (grade.points && grade.points > 0 ? (grade.score / grade.points) * 100 : 0),
                 0
               ) / englishGrades.length
             : 0;
         const socialAvg =
           socialStudiesGrades.length > 0
             ? socialStudiesGrades.reduce(
-                (sum, grade) => sum + (grade.score / grade.points) * 100,
+                (sum, grade) => sum + (grade.points && grade.points > 0 ? (grade.score / grade.points) * 100 : 0),
                 0
               ) / socialStudiesGrades.length
             : 0;
@@ -216,7 +290,7 @@ const Dashboard = () => {
           if (studentEnglishGrades.length > 0) {
             const englishAvg =
               studentEnglishGrades.reduce(
-                (sum, grade) => sum + (grade.score / grade.points) * 100,
+                (sum, grade) => sum + (grade.points && grade.points > 0 ? (grade.score / grade.points) * 100 : 0),
                 0
               ) / studentEnglishGrades.length;
 
@@ -233,7 +307,7 @@ const Dashboard = () => {
           if (studentSocialGrades.length > 0) {
             const socialAvg =
               studentSocialGrades.reduce(
-                (sum, grade) => sum + (grade.score / grade.points) * 100,
+                (sum, grade) => sum + (grade.points && grade.points > 0 ? (grade.score / grade.points) * 100 : 0),
                 0
               ) / studentSocialGrades.length;
 
@@ -266,14 +340,26 @@ const Dashboard = () => {
   // Grade distribution across all subjects
   const gradeDistributionData = useMemo(() => {
     const all = (grades || []).filter(
-      (g) =>
-        typeof g.score === "number" &&
-        typeof g.points === "number" &&
-        g.points > 0
+      (g) => typeof g.score === "number"
     );
     const bins = [0, 0, 0, 0, 0]; // A, B, C, D, F
     for (const g of all) {
-      const pct = (g.score / g.points) * 100;
+      let pct;
+      if (g.points && g.points > 0) {
+        // Calculate percentage: (score / points) * 100
+        pct = (g.score / g.points) * 100;
+      } else {
+        // For grades without points, we need to look up the assignment
+        const assignment = assignments.find(a => a.id === g.assignmentId);
+        if (assignment && assignment.points && assignment.points > 0) {
+          // Calculate percentage using assignment points
+          pct = (g.score / assignment.points) * 100;
+        } else {
+          // Skip grades where we can't determine points
+          continue;
+        }
+      }
+      
       if (pct >= 90) bins[0]++;
       else if (pct >= 80) bins[1]++;
       else if (pct >= 70) bins[2]++;
@@ -298,7 +384,75 @@ const Dashboard = () => {
         },
       ],
     };
-  }, [grades]);
+  }, [grades, assignments]);
+
+  // Grade distribution per subject
+  const subjectGradeDistributionData = useMemo(() => {
+    if (!grades || grades.length === 0) return {};
+    
+    const subjectGroups = {};
+    
+    // Group grades by subject
+    grades.forEach(grade => {
+      if (typeof grade.score === "number") {
+        if (!subjectGroups[grade.subject]) {
+          subjectGroups[grade.subject] = [];
+        }
+        subjectGroups[grade.subject].push(grade);
+      }
+    });
+    
+    const distributions = {};
+    
+    Object.entries(subjectGroups).forEach(([subject, subjectGrades]) => {
+      const bins = [0, 0, 0, 0, 0]; // A, B, C, D, F
+      
+      for (const grade of subjectGrades) {
+        let pct;
+        if (grade.points && grade.points > 0) {
+          // Calculate percentage: (score / points) * 100
+          pct = (grade.score / grade.points) * 100;
+        } else {
+          // For grades without points, we need to look up the assignment
+          const assignment = assignments.find(a => a.id === grade.assignmentId);
+          if (assignment && assignment.points && assignment.points > 0) {
+            // Calculate percentage using assignment points
+            pct = (grade.score / assignment.points) * 100;
+          } else {
+            // Skip grades where we can't determine points
+            continue;
+          }
+        }
+        
+        if (pct >= 90) bins[0]++;
+        else if (pct >= 80) bins[1]++;
+        else if (pct >= 70) bins[2]++;
+        else if (pct >= 60) bins[3]++;
+        else bins[4]++;
+      }
+      
+      distributions[subject] = {
+        labels: [
+          "A (90-100%)",
+          "B (80-89%)",
+          "C (70-79%)",
+          "D (60-69%)",
+          "F (Below 60%)",
+        ],
+        datasets: [
+          {
+            label: subject,
+            data: bins,
+            backgroundColor: `${getSubjectColor(subject)}80`, // Subject color with transparency
+            borderColor: getSubjectColor(subject),
+            borderWidth: 2,
+          },
+        ],
+      };
+    });
+    
+    return distributions;
+  }, [grades, assignments]);
 
   const attendanceChartData = {
     labels: ["Present", "Absent", "Tardy"],
@@ -377,6 +531,8 @@ const Dashboard = () => {
       >
         {t('overview')}
       </Typography>
+
+
 
       {/* Quick Stats */}
       <Grid container spacing={2} sx={{ mb: { xs: 2, md: 4 } }}>
@@ -486,7 +642,7 @@ const Dashboard = () => {
                 variant="h5"
                 sx={{ fontSize: { xs: "1.25rem", sm: "1.5rem" } }}
               >
-                {classAverage}%
+                {classAverage !== null ? `${classAverage}%` : 'N/A'}
               </Typography>
             </Box>
           </Paper>
@@ -529,6 +685,49 @@ const Dashboard = () => {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Subject-Specific Averages */}
+      {Object.keys(subjectAverages).length > 0 && (
+        <Box sx={{ mb: { xs: 2, md: 4 } }}>
+          <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+            📊 Subject Averages
+          </Typography>
+          <Grid container spacing={2}>
+            {Object.entries(subjectAverages).map(([subject, average]) => (
+              <Grid item xs={6} sm={4} md={3} key={subject}>
+                <Paper
+                  elevation={2}
+                  sx={{
+                    p: { xs: 1.5, sm: 2 },
+                    textAlign: "center",
+                    height: "100%",
+                    background: `linear-gradient(135deg, ${getSubjectColor(subject)}20 0%, ${getSubjectColor(subject)}10 100%)`,
+                    border: `1px solid ${getSubjectColor(subject)}30`,
+                  }}
+                >
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontSize: { xs: "1.25rem", sm: "1.5rem" },
+                      color: getSubjectColor(subject),
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {average}%
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="textSecondary"
+                    sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+                  >
+                    {subject}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+      )}
 
       {/* Main Dashboard Content */}
       <Grid container spacing={{ xs: 2, md: 3 }}>
@@ -591,6 +790,70 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         </Grid>
+
+        {/* Subject-Specific Grade Distributions */}
+        {Object.keys(subjectGradeDistributionData).length > 0 && (
+          <Grid item xs={12}>
+            <Card elevation={2}>
+              <CardHeader
+                title={
+                  <Typography
+                    variant="h6"
+                    sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+                  >
+                    📊 Grade Distribution by Subject
+                  </Typography>
+                }
+                sx={{ p: { xs: 2, sm: 3 } }}
+              />
+              <Divider />
+              <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
+                <Grid container spacing={2}>
+                  {Object.entries(subjectGradeDistributionData).map(([subject, chartData]) => (
+                    <Grid item xs={12} sm={6} md={4} key={subject}>
+                      <Box sx={{ height: { xs: 200, sm: 250 } }}>
+                        <Typography variant="subtitle2" gutterBottom align="center" color="textSecondary">
+                          {subject}
+                        </Typography>
+                        <Bar
+                          data={chartData}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                              legend: {
+                                display: false, // Hide legend for individual subject charts
+                              },
+                              title: {
+                                display: false,
+                              },
+                            },
+                            scales: {
+                              x: {
+                                ticks: {
+                                  font: {
+                                    size: window.innerWidth < 600 ? 6 : 8,
+                                  },
+                                },
+                              },
+                              y: {
+                                ticks: {
+                                  font: {
+                                    size: window.innerWidth < 600 ? 6 : 8,
+                                  },
+                                },
+                              },
+                            },
+                          }}
+                        />
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
+        )}
 
         {/* Attendance Overview */}
         <Grid item xs={12} sm={6} lg={4}>

@@ -238,9 +238,9 @@ export const EmailProvider = ({ children }) => {
           // Add to email history
           const emailRecord = {
             id: Date.now(),
-            type: "Student Daily Update",
+            type: "Student Daily Update (to student)",
             subject: `Daily Update - ${result.data?.studentName || "Student"}`,
-            recipients: result.data?.parentEmails?.length || 0,
+            recipients: result.data?.studentEmail ? 1 : 0,
             status: "Sent",
             date: new Date(),
             details: result.data,

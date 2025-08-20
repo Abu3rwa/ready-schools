@@ -1,0 +1,90 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+### ✅ Task: Interactive Task Loop with User Feedback
+
+1. **Check if `userinput.py` exists** in the root directory.
+
+   * If it doesn't exist, create it with the following content:
+
+     ```python
+     # userinput.py
+     user_input = input("prompt: ")
+     ```
+
+2. **Main Workflow**:
+
+   * Perform your assigned tasks.
+
+   * Run:
+
+     ```bash
+     python userinput.py
+     ```
+   * The terminal should be opened in the chat window itself.
+
+   * Read the user's input.
+
+   * Based on the input, perform the next set of tasks.
+
+   * Repeat the process.
+
+3. **Exit Condition**:
+
+   * If the user enters `"stop"` when prompted, exit the loop and terminate the process.
+
+---
+
+### 📚 Data Structure Schema Rules
+
+**CRITICAL**: Always refer to `schemas/data-structures.md` for data structure definitions.
+
+#### Key Rules:
+1. **Subject Fields**: Grades, assignments, lessons, and standards_grades use `subject` field (e.g., "ELA", "MATH"), NOT full subject names
+2. **Subject Names**: UI displays use subject names from the subjects collection (e.g., "English Language Arts")
+3. **Data Relationships**: Always use subject codes for calculations and data relationships
+4. **Consistency**: Follow the exact field names and types defined in the schema
+5. **Validation**: Validate all required fields before saving data
+
+#### Common Mistakes to Avoid:
+- ❌ Using full subject names in grades/assignments instead of subject codes
+- ❌ Mixing `subject` and `subjectCode` fields (use `subject` consistently)
+- ❌ Not validating required fields
+- ❌ Using incorrect field names or types
+- ❌ Confusing `subject` (code) with subject names from subjects collection
+
+#### When Working With:
+- **Grades**: Use `subject` field for calculations, display subject names from subjects collection
+- **Assignments**: Use `subject` field for categorization
+- **Lessons**: Use `subject` field for subject association
+- **Standards Grades**: Use `subject` field for subject grouping
+- **Student Averages**: Calculate by `subject`, display by subject name from subjects collection
+- **UI Components**: Always fetch subject names from subjects collection for display
+
+#### Real Data Structure Examples:
+- **Grades**: `{ subject: "ELA", score: 9, points: 10 }`
+- **Assignments**: `{ subject: "ELA", name: "Write a story", points: 5 }`
+- **Subjects**: `{ code: "ELA", name: "English Language Arts" }`
+- **Daily Update Emails**: Complex structure with assignments, attendance, behavior arrays
+
+#### Collection Names:
+- `students` - Student profiles
+- `assignments` - Assignment definitions
+- `grades` - Student grades
+- `attendance` - Attendance records
+- `behaviors` - Behavior tracking (plural)
+- `subjects` - Subject definitions
+- `dailyUpdateEmails` - Email communications
+- `gradebooks` - Gradebook configurations
+- `lessons` - Lesson plans
+- `standards_grades` - Standards-based grades
+- `educational_standards` - Standards definitions
+- `frameworks` - Assessment frameworks
+- `academicPeriods` - Academic periods
+- `analytics` - Analytics data
+- `users` - User accounts
+
+**Reference**: `schemas/data-structures.md` contains complete schema definitions for all collections.
