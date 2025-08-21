@@ -688,13 +688,27 @@ export const fixGmailConfig = async (req, res) => {
 
 // Handle Gmail OAuth callback (backend)
 export const handleGmailOAuthCallback = async (req, res) => {
+  // Add CORS headers for localhost
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).send('');
+    return;
+  }
+  
   try {
     if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
     
-    const { code, state, userId } = req.body || {};
+    const { code, state, userId, redirect_uri } = req.body || {};
     if (!code || !state || !userId) {
       return res.status(400).json({ error: "Missing code, state, or userId" });
     }
+
+    // Use the redirect_uri from the request or fallback to localhost for development
+    const finalRedirectUri = redirect_uri || 'http://localhost:3000/auth/gmail/callback';
 
     // Exchange code for tokens using backend credentials
     const response = await fetch('https://oauth2.googleapis.com/token', {
@@ -706,7 +720,7 @@ export const handleGmailOAuthCallback = async (req, res) => {
         code,
         client_id: process.env.GOOGLE_CLIENT_ID || '610841874714-qid6baodcg3fgt3vijkog0s8hk76c4n5.apps.googleusercontent.com',
         client_secret: process.env.GOOGLE_CLIENT_SECRET || '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',
-        redirect_uri: 'http://localhost:3000/auth/gmail/callback',
+        redirect_uri: finalRedirectUri,
         grant_type: 'authorization_code',
       })
     });
@@ -745,6 +759,90 @@ export const handleGmailOAuthCallback = async (req, res) => {
     });
   } catch (error) {
     console.error("handleGmailOAuthCallback error", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// Token refresh endpoint
+export const refreshGmailTokens = async (req, res) => {
+  // Add CORS headers for localhost
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.status(200).send('');
+    return;
+  }
+  
+  try {
+    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+    
+    const { userId, refreshToken } = req.body || {};
+    if (!userId || !refreshToken) {
+      return res.status(400).json({ error: "Missing userId or refreshToken" });
+    }
+
+    // Exchange refresh token for new access token
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        refresh_token: refreshToken,
+        client_id: process.env.GOOGLE_CLIENT_ID || '610841874714-qid6baodcg3fgt3vijkog0s8hk76c4n5.apps.googleusercontent.com',
+        client_secret: process.env.GOOGLE_CLIENT_SECRET || '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',
+        grant_type: 'refresh_token',
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Token refresh failed:', errorData);
+      
+      // If refresh token is invalid, clear Gmail configuration
+      if (errorData.error === 'invalid_grant') {
+        const { getFirestore } = await import("firebase-admin/firestore");
+        const db = getFirestore();
+        
+        await db.collection("users").doc(userId).update({
+          gmail_configured: false,
+          gmail_token_error: 'Refresh token invalid - re-authentication required',
+          gmail_token_error_time: new Date().toISOString()
+        });
+      }
+      
+      throw new Error(errorData.error_description || errorData.message || 'Failed to refresh tokens');
+    }
+
+    const tokens = await response.json();
+    
+    // Save new tokens to Firestore
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const db = getFirestore();
+    
+    const newExpiry = Date.now() + (tokens.expires_in * 1000);
+    
+    await db.collection("users").doc(userId).update({
+      gmail_access_token: tokens.access_token,
+      gmail_token_expiry: newExpiry,
+      gmail_token_error: null,
+      gmail_token_error_time: null,
+      gmail_token_last_refresh: new Date().toISOString()
+    });
+    
+    console.log(`Gmail tokens refreshed for user ${userId}`);
+    
+    return res.json({
+      success: true,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token, // May be null if not provided by Google
+      expiry_time: newExpiry
+    });
+  } catch (error) {
+    console.error("refreshGmailTokens error", error);
     return res.status(500).json({ error: error.message });
   }
 };

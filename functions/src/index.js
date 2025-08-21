@@ -39,6 +39,7 @@ export const fixGmailConfig = onRequest(emailApi.fixGmailConfig);
 export const handleGmailOAuthCallback = onRequest(emailApi.handleGmailOAuthCallback);
 export const fixSpecificUser = onRequest(emailApi.fixSpecificUser);
 export const resetGmailConfiguration = onRequest(emailApi.resetGmailConfiguration);
+export const refreshGmailTokens = onRequest(emailApi.refreshGmailTokens);
 export const studentPreviewDailyEmail = onRequest(
   emailApi.studentPreviewDailyEmail
 );

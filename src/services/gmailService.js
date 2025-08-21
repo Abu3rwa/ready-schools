@@ -22,7 +22,7 @@ class GmailService {
         return null;
       }
       
-      // Check if tokens exist and are not expired
+      // Check if tokens exist
       if (!userData.gmail_access_token || !userData.gmail_refresh_token) {
         console.log('Gmail tokens missing - user needs to re-authenticate');
         return null;
@@ -34,9 +34,21 @@ class GmailService {
         return null;
       }
       
-      if (userData.gmail_token_expiry && Date.now() >= userData.gmail_token_expiry) {
-        console.log('Gmail tokens expired');
-        return null;
+      // Check if token is expired or will expire soon (within 5 minutes)
+      const now = Date.now();
+      const fiveMinutesFromNow = now + (5 * 60 * 1000);
+      
+      if (userData.gmail_token_expiry && userData.gmail_token_expiry <= fiveMinutesFromNow) {
+        console.log('Gmail token expired or expiring soon, attempting refresh...');
+        
+        // Try to refresh the token
+        const refreshedTokens = await this.refreshGmailTokens(userId, userData.gmail_refresh_token);
+        if (refreshedTokens) {
+          return refreshedTokens;
+        } else {
+          console.log('Token refresh failed, user needs to re-authenticate');
+          return null;
+        }
       }
       
       return {
@@ -46,6 +58,42 @@ class GmailService {
       };
     } catch (error) {
       console.error('Error getting Gmail tokens:', error);
+      return null;
+    }
+  }
+
+  async refreshGmailTokens(userId, refreshToken) {
+    try {
+      console.log('Refreshing Gmail tokens...');
+      
+      // Use backend to refresh tokens securely
+      const response = await fetch('https://refreshgmailtokens-jhyfivohoq-uc.a.run.app', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          refreshToken
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Token refresh failed:', errorData);
+        return null;
+      }
+
+      const result = await response.json();
+      
+      // Return the refreshed tokens
+      return {
+        accessToken: result.access_token,
+        refreshToken: result.refresh_token || refreshToken, // Use new refresh token if provided
+        expiryTime: result.expiry_time
+      };
+    } catch (error) {
+      console.error('Error refreshing Gmail tokens:', error);
       return null;
     }
   }
@@ -173,59 +221,27 @@ class GmailService {
     if (!userId) throw new Error('User not authenticated');
 
     try {
-      // For local development, handle OAuth directly in frontend
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        console.log('Using frontend OAuth handling for local development');
-        
-        // Exchange code for tokens directly
-        const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            code,
-            client_id: this.CLIENT_ID,
-            client_secret: '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', // Note: In production, this should be in backend
-            redirect_uri: `${window.location.origin}/auth/gmail/callback`,
-            grant_type: 'authorization_code',
-          })
-        });
+      // ALWAYS use backend for secure OAuth handling - never expose client secret in frontend
+      const response = await fetch('https://handlegmailoauthcallback-jhyfivohoq-uc.a.run.app', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code,
+          state,
+          userId,
+          redirect_uri: `${window.location.origin}/auth/gmail/callback`
+        })
+      });
 
-        if (!tokenResponse.ok) {
-          const errorData = await tokenResponse.json().catch(() => ({}));
-          throw new Error(errorData.error_description || errorData.message || 'Failed to exchange code for tokens');
-        }
-
-        const tokens = await tokenResponse.json();
-        
-        // Save tokens to Firestore
-        await this.saveGmailTokens(userId, tokens);
-        
-        console.log('Gmail OAuth completed successfully');
-        return { success: true, message: 'Gmail OAuth completed successfully' };
-      } else {
-        // Use backend for production
-        const response = await fetch('https://us-central1-smile3-8c8c5.cloudfunctions.net/handleGmailOAuthCallback', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            code,
-            state,
-            userId
-          })
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || 'Failed to complete Gmail OAuth');
-        }
-
-        const result = await response.json();
-        return result;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to complete Gmail OAuth');
       }
+
+      const result = await response.json();
+      return result;
     } catch (error) {
       console.error('OAuth callback error:', error);
       throw error;
