@@ -29,9 +29,10 @@ const Login = () => {
       // Wait a brief moment to ensure Firestore document is created
       await new Promise((resolve) => setTimeout(resolve, 1000));
       navigate("/", {
+        replace: true,
         state: {
           newLogin: true,
-          message: `Welcome back, ${user.displayName || user.email}!`,
+          message: `Welcome, ${user.displayName || user.email}!`,
         },
       });
     } catch (error) {

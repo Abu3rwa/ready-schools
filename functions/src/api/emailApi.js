@@ -3,6 +3,7 @@ import { buildStudentDailyEmailTemplate } from "../templates/studentDailyUpdateE
 import { requireAuth } from "../middleware/auth.js";
 import { HttpsError } from "firebase-functions/v2/https";
 
+
 // Student-specific: preview student daily email (admin/teacher)
 export const studentPreviewDailyEmail = async (req, res) => {
   try {
@@ -690,7 +691,10 @@ export const fixGmailConfig = async (req, res) => {
 export const handleGmailOAuthCallback = async (req, res) => {
   // CORS: restrict to known origins
   const origin = req.headers.origin || '';
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,https://smile3-8c8c5.firebaseapp.com')
+  const allowedOrigins = (
+    process.env.cors_allowed_origins ||
+    'http://localhost:3000'
+  )
     .split(',')
     .map((s) => s.trim());
   if (allowedOrigins.includes(origin)) {
@@ -714,12 +718,14 @@ export const handleGmailOAuthCallback = async (req, res) => {
     }
 
     // Prefer APP_URL if set; else use request-provided redirect_uri; else fallback to localhost
-    const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
-    const finalRedirectUri = appUrl
-      ? `${appUrl}/auth/gmail/callback`
+    const appUrlValue = (process.env.app_url || '').replace(/\/$/, '');
+    const finalRedirectUri = appUrlValue
+      ? `${appUrlValue}/auth/gmail/callback`
       : (redirect_uri || 'http://localhost:3000/auth/gmail/callback');
 
     // Exchange code for tokens using backend credentials
+    const clientId = process.env.gmail_client_id || '610841874714-qid6baodcg3fgt3vijkog0s8hk76c4n5.apps.googleusercontent.com';
+    const clientSecret = process.env.gmail_client_secret || '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';
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {
@@ -727,8 +733,8 @@ export const handleGmailOAuthCallback = async (req, res) => {
       },
       body: new URLSearchParams({
         code,
-        client_id: process.env.GOOGLE_CLIENT_ID || '610841874714-qid6baodcg3fgt3vijkog0s8hk76c4n5.apps.googleusercontent.com',
-        client_secret: process.env.GOOGLE_CLIENT_SECRET || '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',
+        client_id: clientId,
+        client_secret: clientSecret,
         redirect_uri: finalRedirectUri,
         grant_type: 'authorization_code',
       })
@@ -794,6 +800,8 @@ export const refreshGmailTokens = async (req, res) => {
     }
 
     // Exchange refresh token for new access token
+    const clientId = process.env.gmail_client_id || '610841874714-qid6baodcg3fgt3vijkog0s8hk76c4n5.apps.googleusercontent.com';
+    const clientSecret = process.env.gmail_client_secret || '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';
     const response = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: {
@@ -801,8 +809,8 @@ export const refreshGmailTokens = async (req, res) => {
       },
       body: new URLSearchParams({
         refresh_token: refreshToken,
-        client_id: process.env.GOOGLE_CLIENT_ID || '610841874714-qid6baodcg3fgt3vijkog0s8hk76c4n5.apps.googleusercontent.com',
-        client_secret: process.env.GOOGLE_CLIENT_SECRET || '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',
+        client_id: clientId,
+        client_secret: clientSecret,
         grant_type: 'refresh_token',
       })
     });
