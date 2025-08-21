@@ -688,15 +688,21 @@ export const fixGmailConfig = async (req, res) => {
 
 // Handle Gmail OAuth callback (backend)
 export const handleGmailOAuthCallback = async (req, res) => {
-  // Add CORS headers for localhost
-  res.set('Access-Control-Allow-Origin', '*');
+  // CORS: restrict to known origins
+  const origin = req.headers.origin || '';
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,https://smile3-8c8c5.firebaseapp.com')
+    .split(',')
+    .map((s) => s.trim());
+  if (allowedOrigins.includes(origin)) {
+    res.set('Access-Control-Allow-Origin', origin);
+  }
+  res.set('Vary', 'Origin');
   res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.set('Access-Control-Allow-Headers', 'Content-Type');
   
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
-    res.status(200).send('');
-    return;
+    return res.status(200).send('');
   }
   
   try {
@@ -707,8 +713,11 @@ export const handleGmailOAuthCallback = async (req, res) => {
       return res.status(400).json({ error: "Missing code, state, or userId" });
     }
 
-    // Use the redirect_uri from the request or fallback to localhost for development
-    const finalRedirectUri = redirect_uri || 'http://localhost:3000/auth/gmail/callback';
+    // Prefer APP_URL if set; else use request-provided redirect_uri; else fallback to localhost
+    const appUrl = (process.env.APP_URL || '').replace(/\/$/, '');
+    const finalRedirectUri = appUrl
+      ? `${appUrl}/auth/gmail/callback`
+      : (redirect_uri || 'http://localhost:3000/auth/gmail/callback');
 
     // Exchange code for tokens using backend credentials
     const response = await fetch('https://oauth2.googleapis.com/token', {

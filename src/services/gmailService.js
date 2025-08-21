@@ -230,8 +230,7 @@ class GmailService {
         body: JSON.stringify({
           code,
           state,
-          userId,
-          redirect_uri: `${window.location.origin}/auth/gmail/callback`
+          userId
         })
       });
 
