@@ -6,13 +6,17 @@ import {
   DialogActions,
   Button,
   TextField,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  Typography,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Typography,
   Box,
   Chip,
   Alert,
@@ -28,6 +32,8 @@ import {
   Grade as GradeIcon,
   CheckCircle as CheckCircleIcon,
 } from "@mui/icons-material";
+import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 
 const AssignmentGradingDialog = ({
   open,
@@ -45,6 +51,9 @@ const AssignmentGradingDialog = ({
     message: "",
     severity: "success",
   });
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   // Initialize grades when dialog opens
   useEffect(() => {
@@ -89,6 +98,17 @@ const AssignmentGradingDialog = ({
       });
     }
   };
+
+  const quickGrade = (studentId, letter) => {
+    if (!assignment?.points) return;
+    const map = { A: 0.95, B: 0.85, C: 0.75, D: 0.65, F: 0.5 };
+    const pct = map[letter] ?? 0.0;
+    const pts = (assignment.points * pct).toFixed(1);
+    handleGradeChange(studentId, String(pts));
+  };
+
+  const goPrev = () => setCurrentIndex((i) => Math.max(0, i - 1));
+  const goNext = () => setCurrentIndex((i) => Math.min(students.length - 1, i + 1));
 
   const toggleNotSubmitted = (studentId) => {
     setNotSubmittedStudents((prev) => {
@@ -290,8 +310,8 @@ const AssignmentGradingDialog = ({
 
   return (
     <>
-      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-        <DialogTitle>
+      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
+        <DialogTitle sx={{ position: isMobile ? 'sticky' : 'static', top: 0, zIndex: 2, bgcolor: 'background.paper' }}>
           <Box
             sx={{
               display: "flex",
@@ -307,9 +327,17 @@ const AssignmentGradingDialog = ({
                 {assignment?.category} • {assignment?.points} points
               </Typography>
             </Box>
-            <IconButton onClick={onClose}>
-              <CloseIcon />
-            </IconButton>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {isMobile && (
+                <>
+                  <Button size="small" onClick={goPrev} disabled={currentIndex === 0}>Prev</Button>
+                  <Button size="small" onClick={goNext} disabled={currentIndex >= students.length - 1}>Next</Button>
+                </>
+              )}
+              <IconButton onClick={onClose} aria-label="Close grading dialog">
+                <CloseIcon />
+              </IconButton>
+            </Box>
           </Box>
         </DialogTitle>
         
@@ -368,130 +396,167 @@ const AssignmentGradingDialog = ({
             )}
           </Box>
 
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Student</TableCell>
-                  <TableCell>Points Earned</TableCell>
-                  <TableCell>Letter Grade</TableCell>
-                  <TableCell>Points Earned</TableCell>
-                  <TableCell>Status</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {students.map((student) => {
-                  const gradeValue = studentGrades[student.id] || "";
-                  const percentage = gradeValue
-                    ? convertToPercentage(gradeValue)
-                    : 0;
-                  const pointsEarned = gradeValue
-                    ? convertToPoints(gradeValue)
-                    : 0;
-                  const letterGrade = gradeValue
-                    ? getLetterGrade(percentage)
-                    : "";
-                  const gradeColor = gradeValue
-                    ? getGradeColor(percentage)
-                    : "default";
-                  const hasGrade = gradeValue && gradeValue.trim() !== "";
-                  const isNotSubmitted = notSubmittedStudents.has(student.id);
+          {/* Mobile list layout */}
+          {isMobile ? (
+            <List sx={{ width: '100%' }}>
+              {students.map((student, idx) => {
+                const gradeValue = studentGrades[student.id] || "";
+                const percentage = gradeValue ? convertToPercentage(gradeValue) : 0;
+                const pointsEarned = gradeValue ? convertToPoints(gradeValue) : 0;
+                const letterGrade = gradeValue ? getLetterGrade(percentage) : "";
+                const gradeColor = gradeValue ? getGradeColor(percentage) : "default";
+                const hasGrade = gradeValue && gradeValue.trim() !== "";
+                const isNotSubmitted = notSubmittedStudents.has(student.id);
 
-                  return (
-                    <TableRow key={student.id}>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" fontWeight="medium">
-                            {student.firstName} {student.lastName}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {student.studentId || "No ID"}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <TextField
-                          type="number"
-                          value={gradeValue}
-                          onChange={(e) =>
-                            handleGradeChange(student.id, e.target.value)
-                          }
-                          inputProps={{ 
-                            min: 0, 
-                            max: assignment?.points || 0, 
-                            step: 0.1,
-                            style: { width: "80px" },
-                          }}
-                          size="small"
-                          error={gradeValue && !validateGrade(gradeValue)}
-                          helperText={
-                            gradeValue && !validateGrade(gradeValue)
-                              ? `0-${assignment?.points || 0}`
-                              : ""
-                          }
-                        />
-                      </TableCell>
-                      <TableCell>
-                        {hasGrade && (
-                          <Chip
-                            label={letterGrade}
-                            color={gradeColor}
+                const isFocused = idx === currentIndex;
+                return (
+                  <ListItem key={student.id} sx={{ flexDirection: 'column', alignItems: 'stretch', p: { xs: 2, sm: 1 }, display: isFocused ? 'flex' : 'none' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Box>
+                        <Typography variant="body1" fontWeight="medium">
+                          {student.firstName} {student.lastName}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {student.studentId || "No ID"}
+                        </Typography>
+                      </Box>
+                      {hasGrade && (
+                        <Chip label={letterGrade} color={gradeColor} size="small" variant="outlined" />
+                      )}
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <TextField
+                        type="number"
+                        value={gradeValue}
+                        onChange={(e) => handleGradeChange(student.id, e.target.value)}
+                        inputProps={{ min: 0, max: assignment?.points || 0, step: 0.1 }}
+                        fullWidth
+                        size="medium"
+                        error={gradeValue && !validateGrade(gradeValue)}
+                        helperText={gradeValue && !validateGrade(gradeValue) ? `0-${assignment?.points || 0}` : ""}
+                      />
+                      <Button
+                        variant="outlined"
+                        onClick={() => toggleNotSubmitted(student.id)}
+                        color={isNotSubmitted ? 'warning' : 'inherit'}
+                        sx={{ minWidth: 44, minHeight: 44 }}
+                      >
+                        {isNotSubmitted ? 'Undo' : 'No Submit'}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        onClick={() => handleGradeChange(student.id, String(assignment?.points || 0))}
+                        sx={{ minWidth: 44, minHeight: 44 }}
+                      >
+                        Full
+                      </Button>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                      {['A','B','C','D','F'].map((L) => (
+                        <Button key={L} size="small" variant="contained" onClick={() => quickGrade(student.id, L)} sx={{ minWidth: 44, minHeight: 36 }}>
+                          {L}
+                        </Button>
+                      ))}
+                    </Box>
+                    {hasGrade && (
+                      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                        {pointsEarned.toFixed(1)} / {assignment?.points || 0} • {percentage.toFixed(0)}%
+                      </Typography>
+                    )}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                      <Button onClick={goPrev} disabled={currentIndex === 0}>Previous</Button>
+                      <Button onClick={goNext} disabled={currentIndex >= students.length - 1}>Next</Button>
+                    </Box>
+                  </ListItem>
+                );
+              })}
+            </List>
+          ) : (
+            // Desktop fallback: existing table layout (unchanged)
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Student</TableCell>
+                    <TableCell>Points Earned</TableCell>
+                    <TableCell>Letter Grade</TableCell>
+                    <TableCell>Points Earned</TableCell>
+                    <TableCell>Status</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {students.map((student) => {
+                    const gradeValue = studentGrades[student.id] || "";
+                    const percentage = gradeValue ? convertToPercentage(gradeValue) : 0;
+                    const pointsEarned = gradeValue ? convertToPoints(gradeValue) : 0;
+                    const letterGrade = gradeValue ? getLetterGrade(percentage) : "";
+                    const gradeColor = gradeValue ? getGradeColor(percentage) : "default";
+                    const hasGrade = gradeValue && gradeValue.trim() !== "";
+                    const isNotSubmitted = notSubmittedStudents.has(student.id);
+
+                    return (
+                      <TableRow key={student.id}>
+                        <TableCell>
+                          <Box>
+                            <Typography variant="body2" fontWeight="medium">
+                              {student.firstName} {student.lastName}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {student.studentId || "No ID"}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <TextField
+                            type="number"
+                            value={gradeValue}
+                            onChange={(e) => handleGradeChange(student.id, e.target.value)}
+                            inputProps={{ min: 0, max: assignment?.points || 0, step: 0.1, style: { width: "80px" } }}
                             size="small"
-                            variant="outlined"
+                            error={gradeValue && !validateGrade(gradeValue)}
+                            helperText={gradeValue && !validateGrade(gradeValue) ? `0-${assignment?.points || 0}` : ""}
                           />
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {hasGrade && (
-                          <Typography variant="body2">
-                            {pointsEarned.toFixed(1)} /{" "}
-                            {assignment?.points || 0}
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {isNotSubmitted ? (
-                          <Chip
-                            label="Not Submitted"
-                            color="warning"
-                            size="small"
-                            variant="outlined"
-                            onClick={() => toggleNotSubmitted(student.id)}
-                            sx={{ cursor: "pointer" }}
-                          />
-                        ) : hasGrade ? (
-                          <Chip
-                            icon={<CheckCircleIcon />}
-                            label="Graded"
-                            color="success"
-                            size="small"
-                          />
-                        ) : (
-                          <Box sx={{ display: "flex", gap: 1 }}>
+                        </TableCell>
+                        <TableCell>
+                          {hasGrade && (
+                            <Chip label={letterGrade} color={gradeColor} size="small" variant="outlined" />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {hasGrade && (
+                            <Typography variant="body2">
+                              {pointsEarned.toFixed(1)} / {assignment?.points || 0}
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {isNotSubmitted ? (
                             <Chip
-                              label="Not Graded"
-                              color="default"
+                              label="Not Submitted"
+                              color="warning"
                               size="small"
                               variant="outlined"
-                            />
-                            <Button
-                              size="small"
-                              variant="text"
-                              color="warning"
                               onClick={() => toggleNotSubmitted(student.id)}
-                              sx={{ minWidth: "auto", p: 0.5 }}
-                            >
-                              Mark Not Submitted
-                            </Button>
-                          </Box>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                              sx={{ cursor: "pointer" }}
+                            />
+                          ) : hasGrade ? (
+                            <Chip icon={<CheckCircleIcon />} label="Graded" color="success" size="small" />
+                          ) : (
+                            <Box sx={{ display: "flex", gap: 1 }}>
+                              <Chip label="Not Graded" color="default" size="small" variant="outlined" />
+                              <Button size="small" variant="text" color="warning" onClick={() => toggleNotSubmitted(student.id)} sx={{ minWidth: "auto", p: 0.5 }}>
+                                Mark Not Submitted
+                              </Button>
+                            </Box>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </DialogContent>
         
         <DialogActions>

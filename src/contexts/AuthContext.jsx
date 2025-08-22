@@ -32,39 +32,53 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // If user exists in Firebase Auth, check if they have a document in Firestore
-        const userRef = doc(db, "users", user.uid);
-        const userDoc = await getDoc(userRef);
+        try {
+          // If user exists in Firebase Auth, check if they have a document in Firestore
+          const userRef = doc(db, "users", user.uid);
+          const userDoc = await getDoc(userRef);
 
-        // If user doesn't have a document in Firestore, create one
-        if (!userDoc.exists()) {
-          await setDoc(userRef, {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName || "",
-            photoURL: user.photoURL || "",
-            admin: false, // Default to non-admin
-            createdAt: new Date(),
-            // Initialize Gmail configuration fields
-            gmail_configured: false,
-            gmail_access_token: null,
-            gmail_refresh_token: null,
-            gmail_token_expiry: null,
-            gmail_token_last_refresh: null,
-            gmail_token_error: null,
-            gmail_token_error_time: null,
-          });
+          // If user doesn't have a document in Firestore, create one
+          if (!userDoc.exists()) {
+            await setDoc(userRef, {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName || "",
+              photoURL: user.photoURL || "",
+              admin: false, // Default to non-admin
+              createdAt: new Date(),
+              // Initialize Gmail configuration fields
+              gmail_configured: false,
+              gmail_access_token: null,
+              gmail_refresh_token: null,
+              gmail_token_expiry: null,
+              gmail_token_last_refresh: null,
+              gmail_token_error: null,
+              gmail_token_error_time: null,
+            });
 
-          // Initialize default frameworks for new user
-          try {
-            console.log("Initializing default frameworks for new user...");
-            const frameworks = await initializeDefaultFrameworks();
-            console.log("Default frameworks created:", frameworks);
-          } catch (err) {
-            console.error("Error initializing default frameworks:", err);
-            // Don't throw the error - we want the user to be able to log in even if framework creation fails
-            // They can retry framework creation later
+            // Initialize default frameworks for new user
+            try {
+              console.log("Initializing default frameworks for new user...");
+              const frameworks = await initializeDefaultFrameworks();
+              console.log("Default frameworks created:", frameworks);
+            } catch (err) {
+              console.error("Error initializing default frameworks:", err);
+              // Don't throw the error - we want the user to be able to log in even if framework creation fails
+              // They can retry framework creation later
+            }
           }
+        } catch (error) {
+          console.warn("Firestore operation failed (possibly offline):", error);
+          // Check if this is an offline error
+          if (error.code === 'unavailable' || error.message.includes('offline')) {
+            console.log("App is offline - user can still be authenticated but Firestore operations will be limited");
+            // Set a flag or show notification that app is in offline mode
+            // You could dispatch this to a global state or context if needed
+          } else {
+            console.error("Unexpected Firestore error:", error);
+          }
+          // Don't prevent user authentication due to Firestore errors
+          // The user document can be created/updated when connection is restored
         }
       }
       setCurrentUser(user);

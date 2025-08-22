@@ -40,6 +40,8 @@ import {
   Badge,
   LinearProgress,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { useAssignments } from "../contexts/AssignmentContext";
 import { useGrades } from "../contexts/GradeContext";
 import { useStudents } from "../contexts/StudentContext";
@@ -76,8 +78,11 @@ import {
   School as SchoolIcon,
   TrendingUp as TrendingUpIcon,
 } from "@mui/icons-material";
+import { BottomNavigation, BottomNavigationAction, Fab } from "@mui/material";
 
 const Assignments = () => {
+  const theme = useTheme();
+  const isXs = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
   const {
     assignments,
@@ -510,7 +515,7 @@ const Assignments = () => {
         </Typography>
 
         {/* Quick Stats and Navigation */}
-        <Paper sx={{ p: 2, mb: 3 }}>
+        <Paper sx={{ p: 2, mb: 3 }} id="assignments-filter-bar">
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={8}>
               <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
@@ -879,6 +884,46 @@ const Assignments = () => {
           grades={grades}
           onSaveGrades={handleSaveGrades}
         />
+
+        {/* Mobile Bottom Navigation */}
+        <Paper 
+          sx={{ 
+            position: 'fixed', 
+            bottom: 0, 
+            left: 0, 
+            right: 0,
+            display: { xs: 'block', md: 'none' },
+            zIndex: 1000
+          }}
+          elevation={3}
+        >
+          <BottomNavigation showLabels>
+            <BottomNavigationAction label="Create" icon={<AddIcon />} onClick={handleOpenAddDialog} />
+            <BottomNavigationAction label="Grade" icon={<GradeIcon />} onClick={() => {
+              const next = filteredAssignments[0];
+              if (next) handleOpenGradingDialog(next);
+            }} />
+            <BottomNavigationAction label="Filter" icon={<FilterIcon />} onClick={() => {
+              const el = document.getElementById('assignments-filter-bar');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }} />
+          </BottomNavigation>
+        </Paper>
+
+        {/* Floating Action Button */}
+        <Fab
+          color="primary"
+          sx={{
+            position: 'fixed',
+            bottom: { xs: 80, sm: 16 },
+            right: 16,
+            display: { xs: 'flex', md: 'none' }
+          }}
+          onClick={handleOpenAddDialog}
+          aria-label="Add Assignment"
+        >
+          <AddIcon />
+        </Fab>
       </Box>
     </LocalizationProvider>
   );
@@ -897,6 +942,8 @@ const AssignmentsTab = ({
   onOpenGradingDialog,
   getAssignmentStatus,
 }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   // Check if date is past due (moved here to fix scope issue)
   const isPastDue = (dateString) => {
     const today = new Date();
@@ -925,7 +972,54 @@ const AssignmentsTab = ({
         </Button>
       </Box>
 
-      <TableContainer component={Paper}>
+      {/* Mobile: card list */}
+      <Box sx={{ display: { xs: 'block', md: 'none' } }}>
+        <Grid container spacing={2}>
+          {assignments.map((assignment) => {
+            const stats = assignmentStats[assignment.id];
+            return (
+              <Grid item xs={12} sm={6} key={assignment.id}>
+                <EnhancedAssignmentCard
+                  assignment={assignment}
+                  onEdit={onEditAssignment}
+                  onDelete={onDeleteAssignment}
+                  showActions={true}
+                />
+                <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                  <Button
+                    fullWidth
+                    size="large"
+                    variant="outlined"
+                    startIcon={<GradeIcon />}
+                    onClick={() => onOpenGradingDialog(assignment)}
+                    sx={{ minHeight: 44 }}
+                  >
+                    Grade
+                  </Button>
+                  <Button
+                    fullWidth
+                    size="large"
+                    variant="outlined"
+                    startIcon={<VisibilityIcon />}
+                    onClick={() => onNavigateToGradebook(assignment)}
+                    sx={{ minHeight: 44 }}
+                  >
+                    Details
+                  </Button>
+                </Box>
+                {stats && (
+                  <Box sx={{ mt: 1 }}>
+                    <LinearProgress variant="determinate" value={stats.completionRate} sx={{ height: 8, borderRadius: 4 }} />
+                  </Box>
+                )}
+              </Grid>
+            );
+          })}
+        </Grid>
+      </Box>
+
+      {/* Desktop/Chromebook: table */}
+      <TableContainer component={Paper} sx={{ display: { xs: 'none', md: 'block' } }}>
         <Table>
           <TableHead>
             <TableRow>
@@ -958,25 +1052,25 @@ const AssignmentsTab = ({
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={assignment.subject} 
+                      label={assignment.subject}
                       size="small"
                       variant="outlined"
                       color="primary"
                     />
                   </TableCell>
                   <TableCell>
-                    <Chip 
-                      label={assignment.category} 
-                      size="small" 
+                    <Chip
+                      label={assignment.category}
+                      size="small"
                       variant="outlined"
                       color="secondary"
                     />
                   </TableCell>
                   <TableCell>
                     <Box>
-                    <Typography variant="body2">
+                      <Typography variant="body2">
                         {new Date(assignment.dueDate).toLocaleDateString()}
-                    </Typography>
+                      </Typography>
                       <Chip
                         label={
                           isPastDue(assignment.dueDate) ? "Overdue" : "On Time"
@@ -1011,9 +1105,9 @@ const AssignmentsTab = ({
                             {stats.completionRate.toFixed(0)}%
                           </Typography>
                         </Box>
-                        <LinearProgress 
-                          variant="determinate" 
-                          value={stats.completionRate} 
+                        <LinearProgress
+                          variant="determinate"
+                          value={stats.completionRate}
                           color={
                             stats.completionRate === 100 ? "success" : "primary"
                           }

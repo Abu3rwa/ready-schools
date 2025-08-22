@@ -40,6 +40,7 @@
     "react-dnd-touch-backend": "^16.0.1",
     "react-dom": "^18.2.0",
     "react-error-boundary": "^4.0.13",
+    "react-google-drive-picker": "^1.2.2",
     "react-hook-form": "^7.62.0",
     "react-i18next": "^14.0.5",
     "react-router-dom": "^6.22.2",
@@ -60,6 +61,7 @@
     "test": "jest --watchAll",
     "eject": "react-scripts eject"
   },
+  "proxy": "https://smile3-8c8c5.web.app",
   "eslintConfig": {
     "extends": [
       "react-app",

@@ -26,7 +26,7 @@ i18n
   .init({
     supportedLngs: ['en', 'ar'],
     fallbackLng: 'en',
-    debug: process.env.NODE_ENV === 'development',
+    debug: process.env.NODE_ENV === 'development' && (typeof window !== 'undefined' ? window.localStorage.getItem('i18nDebug') === '1' : false),
     // Options for language detector
     detection: {
       order: ['path', 'cookie', 'htmlTag', 'localStorage', 'subdomain'],

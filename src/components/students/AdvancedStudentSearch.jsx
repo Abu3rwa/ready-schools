@@ -154,7 +154,13 @@ const AdvancedStudentSearch = ({
   return (
     <Paper elevation={2} sx={{ p: 2, mb: 3 }}>
       {/* Basic Search */}
-      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        gap: 2, 
+        alignItems: { xs: 'stretch', sm: 'center' }, 
+        mb: 2,
+        flexDirection: { xs: 'column', sm: 'row' }
+      }}>
         <TextField
           fullWidth
           placeholder="Search students by name, ID, or parent email..."
@@ -163,11 +169,15 @@ const AdvancedStudentSearch = ({
           InputProps={{
             startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
           }}
+          size="small"
         />
+        <Box sx={{ display: 'flex', gap: 1, width: { xs: '100%', sm: 'auto' } }}>
         <Button
           variant="contained"
           onClick={handleSearch}
           startIcon={<SearchIcon />}
+            fullWidth
+            sx={{ minHeight: 44 }}
         >
           Search
         </Button>
@@ -175,6 +185,7 @@ const AdvancedStudentSearch = ({
           <IconButton
             onClick={() => setExpanded(!expanded)}
             color={activeFiltersCount > 0 ? 'primary' : 'default'}
+              sx={{ border: 1, borderColor: 'divider', borderRadius: 1, minHeight: 44, width: 44 }}
           >
             <FilterIcon />
             {activeFiltersCount > 0 && (
@@ -188,11 +199,12 @@ const AdvancedStudentSearch = ({
         </Tooltip>
         {activeFiltersCount > 0 && (
           <Tooltip title="Clear All Filters">
-            <IconButton onClick={handleClear} color="error">
+              <IconButton onClick={handleClear} color="error" sx={{ border: 1, borderColor: 'divider', borderRadius: 1, minHeight: 44, width: 44 }}>
               <ClearIcon />
             </IconButton>
           </Tooltip>
         )}
+        </Box>
       </Box>
 
       {/* Advanced Filters */}

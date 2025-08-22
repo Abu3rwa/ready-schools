@@ -103,8 +103,7 @@ const Communication = () => {
   const { assignments, loading: assignmentsLoading } = useAssignments();
   const { grades, loading: gradesLoading } = useGrades();
   const { behavior, loading: behaviorLoading } = useBehavior();
-  console.log("Attendance::::::::::::::: ", attendance)
-
+      
   // Keep communications in sync with context
   useEffect(() => {
     setCommunications(initialCommunications);
@@ -139,7 +138,7 @@ const Communication = () => {
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
-    severity: "success",
+    severity: "info",
   });
 
   // Check Gmail configuration status
@@ -178,8 +177,7 @@ const Communication = () => {
 
     const checkGmailStatus = async () => {
       try {
-        console.log('Starting Gmail status check', { hasUser: !!currentUser });
-        if (!currentUser) {
+            if (!currentUser) {
           setGmailStatus({ configured: false, tokenValid: false, loading: false });
           return;
         }
@@ -195,15 +193,8 @@ const Communication = () => {
           // Consider configured if we have tokens, regardless of the flag
           const isConfigured = hasTokens;
           
-          // Debug logging
-          console.log('Gmail status check:', {
-            hasTokens,
-            isConfigured,
-            gmailConfiguredFlag: userData.gmail_configured,
-            tokenExpiry: userData.gmail_token_expiry,
-            currentTime: Date.now(),
-            tokenError: userData.gmail_token_error
-          });
+          
+
           
           setGmailStatus({
             configured: isConfigured,
@@ -237,39 +228,70 @@ const Communication = () => {
       <Box sx={{ 
         flexGrow: 1,
         px: { xs: 2, sm: 3, md: 4 },
-        py: { xs: 3, sm: 4, md: 6 },
+        py: { xs: 2, sm: 3, md: 4 },
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '60vh'
       }}>
-        <Card elevation={3} sx={{ maxWidth: 600, width: '100%', textAlign: 'center' }}>
-          <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
-            <EmailIcon2 sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
+        <Card elevation={3} sx={{ 
+          maxWidth: { xs: '95%', sm: 600 }, 
+          width: '100%', 
+          textAlign: 'center' 
+        }}>
+          <CardContent sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+            <EmailIcon2 sx={{ 
+              fontSize: { xs: 48, sm: 56, md: 64 }, 
+              color: 'primary.main', 
+              mb: { xs: 1.5, sm: 2 } 
+            }} />
             
-            <Typography variant="h4" gutterBottom sx={{ mb: 2 }}>
+            <Typography variant="h4" gutterBottom sx={{ 
+              mb: { xs: 1.5, sm: 2 },
+              fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' }
+            }}>
               Gmail Configuration Required
             </Typography>
             
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+            <Typography variant="body1" color="text.secondary" sx={{ 
+              mb: { xs: 2, sm: 3 },
+              fontSize: { xs: '0.875rem', sm: '1rem' }
+            }}>
               Your Gmail account needs to be configured to send emails from the Communication Center.
             </Typography>
 
-            <Alert severity="info" sx={{ mb: 3, textAlign: 'left' }}>
-              <Typography variant="body2">
+            <Alert severity="info" sx={{ 
+              mb: { xs: 2, sm: 3 }, 
+              textAlign: 'left',
+              '& .MuiAlert-message': {
+                fontSize: { xs: '0.75rem', sm: '0.875rem' }
+              }
+            }}>
+              <Typography variant="body2" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                 <strong>What this means:</strong> The Communication Center needs access to your Gmail account to send daily updates, progress reports, and other communications to parents and students.
               </Typography>
             </Alert>
 
-            <Alert severity="success" sx={{ mb: 3, textAlign: 'left' }}>
-              <Typography variant="body2">
+            <Alert severity="success" sx={{ 
+              mb: { xs: 2, sm: 3 }, 
+              textAlign: 'left',
+              '& .MuiAlert-message': {
+                fontSize: { xs: '0.75rem', sm: '0.875rem' }
+              }
+            }}>
+              <Typography variant="body2" sx={{ fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
                 <strong>How to configure:</strong> Click "Configure Gmail" below, then scroll down on the Settings page to find the "Gmail Setup" section. 
                 You'll need to authorize the app to access your Gmail account.
               </Typography>
             </Alert>
 
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+            <Box sx={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: { xs: 1.5, sm: 2 }, 
+              alignItems: 'center' 
+            }}>
               <Button
                 variant="contained"
                 color="primary"
@@ -277,16 +299,20 @@ const Communication = () => {
                 startIcon={<SettingsIcon />}
                 onClick={() => window.location.href = '/settings'}
                 sx={{ 
-                  px: 4, 
-                  py: 1.5,
-                  fontSize: '1.1rem',
-                  minWidth: 200
+                  px: { xs: 3, sm: 4 }, 
+                  py: { xs: 1.25, sm: 1.5 },
+                  fontSize: { xs: '1rem', sm: '1.1rem' },
+                  minWidth: { xs: 180, sm: 200 },
+                  width: { xs: '100%', sm: 'auto' }
                 }}
               >
                 Configure Gmail
               </Button>
               
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" color="text.secondary" sx={{ 
+                fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                textAlign: 'center'
+              }}>
                 You'll be redirected to Settings page where you can find Gmail Setup
               </Typography>
 
@@ -300,33 +326,49 @@ const Communication = () => {
                   setGmailStatusRefresh((n) => n + 1);
                 }}
                 sx={{ 
-                  px: 3, 
-                  py: 1,
-                  fontSize: '1rem',
-                  minWidth: 150
+                  px: { xs: 2, sm: 3 }, 
+                  py: { xs: 0.75, sm: 1 },
+                  fontSize: { xs: '0.875rem', sm: '1rem' },
+                  minWidth: { xs: 140, sm: 150 },
+                  width: { xs: '100%', sm: 'auto' }
                 }}
               >
                 Check Status Again
               </Button>
             </Box>
 
-            <Divider sx={{ my: 3 }} />
+            <Divider sx={{ my: { xs: 2, sm: 3 } }} />
             
-            <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+            <Typography variant="h6" gutterBottom sx={{ 
+              mb: { xs: 1.5, sm: 2 },
+              fontSize: { xs: '1rem', sm: '1.25rem' }
+            }}>
               Why Gmail Configuration?
             </Typography>
             
             <Box sx={{ textAlign: 'left' }}>
-              <Typography variant="body2" sx={{ mb: 1 }}>
+              <Typography variant="body2" sx={{ 
+                mb: 1,
+                fontSize: { xs: '0.75rem', sm: '0.875rem' }
+              }}>
                 • <strong>Secure:</strong> Uses OAuth2 authentication, no password sharing
               </Typography>
-              <Typography variant="body2" sx={{ mb: 1 }}>
+              <Typography variant="body2" sx={{ 
+                mb: 1,
+                fontSize: { xs: '0.75rem', sm: '0.875rem' }
+              }}>
                 • <strong>Reliable:</strong> Direct Gmail API integration for better delivery
               </Typography>
-              <Typography variant="body2" sx={{ mb: 1 }}>
+              <Typography variant="body2" sx={{ 
+                mb: 1,
+                fontSize: { xs: '0.75rem', sm: '0.875rem' }
+              }}>
                 • <strong>Professional:</strong> Emails sent from your verified Gmail account
               </Typography>
-              <Typography variant="body2" sx={{ mb: 1 }}>
+              <Typography variant="body2" sx={{ 
+                mb: 1,
+                fontSize: { xs: '0.75rem', sm: '0.875rem' }
+              }}>
                 • <strong>Trackable:</strong> Monitor email delivery and engagement
               </Typography>
             </Box>
@@ -578,19 +620,10 @@ const Communication = () => {
         }
       };
 
-      console.log('Preparing to save email with data:', newEmail);
-      console.log('Student data:', student);
-      console.log('Attendance data:', attendance.find(a => a.studentId === emailForm.studentId && a.date === formattedDate));
-      console.log('Grades data:', grades.filter(g => g.studentId === emailForm.studentId && g.date === formattedDate));
-      console.log('Behavior data:', behavior.filter(b => b.studentId === emailForm.studentId && b.date === formattedDate));
-      console.log('Assignments data:', assignments.filter(a => a.studentId === emailForm.studentId && a.date === formattedDate));
       
-      console.log('Calling createCommunication with:', newEmail);
       const result = await createCommunication(newEmail);
-      console.log('Create communication result:', result);
       
       if (result) {
-        console.log('Successfully created email with ID:', result.id);
       } else {
         console.error('No result returned from createCommunication');
       }
@@ -814,7 +847,8 @@ const Communication = () => {
           sx={{ 
             fontSize: { xs: "1.25rem", sm: "1.5rem", md: "1.75rem", lg: "2.125rem" }, 
             textAlign: { xs: "center", sm: "left" },
-            mb: { xs: 2, sm: 3 }
+            mb: { xs: 2, sm: 3 },
+            px: { xs: 1, sm: 0 }
           }}
         >
           Communication Center
@@ -847,106 +881,109 @@ const Communication = () => {
                 px: { xs: 1, sm: 2, md: 3 },
                 fontSize: { xs: "0.75rem", sm: "0.875rem", md: "1rem" },
                 minWidth: { xs: "auto", sm: "auto" },
+                textTransform: "none",
+                fontWeight: { xs: 500, sm: 600 }
               },
             }}
           >
+            <Tab label="Daily Update Manager" />
             <Tab label="Email History" />
             <Tab label="Email Templates" />
-            <Tab label="Daily Updates" />
           </Tabs>
         </Box>
 
         {/* Email History Tab */}
-        {tabValue === 0 && (
+        {tabValue === 1 && (
           <Box sx={{ px: { xs: 1, sm: 0 } }}>
             <DailyEmailsHistory initialTemplate={templateToCompose} />
           </Box>
         )}
 
         {/* Email Templates Tab */}
-        {tabValue === 1 && (
+        {tabValue === 2 && (
           <Box sx={{ px: { xs: 1, sm: 0 } }}>
-            <Grid container spacing={{ xs: 2, sm: 3 }}>
-            {emailTemplates.map((template, index) => (
-              <Grid item xs={12} sm={6} lg={4} key={index}>
-                <Card elevation={2} sx={{ height: '100%' }}>
-                  <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
-                    <Typography 
-                      variant="h6" 
-                      gutterBottom
-                      sx={{ 
-                        fontSize: { xs: "1rem", sm: "1.25rem" },
-                        mb: { xs: 1, sm: 2 }
-                      }}
-                    >
-                      {template.name}
-                    </Typography>
-                    <Divider sx={{ mb: { xs: 1, sm: 2 } }} />
-                    <Typography 
-                      variant="subtitle1" 
-                      gutterBottom
-                      sx={{ 
-                        fontSize: { xs: "0.875rem", sm: "1rem" },
-                        fontWeight: "bold"
-                      }}
-                    >
-                      Subject: {template.subject}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{ 
-                        whiteSpace: "pre-line", 
-                        mb: { xs: 1, sm: 2 },
-                        fontSize: { xs: "0.75rem", sm: "0.875rem" },
-                        lineHeight: 1.4,
-                        maxHeight: { xs: "120px", sm: "150px" },
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 6,
-                        WebkitBoxOrient: "vertical"
-                      }}
-                    >
-                      {template.content}
-                    </Typography>
-                    <Box sx={{ 
-                      display: "flex", 
-                      justifyContent: "flex-end",
-                      mt: "auto"
-                    }}>
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        size="small"
-                        startIcon={<EmailIcon />}
-                        onClick={() => {
-                          setTemplateToCompose(template);
-                          setTabValue(0);
-                        }}
-                        sx={{
-                          fontSize: { xs: "0.75rem", sm: "0.875rem" },
-                          px: { xs: 1.5, sm: 2 }
+            <Grid container spacing={{ xs: 1, sm: 2, md: 3 }}>
+              {emailTemplates.map((template, index) => (
+                <Grid item xs={12} sm={6} lg={4} key={index}>
+                  <Card elevation={2} sx={{ height: '100%' }}>
+                    <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                      <Typography 
+                        variant="h6" 
+                        gutterBottom
+                        sx={{ 
+                          fontSize: { xs: "1rem", sm: "1.25rem" },
+                          mb: { xs: 1, sm: 2 }
                         }}
                       >
-                        Use Template
-                      </Button>
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
+                        {template.name}
+                      </Typography>
+                      <Divider sx={{ mb: { xs: 1, sm: 2 } }} />
+                      <Typography 
+                        variant="subtitle1" 
+                        gutterBottom
+                        sx={{ 
+                          fontSize: { xs: "0.875rem", sm: "1rem" },
+                          fontWeight: "bold"
+                        }}
+                      >
+                        Subject: {template.subject}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{ 
+                          whiteSpace: "pre-line", 
+                          mb: { xs: 1, sm: 2 },
+                          fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                          lineHeight: 1.4,
+                          maxHeight: { xs: "120px", sm: "150px" },
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 6,
+                          WebkitBoxOrient: "vertical"
+                        }}
+                      >
+                        {template.content}
+                      </Typography>
+                      <Box sx={{ 
+                        display: "flex", 
+                        justifyContent: "flex-end",
+                        mt: "auto"
+                      }}>
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          size="small"
+                          startIcon={<EmailIcon />}
+                          onClick={() => {
+                            setTemplateToCompose(template);
+                            setTabValue(0);
+                          }}
+                          sx={{
+                            fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                            px: { xs: 1.5, sm: 2 },
+                            py: { xs: 0.5, sm: 0.75 }
+                          }}
+                        >
+                          Use Template
+                        </Button>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              ))}
             </Grid>
           </Box>
         )}
 
-        {/* Daily Updates Tab */}
-        {tabValue === 2 && (
+        {/* Daily Update Manager Tab */}
+        {tabValue === 0 && (
           <Box sx={{ 
             px: { xs: 1, sm: 0 },
             '& > *': { mb: { xs: 2, sm: 3 } }
           }}>
             <EmailStatus />
-             <DailyUpdateManager
+            <DailyUpdateManager
               students={students}
               attendance={attendance}
               assignments={assignments}
@@ -956,8 +993,35 @@ const Communication = () => {
                 // Success message is handled by EmailProvider
               }}
             />
-           </Box>
+          </Box>
         )}
+
+        {/* Responsive Snackbar */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={6000}
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ 
+            vertical: 'bottom', 
+            horizontal: 'center' 
+          }}
+          sx={{
+            '& .MuiSnackbar-root': {
+              width: { xs: '90%', sm: 'auto' }
+            }
+          }}
+        >
+          <Alert
+            onClose={handleCloseSnackbar}
+            severity={snackbar.severity || 'info'}
+            sx={{ 
+              width: '100%',
+              fontSize: { xs: '0.875rem', sm: '1rem' }
+            }}
+          >
+            {snackbar.message || ''}
+          </Alert>
+        </Snackbar>
 
       </Box>
     </LocalizationProvider>

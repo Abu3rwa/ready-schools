@@ -91,8 +91,7 @@ const DailyUpdateManager = ({
   const [sendingStudents, setSendingStudents] = useState(false);
   const [lessonDetailsDialogOpen, setLessonDetailsDialogOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState(null);
-  console.log("dailyUpdateData?.data?", dailyUpdateData?.data.dailyUpdates);
-
+ 
   // Tab state for switching between preview and settings
   const [activeTab, setActiveTab] = useState(0);
 
@@ -157,8 +156,6 @@ const DailyUpdateManager = ({
         ];
 
         const dateString = selectedDate.format("YYYY-MM-DD");
-        console.log("Fetching lessons for date:", dateString);
-        console.log("Using subjects:", subjects);
 
         const { dailyUpdateService } = await import(
           "../../services/dailyUpdateService"
@@ -170,8 +167,6 @@ const DailyUpdateManager = ({
 
         // Ensure lessons is always an array
         setLessons(Array.isArray(fetchedLessons) ? fetchedLessons : []);
-        console.log("Fetched lessons:", fetchedLessons);
-        console.log("Lessons count:", fetchedLessons?.length || 0);
       } catch (error) {
         console.error("Error fetching lessons:", error);
         setLessonError("Failed to fetch lessons");
@@ -189,19 +184,13 @@ const DailyUpdateManager = ({
     if (!attendance || !Array.isArray(attendance)) return [];
 
     const dateString = selectedDate.format("YYYY-MM-DD");
-    console.log("Filtering attendance for date:", dateString);
-    console.log("Available attendance records:", attendance);
 
     const filtered = attendance.filter((record) => {
       const recordDate = record.date;
       const matches = recordDate === dateString;
-      console.log(
-        `Attendance record ${record.id}: date=${recordDate}, matches=${matches}`
-      );
       return matches;
     });
 
-    console.log("Filtered attendance records:", filtered);
     return filtered;
   }, [attendance, selectedDate]);
 
@@ -225,31 +214,13 @@ const DailyUpdateManager = ({
       : undefined,
   };
 
-  console.log("Prepared contexts:", {
-    studentsCount: contexts.students.length,
-    attendanceCount: contexts.attendance.length,
-    totalAttendanceRecords: attendance?.length || 0,
-    filteredAttendanceCount: filteredAttendance.length,
-    assignmentsCount: contexts.assignments.length,
-    gradesCount: contexts.grades.length,
-    behaviorCount: contexts.behavior.length,
-    lessonsCount: contexts.lessons.length,
-    teacher: contexts.teacher,
-    schoolName: contexts.schoolName,
-  });
+  
 
   // Generate preview data
   const generatePreview = async () => {
     try {
-      console.log("Generating preview with contexts:", contexts);
       const result = await previewDailyUpdates(contexts, selectedDate.toDate());
-      console.log("Preview result:", {
-        success: result.success,
-        data: result.data,
-        dailyUpdates: result.data?.dailyUpdates,
-        classSummary: result.data?.classSummary,
-        message: result.data?.message,
-      });
+     
       if (!result.success) {
         console.error("Preview failed:", result.error);
       }
@@ -283,7 +254,7 @@ const DailyUpdateManager = ({
         selectedDate.toDate()
       );
       if (result?.success) {
-        console.log("Student emails send result:", result.data);
+       
       } else {
         console.error("Error sending student emails:", result?.error);
       }
@@ -379,10 +350,7 @@ const DailyUpdateManager = ({
 
   useEffect(() => {
     if (students && students.length > 0) {
-      console.log(
-        "Students data changed, regenerating preview. Students:",
-        students
-      );
+      console.log("Generating preview");      
       generatePreview();
     }
   }, [
@@ -469,56 +437,103 @@ const DailyUpdateManager = ({
               {dailyUpdateData?.data?.classSummary && (
                 <Box mb={3}>
                   <Typography variant="h6" gutterBottom>
-                    Class Summary for {selectedDate.format("MMM DD, YYYY")}
+                    ✨ Class Summary for {selectedDate.format("MMM DD, YYYY")}
                   </Typography>
                   <Grid container spacing={2}>
-                    <Grid item xs={6} sm={3}>
-                      <Card variant="outlined">
-                        <CardContent sx={{ textAlign: "center" }}>
-                          <Typography variant="h4" color="primary">
+                    <Grid item xs={6} sm={3} sx={{ display: "flex" }}>
+                      <Card sx={{
+                        background: "linear-gradient(135deg, #1459a9 0%, #0d3d7a 100%)",
+                        color: "#ffffff",
+                        borderRadius: 3,
+                        boxShadow: "0 6px 16px rgba(20, 89, 169, 0.25)",
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column"
+                      }}>
+                        <CardContent sx={{ textAlign: "center", flexGrow: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                          <Typography variant="overline" sx={{ opacity: 0.95, letterSpacing: 0.5 }}>✅ Present Today</Typography>
+                          <Typography variant="h3" sx={{ fontWeight: 800 }}>
                             {dailyUpdateData.data.classSummary.presentToday}
                           </Typography>
-                          <Typography variant="body2" color="textSecondary">
-                            Present Today
-                          </Typography>
                         </CardContent>
                       </Card>
                     </Grid>
-                    <Grid item xs={6} sm={3}>
-                      <Card variant="outlined">
-                        <CardContent sx={{ textAlign: "center" }}>
-                          <Typography variant="h4" color="warning.main">
+                    <Grid item xs={6} sm={3} sx={{ display: "flex" }}>
+                      <Card sx={{
+                        background: "linear-gradient(135deg, #ed2024 0%, #b41418 100%)",
+                        color: "#ffffff",
+                        borderRadius: 3,
+                        boxShadow: "0 6px 16px rgba(237, 32, 36, 0.25)",
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column"
+                      }}>
+                        <CardContent sx={{ textAlign: "center", flexGrow: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                          <Typography variant="overline" sx={{ opacity: 0.95, letterSpacing: 0.5 }}>📊 New Grades</Typography>
+                          <Typography variant="h3" sx={{ fontWeight: 800 }}>
                             {dailyUpdateData.data.classSummary.newGradesToday}
                           </Typography>
-                          <Typography variant="body2" color="textSecondary">
-                            New Grades
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                    <Grid item xs={6} sm={3} sx={{ display: "flex" }}>
+                      <Card sx={{
+                        background: "linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)",
+                        color: "#1459a9",
+                        borderRadius: 3,
+                        border: "2px solid #1459a9",
+                        boxShadow: "0 6px 16px rgba(20, 89, 169, 0.12)",
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column"
+                      }}>
+                        <CardContent sx={{ textAlign: "center", flexGrow: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                          <Typography variant="overline" sx={{ letterSpacing: 0.5 }}>⏰ Upcoming</Typography>
+                          <Typography variant="h3" sx={{ fontWeight: 800 }}>
+                            {dailyUpdateData.data.classSummary.upcomingAssignments}
                           </Typography>
                         </CardContent>
                       </Card>
                     </Grid>
-                    <Grid item xs={6} sm={3}>
-                      <Card variant="outlined">
-                        <CardContent sx={{ textAlign: "center" }}>
-                          <Typography variant="h4" color="info.main">
-                            {
-                              dailyUpdateData.data.classSummary
-                                .upcomingAssignments
-                            }
-                          </Typography>
-                          <Typography variant="body2" color="textSecondary">
-                            Upcoming
-                          </Typography>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                    <Grid item xs={6} sm={3}>
-                      <Card variant="outlined">
-                        <CardContent sx={{ textAlign: "center" }}>
-                          <Typography variant="h4" color="success.main">
-                            {dailyUpdateData.data.classSummary.averageGrade}%
-                          </Typography>
-                          <Typography variant="body2" color="textSecondary">
-                            Avg Grade
+                    <Grid item xs={6} sm={3} sx={{ display: "flex" }}>
+                      <Card sx={{
+                        background: "linear-gradient(135deg, #1459a9 0%, #0d3d7a 100%)",
+                        color: "#ffffff",
+                        borderRadius: 3,
+                        boxShadow: "0 6px 16px rgba(20, 89, 169, 0.25)",
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column"
+                      }}>
+                        <CardContent sx={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
+                          <Box sx={{ textAlign: "center" }}>
+                            <Typography variant="overline" sx={{ opacity: 0.95, letterSpacing: 0.5 }}>🏆 Avg Grade</Typography>
+                            <Typography variant="h3" sx={{ fontWeight: 800 }}>
+                              {dailyUpdateData.data.classSummary.averageGrade}%
+                            </Typography>
+                          </Box>
+                          <LinearProgress
+                            variant="determinate"
+                            value={Number(dailyUpdateData.data.classSummary.averageGrade) || 0}
+                            sx={{
+                              mt: 1,
+                              height: 8,
+                              borderRadius: 999,
+                              background: "rgba(255,255,255,0.3)",
+                              "& .MuiLinearProgress-bar": { backgroundColor: "#ffffff" }
+                            }}
+                          />
+                          <Typography variant="caption" sx={{ mt: 0.75, display: "block", opacity: 0.95, textAlign: "center" }}>
+                            {(() => {
+                              const g = Number(dailyUpdateData.data.classSummary.averageGrade) || 0;
+                              return g >= 90
+                                ? "On fire! 🔥"
+                                : g >= 80
+                                ? "Great momentum! 🚀"
+                                : g >= 70
+                                ? "Keep climbing! 🧗"
+                                : "You’ve got this! 🌱";
+                            })()}
                           </Typography>
                         </CardContent>
                       </Card>

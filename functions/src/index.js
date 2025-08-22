@@ -15,8 +15,6 @@ setGlobalOptions({
 });
 
 // Initialize Firebase Admin once per instance
-// Updated to use the correct project ID that matches the frontend
-// Using default database configuration
 initializeApp({
   projectId: "smile3-8c8c5",
 });
@@ -24,40 +22,105 @@ initializeApp({
 const adminDb = getFirestore();
 const adminAuth = getAuth();
 
- 
-// Export all email API functions using dynamic imports
-// This prevents the functions from being loaded during initialization
-const emailApi = await import("./api/emailApi.js");
-export const sendEmail = onRequest(emailApi.sendEmail);
-export const sendBatchEmails = onRequest(emailApi.sendBatchEmails);
-export const getEmailStatus = onRequest(emailApi.getEmailStatus);
-export const verifyEmailConfig = onRequest(emailApi.verifyEmailConfig);
-export const getGmailStatus = onRequest(emailApi.getGmailStatus);
-export const testGmailDelivery = onRequest(emailApi.testGmailDelivery);
-export const getGmailQuotas = onRequest(emailApi.getGmailQuotas);
-export const fixGmailConfig = onRequest(emailApi.fixGmailConfig);
-export const handleGmailOAuthCallback = onRequest(emailApi.handleGmailOAuthCallback);
-export const fixSpecificUser = onRequest(emailApi.fixSpecificUser);
-export const resetGmailConfiguration = onRequest(emailApi.resetGmailConfiguration);
-export const refreshGmailTokens = onRequest(emailApi.refreshGmailTokens);
-export const studentPreviewDailyEmail = onRequest(
-  emailApi.studentPreviewDailyEmail
-);
-export const studentQueueDailyEmail = onRequest(
-  emailApi.studentQueueDailyEmail
-);
-export const sendDailyUpdates = onCall(emailApi.sendDailyUpdates);
-export const sendStudentDailyUpdate = onRequest(
-  emailApi.sendStudentDailyUpdate
-);
-export const getDailyUpdateData = onCall(emailApi.getDailyUpdateData);
-// Student email callables
-export const sendStudentEmails = onCall(emailApi.sendStudentEmailsCallable);
-export const sendStudentEmail = onCall(emailApi.sendStudentEmailCallable);
-// New callable endpoints for student-directed emails (separate from parent updates)
- 
+// Lazy import helpers
+const loadEmailApi = async () => await import("./api/emailApi.js");
+const loadAdminApi = async () => await import("./api/adminApi.js");
+const loadDriveApi = async () => await import("./api/driveApi.js");
 
-// Admin API
-const adminApi = await import("./api/adminApi.js");
-export const adminBanUser = onCall(adminApi.adminBanUser);
-export const adminDeleteUser = onCall(adminApi.adminDeleteUser);
+// Email API HTTP
+export const sendEmail = onRequest(async (req, res) => {
+  const emailApi = await loadEmailApi();
+  return emailApi.sendEmail(req, res);
+});
+
+export const sendBatchEmails = onRequest(async (req, res) => {
+  const emailApi = await loadEmailApi();
+  return emailApi.sendBatchEmails(req, res);
+});
+
+export const getGmailStatus = onRequest(async (req, res) => {
+  const emailApi = await loadEmailApi();
+  return emailApi.getGmailStatus(req, res);
+});
+
+export const handleGmailOAuthCallback = onRequest(async (req, res) => {
+  const emailApi = await loadEmailApi();
+  return emailApi.handleGmailOAuthCallback(req, res);
+});
+
+export const refreshGmailTokens = onRequest(async (req, res) => {
+  const emailApi = await loadEmailApi();
+  return emailApi.refreshGmailTokens(req, res);
+});
+
+export const studentPreviewDailyEmail = onRequest(async (req, res) => {
+  const emailApi = await loadEmailApi();
+  return emailApi.studentPreviewDailyEmail(req, res);
+});
+
+export const studentQueueDailyEmail = onRequest(async (req, res) => {
+  const emailApi = await loadEmailApi();
+  return emailApi.studentQueueDailyEmail(req, res);
+});
+
+// Email API Callables
+export const sendDailyUpdates = onCall(async (request) => {
+  const emailApi = await loadEmailApi();
+  return emailApi.sendDailyUpdates(request, request);
+});
+
+export const sendStudentDailyUpdate = onRequest(async (req, res) => {
+  const emailApi = await loadEmailApi();
+  return emailApi.sendStudentDailyUpdate(req, res);
+});
+
+export const getDailyUpdateData = onCall(async (request) => {
+  const emailApi = await loadEmailApi();
+  return emailApi.getDailyUpdateData(request, request);
+});
+
+export const sendStudentEmails = onCall(async (request) => {
+  const emailApi = await loadEmailApi();
+  return emailApi.sendStudentEmailsCallable(request, request);
+});
+
+export const sendStudentEmail = onCall(async (request) => {
+  const emailApi = await loadEmailApi();
+  return emailApi.sendStudentEmailCallable(request, request);
+});
+
+// Admin API Callables
+export const adminBanUser = onCall(async (request) => {
+  const adminApi = await loadAdminApi();
+  return adminApi.adminBanUser(request, request);
+});
+
+export const adminDeleteUser = onCall(async (request) => {
+  const adminApi = await loadAdminApi();
+  return adminApi.adminDeleteUser(request, request);
+});
+
+// Drive API HTTP
+export const apiDriveAuthStart = onRequest({
+  cors: true,
+  path: "/api/drive/auth/start"
+}, async (req, res) => {
+  const driveApi = await loadDriveApi();
+  return driveApi.driveAuthStart(req, res);
+});
+
+export const apiDriveAuthCallback = onRequest({
+  cors: true,
+  path: "/api/drive/auth/callback"
+}, async (req, res) => {
+  const driveApi = await loadDriveApi();
+  return driveApi.driveAuthCallback(req, res);
+});
+
+export const apiDriveFiles = onRequest({
+  cors: true,
+  path: "/api/drive/files"
+}, async (req, res) => {
+  const driveApi = await loadDriveApi();
+  return driveApi.driveFiles(req, res);
+});

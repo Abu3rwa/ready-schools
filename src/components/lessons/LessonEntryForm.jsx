@@ -30,12 +30,14 @@ import dayjs from 'dayjs';
 import { useLessons } from '../../contexts/LessonContext';
 import { useGradeBooks } from '../../contexts/GradeBookContext';
 import { useSubjects } from '../../contexts/SubjectsContext';
+import useDrivePicker from 'react-google-drive-picker';
 
 
 const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
   const { addLesson, updateLesson } = useLessons();
   const { gradeBooks } = useGradeBooks();
   const { subjects, loading: subjectsLoading } = useSubjects();
+  const [openPicker, authResponse] = useDrivePicker();
   
   const [formData, setFormData] = useState({
     title: '',
@@ -95,18 +97,35 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
   };
 
   const handleMaterialAdd = () => {
+    console.log('=== ADDING MATERIAL TO FORM ===');
+    console.log('Current newMaterial state:', newMaterial);
+    console.log('Current formData.materials:', formData.materials);
+    
     if (newMaterial.name && newMaterial.url) {
-      setFormData(prev => ({
-        ...prev,
-        materials: [...prev.materials, { ...newMaterial }]
-      }));
+      const materialToAdd = { ...newMaterial };
+      console.log('Material to add:', materialToAdd);
+      
+      setFormData(prev => {
+        const updatedMaterials = [...prev.materials, materialToAdd];
+        console.log('Updated materials array:', updatedMaterials);
+        console.log('Full updated formData:', { ...prev, materials: updatedMaterials });
+        return { ...prev, materials: updatedMaterials };
+      });
+      
       setNewMaterial({
         name: '',
         type: 'google_drive',
         url: '',
         description: ''
       });
+      
+      console.log('Material added successfully!');
+    } else {
+      console.log('Material validation failed:');
+      console.log('- name exists:', !!newMaterial.name);
+      console.log('- url exists:', !!newMaterial.url);
     }
+    console.log('=== END ADDING MATERIAL ===');
   };
 
   const handleMaterialDelete = (index) => {
@@ -361,6 +380,58 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
                     <IconButton onClick={handleMaterialAdd} color="primary">
                       <AddIcon />
                     </IconButton>
+                    <Button variant="outlined" size="small" onClick={() => {
+                      console.log('=== OPENING GOOGLE DRIVE PICKER DIRECTLY ===');
+                      openPicker({
+                        clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID,
+                        developerKey: "AIzaSyAYI6vd9LWfIsuTM6sCFtDz915QLlFlOdc",
+                        viewId: 'DOCS',
+                        showUploadView: false,
+                        setIncludeFolders: false,
+                        multiselect: false,
+                        customScopes: ['https://www.googleapis.com/auth/drive.readonly'],
+                        setOrigin: window.location.origin,
+                        setParentFolder: '',
+                        setSelectFolderEnabled: false,
+                        setEnableFeature: 'MINE_ONLY',
+                        callbackFunction: (data) => {
+                          console.log('=== GOOGLE DRIVE FILE SELECTED ===');
+                          console.log('Raw file object:', data);
+                          
+                          if (data.action === 'picked') {
+                            const selectedFile = data.docs[0];
+                            if (selectedFile) {
+                              console.log('File name:', selectedFile.name);
+                              console.log('File URL:', selectedFile.url);
+                              console.log('File type:', selectedFile.mimeType);
+                              console.log('File ID:', selectedFile.id);
+                              
+                              const updatedMaterial = {
+                                name: selectedFile.name || 'Drive File',
+                                type: 'google_drive',
+                                url: selectedFile.url || '',
+                                description: ''
+                              };
+                              
+                              console.log('Updated material object:', updatedMaterial);
+                              setNewMaterial(updatedMaterial);
+                              console.log('Material set successfully!');
+                            }
+                          } else if (data.action === 'cancel') {
+                            console.log('User cancelled file selection');
+                          }
+                        },
+                        onAuthFailed: (data) => {
+                          console.error('Auth failed:', data);
+                          alert('Authentication failed. Please try again.');
+                        },
+                        onPickerInited: (picker) => {
+                          console.log('Picker initialized successfully');
+                        }
+                      });
+                    }} sx={{ ml: 1 }}>
+                      Add from Drive
+                    </Button>
                   </Grid>
                 </Grid>
               </Grid>
@@ -420,6 +491,41 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
           </Box>
         </CardContent>
       </Card>
+
+      {/* The GoogleDrivePicker component is no longer needed as the picker is opened directly */}
+      {/* <GoogleDrivePicker
+        open={driveOpen}
+        onClose={() => setDriveOpen(false)}
+        onFileSelect={(file) => {
+          console.log('=== GOOGLE DRIVE FILE SELECTED ===');
+          console.log('Raw file object:', file);
+          console.log('File name:', file.name);
+          console.log('File URL:', file.webViewLink || file.url);
+          console.log('File type:', file.mimeType);
+          console.log('File ID:', file.id);
+          
+          const updatedMaterial = {
+            name: file.name || 'Drive File',
+            type: 'google_drive',
+            url: file.webViewLink || file.url,
+            description: ''
+          };
+          
+          console.log('Updated material object:', updatedMaterial);
+          console.log('Previous newMaterial state:', newMaterial);
+          
+          setNewMaterial(prev => {
+            const result = { ...prev, ...updatedMaterial };
+            console.log('New material state after update:', result);
+            return result;
+          });
+          
+          console.log('Form data before update:', formData);
+          console.log('=== END FILE SELECTION ===');
+          
+          setDriveOpen(false);
+        }}
+      /> */}
 
       <Snackbar
         open={snackbar.open}

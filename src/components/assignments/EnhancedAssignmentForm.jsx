@@ -44,6 +44,8 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import dayjs from "dayjs";
+import { useTheme } from "@mui/material/styles";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { useStandardsGrading } from "../../contexts/StandardsGradingContext";
 import { useAssignments } from "../../contexts/AssignmentContext";
 import { useGradeBooks } from "../../contexts/GradeBookContext";
@@ -58,6 +60,8 @@ const EnhancedAssignmentForm = ({
   onSave,
   isEdit = false,
 }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { createStandardMapping, loadStandardsMappings } =
     useStandardsGrading();
   const { getCategoryWeight } = useAssignments();
@@ -408,13 +412,13 @@ const EnhancedAssignmentForm = ({
 
   return (
     <>
-      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth fullScreen={isMobile}>
         <DialogTitle>
           {isEdit ? "Edit Assignment" : "Create New Assignment"}
         </DialogTitle>
         <DialogContent>
           <LocalizationProvider dateAdapter={AdapterDayjs}>
-            <Grid container spacing={3} sx={{ mt: 1 }}>
+            <Grid container spacing={{ xs: 2, sm: 3 }} sx={{ mt: 1 }}>
               {/* Basic Information */}
               <Grid item xs={12}>
                 <Typography variant="h6" gutterBottom>

@@ -115,7 +115,9 @@ const getGradeColor = (percentage) => {
 //   }
 // };
 
-const getBuiltInQuotes = (weekday, isWeekend) => {
+const getBuiltInQuotes = (weekday, isWeekend, studentId = null) => {
+  // Week structure: Sunday(0) -> Monday(1) -> Tuesday(2) -> Wednesday(3) -> Thursday(4) -> Friday(5) -> Saturday(6)
+  // Weekends: Friday(5) and Saturday(6)
   const generalQuotes = [
     'Small steps every day add up to big results. 🌱',
     'Mistakes help your brain grow. Keep going! 🧠',
@@ -134,8 +136,8 @@ const getBuiltInQuotes = (weekday, isWeekend) => {
     1: ['Monday motivation: Start strong and stay curious! 🔍', 'New week, new opportunities to learn and grow. 🌱'],
     2: ['Tuesday tip: Ask one "why" question today. ❓', 'Keep that learning momentum going! 🚀'],
     3: ['Wednesday wisdom: You\'re halfway through the week! 🎯', 'Stay curious about everything around you. 👀'],
-    4: ['Thursday thought: Weekend\'s coming! Plan one mini curiosity-quest to try. 🔎✨', 'Finish the week strong with one new discovery! 💡'],
-    5: ['Friday feeling: Finish strong—then celebrate with a tiny experiment this weekend! 🧪🎉', 'Weekend curiosity mission starts now! 🚀'],
+    4: ['Thursday thought: Week is ending! Plan one mini curiosity-quest for the weekend. 🔎✨', 'Finish the week strong with one new discovery! 💡'],
+    5: ['Friday feeling: Weekend is here! Time to explore and satisfy your curiosity! 🧪🎉', 'Weekend curiosity mission starts now! 🚀'],
     6: ['Saturday spirit: Weekends are perfect for wonder. Notice something new today. 👀', 'Time to explore and satisfy your curiosity! 🔍']
   };
 
@@ -155,10 +157,26 @@ const getBuiltInQuotes = (weekday, isWeekend) => {
     pool = pool.concat(weekendQuotes);
   }
 
-  return pool;
+  // Use student ID for unique selection if available
+  if (studentId) {
+    const seed = `${studentId}-${weekday}-${isWeekend ? 'weekend' : 'weekday'}`;
+    const hash = seed.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    const index = Math.abs(hash) % pool.length;
+    return pool[index];
+  }
+
+  // Fallback: use day-of-year for deterministic selection when no student ID
+  const doy = dayjs(new Date()).dayOfYear();
+  const index = doy % pool.length;
+  return pool[index];
 };
 
-const getBuiltInChallenges = (weekday, traitName = null) => {
+const getBuiltInChallenges = (weekday, traitName = null, studentId = null) => {
+  // Week structure: Sunday(0) -> Monday(1) -> Tuesday(2) -> Wednesday(3) -> Thursday(4) -> Friday(5) -> Saturday(6)
+  // Weekends: Friday(5) and Saturday(6)
   const generalChallenges = [
     'Ask one curious question in class today ❓',
     'Find 3 new words while reading and use one in a sentence 📖',
@@ -195,15 +213,29 @@ const getBuiltInChallenges = (weekday, traitName = null) => {
   }
 
   // Add weekend-specific challenges for Thursday (plan) and Friday/Saturday (do)
-  if (weekday === 4) { // Thursday
+  if (weekday === 4) { // Thursday - week ending, plan weekend
     pool.push('Plan a weekend curiosity mission: list materials and 1 step 🗺️');
     pool.push('Think of one thing you want to learn about this weekend 📚');
-  } else if (weekday === 5 || weekday === 6) { // Friday/Saturday
+  } else if (weekday === 5 || weekday === 6) { // Friday/Saturday - weekend
     pool.push('Try your weekend curiosity quest and reflect on 1 discovery 🌟');
     pool.push('Do one thing today that makes you wonder about the world 🔍');
   }
 
-  return pool;
+  // Use student ID for unique selection if available
+  if (studentId) {
+    const seed = `${studentId}-${weekday}-${traitName || 'general'}`;
+    const hash = seed.split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0);
+    const index = Math.abs(hash) % pool.length;
+    return pool[index];
+  }
+
+  // Fallback: use day-of-year for deterministic selection when no student ID
+  const doy = dayjs(new Date()).dayOfYear();
+  const index = doy % pool.length;
+  return pool[index];
 };
 
 // ------------------------------
@@ -320,27 +352,27 @@ export const buildHtml = async (context) => {
       : 'You\'ve got this! 🌱';
     return `
       <div style="margin:16px 0;">
-        <div style="font-weight:800; color:#1976d2; margin-bottom:8px;">📈 Learning Progress</div>
-        <div style="background:#eceff1; border-radius:12px; height:16px; overflow:hidden; border:1px solid #d0d7de;">
+        <div style="font-weight:800; color:#1459a9; margin-bottom:8px;">📈 Learning Progress</div>
+        <div style="background:#eceff1; border-radius:12px; height:16px; overflow:hidden; border:1px solid #1459a9;">
           <div style="width:${width}%; height:16px; background:${color};"></div>
         </div>
-        <div style="font-size:13px; color:#455a64; margin-top:8px;">Current average: <strong>${width}%</strong> • ${message}</div>
+        <div style="font-size:13px; color:#1459a9; margin-top:8px;">Current average: <strong>${width}%</strong> • ${message}</div>
       </div>`;
   };
 
   // Achievement badges
   const achievementBadges = () => {
     const badges = [];
-    if (attendanceSummary && attendanceSummary.status === 'Present') badges.push({ label: '✅ Attendance Champion', bg:'#e8f5e9', color:'#2e7d32' });
-    if (Array.isArray(newGrades) && newGrades.length > 0) badges.push({ label: '📊 Grade Collector', bg:'#fff3e0', color:'#ef6c00' });
-    if (Array.isArray(lessons) && lessons.length > 0) badges.push({ label: '🔎 Curious Learner', bg:'#e3f2fd', color:'#1976d2' });
-    if (Array.isArray(behaviorHighlights) && behaviorHighlights.some(b=>b.type === 'Positive')) badges.push({ label: '💜 Kindness Hero', bg:'#f3e5f5', color:'#6a1b9a' });
+    if (attendanceSummary && attendanceSummary.status === 'Present') badges.push({ label: '✅ Attendance Champion', bg:'#f8f9fa', color:'#1459a9' });
+    if (Array.isArray(newGrades) && newGrades.length > 0) badges.push({ label: '📊 Grade Collector', bg:'#f8f9fa', color:'#ed2024' });
+    if (Array.isArray(lessons) && lessons.length > 0) badges.push({ label: '🔎 Curious Learner', bg:'#f8f9fa', color:'#1459a9' });
+    if (Array.isArray(behaviorHighlights) && behaviorHighlights.some(b=>b.type === 'Positive')) badges.push({ label: '💜 Kindness Hero', bg:'#f8f9fa', color:'#ed2024' });
     if (badges.length === 0) return '';
     return `
       <div style="margin:16px 0;">
-        <div style="font-weight:800; color:#6d4c41; margin-bottom:8px;">🏅 Achievement Badges</div>
+        <div style="font-weight:800; color:#1459a9; margin-bottom:8px;">🏅 Achievement Badges</div>
         <div style="display:flex; flex-wrap:wrap; gap:10px;">
-          ${badges.map(b => `<span style="background:${b.bg}; color:${b.color}; padding:8px 12px; border-radius:18px; font-size:13px; box-shadow:0 1px 0 rgba(0,0,0,0.06);">${b.label}</span>`).join('')}
+          ${badges.map(b => `<span style="background:${b.bg}; color:${b.color}; padding:8px 12px; border-radius:18px; font-size:13px; box-shadow:0 1px 0 rgba(0,0,0,0.06); border:1px solid ${b.color};">${b.label}</span>`).join('')}
         </div>
       </div>`;
   };
@@ -363,7 +395,7 @@ export const buildHtml = async (context) => {
       const subjectKey = (lowestSubject || '').toString();
       const tip = tips[subjectKey] || tips.default;
       return `
-        <div style="margin:16px 0; padding:14px; border-radius:10px; background:#e3f2fd; border:1px solid #bbdefb; color:#0d47a1;">
+        <div style="margin:16px 0; padding:14px; border-radius:10px; background:#f8f9fa; border:1px solid #1459a9; color:#1459a9;">
           <strong>🎯 Focus Tip (${safe(lowestSubject)} – ${lowestGrade}%):</strong> ${safe(tip)}
         </div>`;
     } catch(_) {
@@ -392,15 +424,14 @@ export const buildHtml = async (context) => {
       console.error("Error getting character trait quote:", error);
     }
 
-    // Fallback to built-in quotes
+    // Fallback to built-in quotes with student-specific selection
     const weekday = dayjs(date).day();
-    const isWeekend = weekday === 5 || weekday === 6; // Friday or Saturday
-    const quotes = getBuiltInQuotes(weekday, isWeekend);
-    const doy = dayjs(date).dayOfYear();
-    const index = doy % quotes.length;
+    const isWeekend = weekday === 5 || weekday === 6; // Friday (5) and Saturday (6) are weekends
+    const studentId = studentName || firstName || "student";
+    const quote = getBuiltInQuotes(weekday, isWeekend, studentId);
     return `
       <div style="margin:18px 0; padding:12px; border-radius:10px; background:#fffde7; border:1px solid #fff59d; color:#795548; text-align:center;">
-        ${quotes[index]}
+        ${quote}
       </div>`;
   };
 
@@ -493,12 +524,10 @@ export const buildHtml = async (context) => {
       console.error("Error getting character trait challenge:", error);
     }
 
-    // Fallback to built-in challenges
+    // Fallback to built-in challenges with student-specific selection
     const weekday = dayjs(date).day();
-    const challenges = getBuiltInChallenges(weekday);
-    const doy = dayjs(date).dayOfYear();
-    const index = doy % challenges.length;
-    const challenge = challenges[index];
+    const studentId = studentName || firstName || "student";
+    const challenge = getBuiltInChallenges(weekday, null, studentId);
     return `
       <div class="section" style="border-color:#c8e6c9; background:#f1f8f2;">
         <div class="section-title" style="background:#2e7d32;">🌟 Today's Challenge</div>
@@ -532,7 +561,7 @@ export const buildHtml = async (context) => {
           overflow: hidden !important;
         }
         .header {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+          background: linear-gradient(135deg, #1459a9 0%, #0d3d7a 100%) !important;
           color: #fff !important;
           padding: 28px 24px !important;
           text-align: center !important;
@@ -582,7 +611,7 @@ export const buildHtml = async (context) => {
           overflow: hidden !important;
         }
         .section-title { 
-          background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important; 
+          background: linear-gradient(135deg, #1459a9 0%, #0d3d7a 100%) !important; 
           color: #fff !important; 
           padding: 16px 20px !important; 
           font-weight: 700 !important; 
@@ -619,97 +648,90 @@ export const buildHtml = async (context) => {
           letter-spacing: 0.5px !important;
         }
         .hero-banner {
-          background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%) !important;
-          border: 3px solid #ff9a56 !important;
+          background: linear-gradient(135deg, #1459a9 0%, #0d3d7a 100%) !important;
+          border: 3px solid #1459a9 !important;
           border-radius: 20px !important;
           padding: 24px 28px !important;
           margin: 0 0 24px 0 !important;
-          box-shadow: 0 6px 20px rgba(255, 154, 86, 0.2) !important;
+          box-shadow: 0 6px 20px rgba(20, 89, 169, 0.2) !important;
         }
         .wins-section {
-          background: linear-gradient(135deg, #e0f7fa 0%, #b2ebf2 100%) !important;
-          border: 2px solid #26c6da !important;
+          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+          border: 2px solid #1459a9 !important;
           border-radius: 16px !important;
           padding: 20px !important;
           margin: 24px 0 !important;
-          box-shadow: 0 4px 16px rgba(38, 198, 218, 0.15) !important;
+          box-shadow: 0 4px 16px rgba(20, 89, 169, 0.15) !important;
         }
-        .quick-peek {
-          background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%) !important;
-          border: 2px solid #ab47bc !important;
-          border-radius: 16px !important;
-          padding: 16px !important;
-          margin: 20px 0 !important;
-          box-shadow: 0 4px 16px rgba(171, 71, 188, 0.15) !important;
-        }
+
         .stars-earned {
           background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%) !important;
-          border: 2px solid #ffc107 !important;
+          border: 2px solid #ed2024 !important;
           border-radius: 16px !important;
           padding: 16px !important;
           margin: 20px 0 !important;
-          box-shadow: 0 4px 16px rgba(255, 193, 7, 0.2) !important;
+          box-shadow: 0 4px 16px rgba(237, 32, 36, 0.2) !important;
         }
         .grades-section {
-          background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%) !important;
-          border: 2px solid #66bb6a !important;
+          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+          border: 2px solid #1459a9 !important;
           border-radius: 16px !important;
           padding: 20px !important;
           margin: 24px 0 !important;
-          box-shadow: 0 4px 16px rgba(102, 187, 106, 0.15) !important;
+          box-shadow: 0 4px 16px rgba(20, 89, 169, 0.15) !important;
         }
         .lessons-section {
-          background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
-          border: 2px solid #42a5f5 !important;
+          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+          border: 2px solid #1459a9 !important;
           border-radius: 16px !important;
           padding: 20px !important;
           margin: 24px 0 !important;
-          box-shadow: 0 4px 16px rgba(66, 165, 245, 0.15) !important;
+          box-shadow: 0 4px 16px rgba(20, 89, 169, 0.15) !important;
         }
         .assignments-section {
-          background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%) !important;
-          border: 2px solid #ff9800 !important;
+          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+          border: 2px solid #ed2024 !important;
           border-radius: 16px !important;
           padding: 20px !important;
           margin: 24px 0 !important;
-          box-shadow: 0 4px 16px rgba(255, 152, 0, 0.15) !important;
+          box-shadow: 0 4px 16px rgba(237, 32, 36, 0.15) !important;
         }
         .attendance-section {
-          background: linear-gradient(135deg, #f1f8e9 0%, #dcedc8 100%) !important;
-          border: 2px solid #8bc34a !important;
+          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+          border: 2px solid #1459a9 !important;
           border-radius: 16px !important;
           padding: 20px !important;
           margin: 24px 0 !important;
-          box-shadow: 0 4px 16px rgba(139, 195, 74, 0.15) !important;
+          box-shadow: 0 4px 16px rgba(20, 89, 169, 0.15) !important;
         }
         .behavior-section {
-          background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%) !important;
-          border: 2px solid #e91e63 !important;
+          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+          border: 2px solid #ed2024 !important;
           border-radius: 16px !important;
           padding: 20px !important;
           margin: 24px 0 !important;
-          box-shadow: 0 4px 16px rgba(233, 30, 99, 0.15) !important;
+          box-shadow: 0 4px 16px rgba(237, 32, 36, 0.15) !important;
         }
         .reminders-section {
-          background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%) !important;
-          border: 2px solid #9c27b0 !important;
+          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+          border: 2px solid #1459a9 !important;
           border-radius: 16px !important;
           padding: 20px !important;
           margin: 24px 0 !important;
-          box-shadow: 0 4px 16px rgba(156, 39, 176, 0.15) !important;
+          box-shadow: 0 4px 16px rgba(20, 89, 169, 0.15) !important;
         }
         .challenge-section {
-          background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%) !important;
-          border: 2px solid #4caf50 !important;
+          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+          border: 2px solid #1459a9 !important;
           border-radius: 16px !important;
           padding: 20px !important;
           margin: 24px 0 !important;
-          box-shadow: 0 4px 16px rgba(76, 175, 80, 0.15) !important;
+          box-shadow: 0 4px 16px rgba(20, 89, 169, 0.15) !important;
         }
         .footer {
           margin-top: 32px !important;
           padding-top: 20px !important;
-          border-top: 2px solid #ecf0f1 !important;
+          border-top: 2px solid #1459a9 !important;
           font-size: 14px !important;
           color: #7f8c8d !important;
           background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
@@ -719,23 +741,13 @@ export const buildHtml = async (context) => {
         .section-header {
           font-size: 20px !important;
           font-weight: 700 !important;
-          color: #2c3e50 !important;
+          color: #1459a9 !important;
           margin: 0 0 12px 0 !important;
           display: flex !important;
           align-items: center !important;
           gap: 8px !important;
         }
-        .chip {
-          background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%) !important;
-          color: #1565c0 !important;
-          padding: 10px 16px !important;
-          border-radius: 20px !important;
-          font-size: 13px !important;
-          font-weight: 600 !important;
-          border: 1px solid #90caf9 !important;
-          display: inline-block !important;
-          margin: 4px !important;
-        }
+
         ul {
           margin: 12px 0 !important;
           padding-left: 24px !important;
@@ -766,8 +778,8 @@ export const buildHtml = async (context) => {
         <div class="content">
           <!-- Hero Banner -->
           <div class="hero-banner">
-            <div style="font-size: 22px; font-weight: 800; color:#d84315;">🌟 You're absolutely amazing, ${safe(firstName)}! 🌟</div>
-            <div style="font-size: 15px; color:#e64a19; margin-top: 10px;">High-five for being awesome and giving it your all today! 🙌✨</div>
+            <div style="font-size: 22px; font-weight: 800; color:#ffffff;">🌟 You're absolutely amazing, ${safe(firstName)}! 🌟</div>
+            <div style="font-size: 15px; color:#ffffff; margin-top: 10px;">High-five for being awesome and giving it your all today! 🙌✨</div>
           </div>
 
           <p style="margin:0 0 16px 0; font-size: 17px; color: #2c3e50;">Hi there, ${safe(firstName)}! 👋</p>
@@ -784,29 +796,14 @@ export const buildHtml = async (context) => {
             if (wins.length === 0) return '';
             return `
               <div class="wins-section">
-                <div style="font-weight:800; color:#0277bd; margin-bottom:8px; font-size: 18px;">🎉 Today's Amazing Achievements 🎉</div>
-                <ul style="margin:0; padding-left:20px; color:#1565c0;">
+                <div style="font-weight:800; color:#1459a9; margin-bottom:8px; font-size: 18px;">🎉 Today's Amazing Achievements 🎉</div>
+                <ul style="margin:0; padding-left:20px; color:#1459a9;">
                   ${wins.map(w => `<li>${safe(w)}</li>`).join('')}
                 </ul>
               </div>`;
           })()}
 
-          <!-- At a Glance -->
-          ${(() => {
-            const chips = [];
-            if (attendanceSummary?.status) chips.push(`Attendance: ${attendanceSummary.status}`);
-            if (Array.isArray(newGrades)) chips.push(`New Grades: ${newGrades.length}`);
-            if (Array.isArray(assignmentsDueSoon)) chips.push(`Upcoming: ${assignmentsDueSoon.length}`);
-            if (Array.isArray(lessons)) chips.push(`Lessons: ${lessons.length}`);
-            if (!chips.length) return '';
-            return `
-              <div class="quick-peek">
-                <div style="font-weight:700; color:#7b1fa2; margin-bottom:10px; font-size: 16px;">🔎 Quick Overview</div>
-                <div style="display:flex; flex-wrap:wrap; gap:10px;">
-                  ${chips.map(c => `<span class="chip">${safe(c)}</span>`).join('')}
-                </div>
-              </div>`;
-          })()}
+
 
           <!-- Stars Earned -->
           ${(() => {
@@ -818,7 +815,7 @@ export const buildHtml = async (context) => {
             const starRow = '⭐'.repeat(Math.min(stars, 5));
             return `
               <div class="stars-earned">
-                <div style="color:#f57c00; font-weight:700; font-size: 16px; text-align: center;">
+                <div style="color:#ed2024; font-weight:700; font-size: 16px; text-align: center;">
                   🎊 ${starRow} Incredible! You earned ${stars} star${stars>1?'s':''} today! ${starRow}
                 </div>
               </div>`;
@@ -873,10 +870,12 @@ export const buildHtml = async (context) => {
             ${formatReminders(reminders)}
           </div>` : ""}
 
-          <div class="footer">
-            <div style="font-weight:600; color:#2c3e50;">👨‍🏫 Teacher: ${safe(teacherName)}</div>
-            <div style="margin-top:12px; color:#34495e;">You're absolutely crushing it today! Keep that incredible momentum going! 🌟💪</div>
-            <div style="margin-top:8px; color:#7f8c8d;">You can adjust your email preferences in your portal anytime.</div>
+          <div class="footer" style="margin-top:32px; border-top:1px solid #e1e4e8; padding-top:18px; color:#7f8c8d; font-size:14px;">
+            <div style="font-weight:600; color:#1459a9; margin-bottom:4px;">
+              Best,<br>
+              ${safe(teacherName)}<br>
+              ${safe(schoolName)}
+            </div>
           </div>
         </div>
       </div>

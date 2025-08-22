@@ -1,9 +1,8 @@
 {
+  "appName": "المعلم المستعد",
   "welcomeMessage": "أهلاً، {{name}}!",
   "overview": "إليك نظرة عامة على صفك.",
-  "students": "الطلاب",
-  "assignments": "الواجبات",
-  "classAverage": "متوسط الصف",
+   "classAverage": "متوسط الصف",
   "alerts": "التنبيهات",
   "gradeDistribution": "توزيع الدرجات",
   "attendanceOverview": "نظرة عامة على الحضور",

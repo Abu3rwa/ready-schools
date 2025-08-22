@@ -8,10 +8,6 @@ import {
   Grid,
   Chip,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   TextField,
   FormControl,
   InputLabel,
@@ -46,7 +42,7 @@ const Lessons = () => {
   const [selectedDate, setSelectedDate] = useState(dayjs());
   const [selectedSubject, setSelectedSubject] = useState('');
   const [selectedGradebook, setSelectedGradebook] = useState('');
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [editingLesson, setEditingLesson] = useState(null);
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -68,12 +64,12 @@ const Lessons = () => {
 
   const handleAddLesson = () => {
     setEditingLesson(null);
-    setDialogOpen(true);
+    setShowForm(true);
   };
 
   const handleEditLesson = (lesson) => {
     setEditingLesson(lesson);
-    setDialogOpen(true);
+    setShowForm(true);
   };
 
   const handleDeleteLesson = async (lessonId) => {
@@ -96,7 +92,7 @@ const Lessons = () => {
   };
 
   const handleSaveLesson = (lessonData) => {
-    setDialogOpen(false);
+    setShowForm(false);
     setSnackbar({
       open: true,
       message: editingLesson ? 'Lesson updated successfully!' : 'Lesson added successfully!',
@@ -105,7 +101,7 @@ const Lessons = () => {
   };
 
   const handleCancel = () => {
-    setDialogOpen(false);
+    setShowForm(false);
     setEditingLesson(null);
   };
 
@@ -354,24 +350,16 @@ const Lessons = () => {
           </Grid>
         )}
 
-        {/* Add/Edit Lesson Dialog */}
-        <Dialog
-          open={dialogOpen}
-          onClose={handleCancel}
-          maxWidth="md"
-          fullWidth
-        >
-          <DialogTitle>
-            {editingLesson ? 'Edit Lesson' : 'Add New Lesson'}
-          </DialogTitle>
-          <DialogContent>
+        {/* Add/Edit Lesson Form */}
+        {showForm && (
+          <Box sx={{ mt: 3, mb: 4 }}>
             <LessonEntryForm
               onSave={handleSaveLesson}
               onCancel={handleCancel}
               initialData={editingLesson}
             />
-          </DialogContent>
-        </Dialog>
+          </Box>
+        )}
 
         {/* Snackbar */}
         <Snackbar

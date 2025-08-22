@@ -91,36 +91,7 @@ export const sendBatchEmails = async (req, res) => {
   }
 };
 
-// Get email service status
-export const getEmailStatus = async (req, res) => {
-  if (req.method !== "GET") return res.status(405).json({ error: "Method Not Allowed" });
-  try {
-    // Mock status for now
-    return res.json({
-      success: true,
-      status: "operational",
-      service: "email"
-    });
-  } catch (error) {
-    console.error("getEmailStatus error", error);
-    return res.status(500).json({ error: error.message });
-  }
-};
-
-// Verify email configuration
-export const verifyEmailConfig = async (req, res) => {
-  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
-  try {
-    // Mock verification for now
-    return res.json({
-      success: true,
-      message: "Email configuration verified"
-    });
-  } catch (error) {
-    console.error("verifyEmailConfig error", error);
-    return res.status(500).json({ error: error.message });
-  }
-};
+// (Removed test/diagnostic helpers: , verifyEmailConfig)
 
 // Send daily updates to all parents (callable v2 handler)
 export const sendDailyUpdates = async (data, context) => {
@@ -554,68 +525,9 @@ export const sendStudentEmailCallable = async (data, context) => {
   }
 };
 
-// Test Gmail API email delivery
-export const testGmailDelivery = async (req, res) => {
-  try {
-    const authed = await requireAuth(req).catch(() => null);
-    if (!authed) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
+// (Removed testGmailDelivery)
 
-    const { testEmail } = req.body || {};
-    if (!testEmail) {
-      return res.status(400).json({ error: "Missing testEmail" });
-    }
-
-    const userId = req.user?.uid;
-    const gmailApiService = (await import("../services/gmailApiService.js")).default;
-    
-    // First check Gmail status
-    const status = await gmailApiService.checkGmailStatus(userId);
-    if (status.status !== 'operational') {
-      return res.status(400).json({ 
-        error: "Gmail API not operational", 
-        status: status 
-      });
-    }
-
-    // Test email delivery
-    const result = await gmailApiService.testEmailDelivery(userId, testEmail);
-
-    return res.json({
-      success: true,
-      result: result,
-      status: status
-    });
-  } catch (error) {
-    console.error("testGmailDelivery error", error);
-    return res.status(500).json({ error: error.message });
-  }
-};
-
-// Get Gmail API quotas and limits
-export const getGmailQuotas = async (req, res) => {
-  try {
-    const authed = await requireAuth(req).catch(() => null);
-    if (!authed) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    if (req.method !== "GET") return res.status(405).json({ error: "Method Not Allowed" });
-
-    const userId = req.user?.uid;
-    const gmailApiService = (await import("../services/gmailApiService.js")).default;
-    const quotas = await gmailApiService.checkGmailQuotas(userId);
-
-    return res.json({
-      success: true,
-      quotas: quotas
-    });
-  } catch (error) {
-    console.error("getGmailQuotas error", error);
-    return res.status(500).json({ error: error.message });
-  }
-};
+// (Removed getGmailQuotas)
 
 // Get Gmail API status for a user
 export const getGmailStatus = async (req, res) => {
@@ -644,48 +556,7 @@ export const getGmailStatus = async (req, res) => {
   }
 };
 
-// Fix Gmail configuration for a user
-export const fixGmailConfig = async (req, res) => {
-  try {
-    const authed = await requireAuth(req).catch(() => null);
-    if (!authed) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
-
-    const userId = req.user?.uid;
-    if (!userId) {
-      return res.status(400).json({ error: "Missing user ID" });
-    }
-
-    // Calculate new expiry time (1 hour from now)
-    const newExpiry = Date.now() + (60 * 60 * 1000);
-    
-    const { getFirestore } = await import("firebase-admin/firestore");
-    const db = getFirestore();
-    
-    await db.collection("users").doc(userId).update({
-      gmail_configured: true,
-      gmail_token_expiry: newExpiry,
-      gmail_token_error: null,
-      gmail_token_error_time: null,
-      gmail_last_error: null,
-      gmail_error_time: null,
-      gmail_token_last_refresh: new Date().toISOString()
-    });
-    
-    console.log(`Fixed Gmail configuration for user ${userId}`);
-    
-    return res.json({
-      success: true,
-      message: "Gmail configuration fixed successfully",
-      newExpiry: newExpiry
-    });
-  } catch (error) {
-    console.error("fixGmailConfig error", error);
-    return res.status(500).json({ error: error.message });
-  }
-};
+// (Removed fixGmailConfig)
 
 // Handle Gmail OAuth callback (backend)
 export const handleGmailOAuthCallback = async (req, res) => {
@@ -864,80 +735,6 @@ export const refreshGmailTokens = async (req, res) => {
   }
 };
 
-// Temporary fix for specific user (no auth required)
-export const fixSpecificUser = async (req, res) => {
-  try {
-    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
-    
-    // Only allow this specific user ID for security
-    const userId = 'sEoZ0W5LMSV8IrxviJj0JBKOb5t1';
-    
-    // Calculate new expiry time (1 hour from now)
-    const newExpiry = Date.now() + (60 * 60 * 1000);
-    
-    const { getFirestore } = await import("firebase-admin/firestore");
-    const db = getFirestore();
-    
-    await db.collection("users").doc(userId).update({
-      gmail_configured: false, // Force re-authentication
-      gmail_access_token: null, // Clear broken access token
-      gmail_refresh_token: null, // Clear broken refresh token
-      gmail_token_expiry: null, // Clear expiry
-      gmail_token_error: null,
-      gmail_token_error_time: null,
-      gmail_last_error: null,
-      gmail_error_time: null,
-      gmail_token_last_refresh: null
-    });
-    
-    console.log(`Forced Gmail re-authentication for user ${userId}`);
-    
-    return res.json({
-      success: true,
-      message: "Gmail re-authentication required - please configure Gmail again",
-      newExpiry: newExpiry,
-      userId: userId
-    });
-  } catch (error) {
-    console.error("fixSpecificUser error", error);
-    return res.status(500).json({ error: error.message });
-  }
-};
+// (Removed fixSpecificUser)
 
-// Reset Gmail configuration for a specific user to allow re-authentication
-export const resetGmailConfiguration = async (req, res) => {
-  try {
-    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
-    
-    // Get user ID from request body or use default
-    const { userId } = req.body || {};
-    const targetUserId = userId || 'sEoZ0W5LMSV8IrxviJj0JBKOb5t1'; // Default fallback
-    
-    const { getFirestore } = await import("firebase-admin/firestore");
-    const db = getFirestore();
-    
-    // Reset Gmail configuration to allow re-authentication
-    await db.collection("users").doc(targetUserId).update({
-      gmail_configured: false, // Allow re-authentication
-      gmail_access_token: null, // Clear access token
-      gmail_refresh_token: null, // Clear refresh token
-      gmail_token_expiry: null, // Clear expiry
-      gmail_token_error: null,
-      gmail_token_error_time: null,
-      gmail_last_error: null,
-      gmail_error_time: null,
-      gmail_token_last_refresh: null
-    });
-    
-    console.log(`Reset Gmail configuration for user ${targetUserId}`);
-    
-    return res.json({
-      success: true,
-      message: "Gmail configuration reset successfully - please re-authenticate",
-      userId: targetUserId
-    });
-  } catch (error) {
-    console.error("resetGmailConfiguration error", error);
-    return res.status(500).json({ error: error.message });
-  }
-};
+// (Removed resetGmailConfiguration)

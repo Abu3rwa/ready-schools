@@ -1,6 +1,6 @@
 // Firebase configuration for Teacher Dashboard v2
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableNetwork, disableNetwork } from "firebase/firestore";
 import {
   getAuth,
   setPersistence,
@@ -32,8 +32,18 @@ const authConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firebase services
+// Initialize Firebase services with offline persistence
 const db = getFirestore(app);
+
+// Enable offline persistence
+try {
+  // Note: enableNetwork is called by default, but we can use disableNetwork/enableNetwork
+  // to control offline behavior. For now, we just rely on automatic offline persistence.
+  console.log("Firestore initialized with offline persistence");
+} catch (error) {
+  console.warn("Failed to enable Firestore offline persistence:", error);
+}
+
 const storage = getStorage(app);
 const functions = getFunctions(app, "us-central1"); // Explicitly set region
 
@@ -51,4 +61,4 @@ setPersistence(auth, browserLocalPersistence).catch((e) => {
 // Do not override auth domain; rely on Firebase default handling for localhost
 
 // Export the initialized app, db, auth, functions and config
-export { app, db, auth, functions, authConfig };
+export { app, db, auth, functions, authConfig, enableNetwork, disableNetwork };

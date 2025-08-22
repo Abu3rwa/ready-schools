@@ -19,13 +19,13 @@ import {
   Button,
   Snackbar,
   Alert,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import {
   People as PeopleIcon,
   MenuBook as MenuBookIcon,
   Assignment as AssignmentIcon,
-  EventNote as EventNoteIcon,
-  Psychology as PsychologyIcon,
   Email as EmailIcon,
   Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
@@ -72,6 +72,8 @@ const Dashboard = () => {
   const location = useLocation();
   const [showWelcome, setShowWelcome] = useState(false);
   const [welcomeMessage, setWelcomeMessage] = useState("");
+  const theme = useTheme();
+  const isSmallScreen = useMediaQuery(theme.breakpoints.down("sm"));
 
   // Handle welcome message from login
   useEffect(() => {
@@ -124,10 +126,6 @@ const Dashboard = () => {
     if (valid.length === 0) return null;
     
     const sum = valid.reduce((acc, g) => {
-      if (g.points && g.points > 0) {
-        // Calculate percentage: (score / points) * 100
-        return acc + (g.score / g.points) * 100;
-      } else {
         // For grades without points, we need to look up the assignment
         const assignment = assignments.find(a => a.id === g.assignmentId);
         if (assignment && assignment.points && assignment.points > 0) {
@@ -138,7 +136,7 @@ const Dashboard = () => {
           return acc;
         }
       }
-    }, 0);
+    , 0);
     
     return Math.round(sum / valid.length);
   }, [grades, assignments]);
@@ -184,10 +182,7 @@ const Dashboard = () => {
     return averages;
   }, [grades, assignments]);
 
-  const [classAverages, setClassAverages] = useState({
-    english: 0,
-    socialStudies: 0,
-  });
+  // Removed unused legacy classAverages state
   const [attendanceData, setAttendanceData] = useState({
     present: 0,
     absent: 0,
@@ -211,27 +206,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (!loading) {
-      // Optional: keep legacy per-subject averages if needed for other widgets
-      if (englishGrades.length > 0 || socialStudiesGrades.length > 0) {
-        const englishAvg =
-          englishGrades.length > 0
-            ? englishGrades.reduce(
-                (sum, grade) => sum + (grade.points && grade.points > 0 ? (grade.score / grade.points) * 100 : 0),
-                0
-              ) / englishGrades.length
-            : 0;
-        const socialAvg =
-          socialStudiesGrades.length > 0
-            ? socialStudiesGrades.reduce(
-                (sum, grade) => sum + (grade.points && grade.points > 0 ? (grade.score / grade.points) * 100 : 0),
-                0
-              ) / socialStudiesGrades.length
-            : 0;
-        setClassAverages({
-          english: Math.round(englishAvg),
-          socialStudies: Math.round(socialAvg),
-        });
-      }
+      // Legacy per-subject averages removed (unused)
 
       // Calculate attendance statistics
       if (attendance.length > 0) {
@@ -359,12 +334,12 @@ const Dashboard = () => {
           continue;
         }
       }
-      
-      if (pct >= 90) bins[0]++;
-      else if (pct >= 80) bins[1]++;
-      else if (pct >= 70) bins[2]++;
-      else if (pct >= 60) bins[3]++;
-      else bins[4]++;
+      let idx = 4; // F
+      if (pct >= 90) idx = 0; // A
+      else if (pct >= 80) idx = 1; // B
+      else if (pct >= 70) idx = 2; // C
+      else if (pct >= 60) idx = 3; // D
+      bins[idx]++;
     }
     return {
       labels: [
@@ -423,12 +398,12 @@ const Dashboard = () => {
             continue;
           }
         }
-        
-        if (pct >= 90) bins[0]++;
-        else if (pct >= 80) bins[1]++;
-        else if (pct >= 70) bins[2]++;
-        else if (pct >= 60) bins[3]++;
-        else bins[4]++;
+        let idx = 4; // F
+        if (pct >= 90) idx = 0; // A
+        else if (pct >= 80) idx = 1; // B
+        else if (pct >= 70) idx = 2; // C
+        else if (pct >= 60) idx = 3; // D
+        bins[idx]++;
       }
       
       distributions[subject] = {
@@ -495,7 +470,7 @@ const Dashboard = () => {
   }
 
   return (
-    <Box sx={{ flexGrow: 1, px: { xs: 2, sm: 0 } }}>
+    <Box sx={{ flexGrow: 1, p: { xs: 1, sm: 2, md: 3 } }}>
       <Snackbar
         open={showWelcome}
         autoHideDuration={6000}
@@ -510,33 +485,33 @@ const Dashboard = () => {
           {welcomeMessage}
         </Alert>
       </Snackbar>
-      <Typography
-        variant="h4"
-        gutterBottom
-        sx={{
-          fontSize: { xs: "1.5rem", sm: "2rem", md: "2.25rem" },
-          textAlign: { xs: "center", sm: "left" },
-        }}
-      >
-        {t('welcomeMessage', { name: currentUser?.displayName || currentUser?.email })}
-      </Typography>
-      <Typography
-        variant="subtitle1"
-        color="textSecondary"
-        gutterBottom
-        sx={{
-          fontSize: { xs: "0.875rem", sm: "1rem" },
-          textAlign: { xs: "center", sm: "left" },
-        }}
-      >
-        {t('overview')}
-      </Typography>
-
-
+      <Box sx={{ mb: { xs: 2, md: 4 } }}>
+        <Typography
+          variant="h4"
+          gutterBottom
+          sx={{
+            fontSize: { xs: "1.8rem", sm: "2rem", md: "2.25rem" },
+            textAlign: { xs: "center", sm: "left" },
+          }}
+        >
+          {t('welcomeMessage', { name: currentUser?.displayName || currentUser?.email })}
+        </Typography>
+        <Typography
+          variant="subtitle1"
+          color="textSecondary"
+          gutterBottom
+          sx={{
+            fontSize: { xs: "0.9rem", sm: "1rem" },
+            textAlign: { xs: "center", sm: "left" },
+          }}
+        >
+          {t('overview')}
+        </Typography>
+      </Box>
 
       {/* Quick Stats */}
-      <Grid container spacing={2} sx={{ mb: { xs: 2, md: 4 } }}>
-        <Grid item xs={6} sm={6} md={3}>
+      <Grid container spacing={{ xs: 2, md: 3 }} sx={{ mb: { xs: 2, md: 4 } }}>
+        <Grid item xs={12} sm={6} md={3}>
           <Paper
             elevation={2}
             sx={{
@@ -549,31 +524,31 @@ const Dashboard = () => {
             <Avatar
               sx={{
                 bgcolor: "primary.main",
-                mr: { xs: 1, sm: 2 },
-                width: { xs: 32, sm: 40 },
-                height: { xs: 32, sm: 40 },
+                mr: { xs: 1.5, sm: 2 },
+                width: { xs: 36, sm: 48 },
+                height: { xs: 36, sm: 48 },
               }}
             >
-              <PeopleIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
+              <PeopleIcon sx={{ fontSize: { xs: 22, sm: 28 } }} />
             </Avatar>
             <Box>
               <Typography
                 variant="body2"
                 color="textSecondary"
-                sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+                sx={{ fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
               >
                 {t('navigation.students')}
               </Typography>
               <Typography
                 variant="h5"
-                sx={{ fontSize: { xs: "1.25rem", sm: "1.5rem" } }}
+                sx={{ fontSize: { xs: "1.3rem", sm: "1.5rem" } }}
               >
                 {students.length}
               </Typography>
             </Box>
           </Paper>
         </Grid>
-        <Grid item xs={6} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={3}>
           <Paper
             elevation={2}
             sx={{
@@ -586,31 +561,31 @@ const Dashboard = () => {
             <Avatar
               sx={{
                 bgcolor: "secondary.main",
-                mr: { xs: 1, sm: 2 },
-                width: { xs: 32, sm: 40 },
-                height: { xs: 32, sm: 40 },
+                mr: { xs: 1.5, sm: 2 },
+                width: { xs: 36, sm: 48 },
+                height: { xs: 36, sm: 48 },
               }}
             >
-              <AssignmentIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
+              <AssignmentIcon sx={{ fontSize: { xs: 22, sm: 28 } }} />
             </Avatar>
             <Box>
               <Typography
                 variant="body2"
                 color="textSecondary"
-                sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+                sx={{ fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
               >
                 {t('navigation.assignments')}
               </Typography>
               <Typography
                 variant="h5"
-                sx={{ fontSize: { xs: "1.25rem", sm: "1.5rem" } }}
+                sx={{ fontSize: { xs: "1.3rem", sm: "1.5rem" } }}
               >
                 {assignments.length}
               </Typography>
             </Box>
           </Paper>
         </Grid>
-        <Grid item xs={6} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={3}>
           <Paper
             elevation={2}
             sx={{
@@ -623,31 +598,31 @@ const Dashboard = () => {
             <Avatar
               sx={{
                 bgcolor: "success.main",
-                mr: { xs: 1, sm: 2 },
-                width: { xs: 32, sm: 40 },
-                height: { xs: 32, sm: 40 },
+                mr: { xs: 1.5, sm: 2 },
+                width: { xs: 36, sm: 48 },
+                height: { xs: 36, sm: 48 },
               }}
             >
-              <MenuBookIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
+              <MenuBookIcon sx={{ fontSize: { xs: 22, sm: 28 } }} />
             </Avatar>
             <Box>
               <Typography
                 variant="body2"
                 color="textSecondary"
-                sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+                sx={{ fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
               >
                 {t('classAverage')}
               </Typography>
               <Typography
                 variant="h5"
-                sx={{ fontSize: { xs: "1.25rem", sm: "1.5rem" } }}
+                sx={{ fontSize: { xs: "1.3rem", sm: "1.5rem" } }}
               >
                 {classAverage !== null ? `${classAverage}%` : 'N/A'}
               </Typography>
             </Box>
           </Paper>
         </Grid>
-        <Grid item xs={6} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={3}>
           <Paper
             elevation={2}
             sx={{
@@ -660,24 +635,24 @@ const Dashboard = () => {
             <Avatar
               sx={{
                 bgcolor: "warning.main",
-                mr: { xs: 1, sm: 2 },
-                width: { xs: 32, sm: 40 },
-                height: { xs: 32, sm: 40 },
+                mr: { xs: 1.5, sm: 2 },
+                width: { xs: 36, sm: 48 },
+                height: { xs: 36, sm: 48 },
               }}
             >
-              <WarningIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
+              <WarningIcon sx={{ fontSize: { xs: 22, sm: 28 } }} />
             </Avatar>
             <Box>
               <Typography
                 variant="body2"
                 color="textSecondary"
-                sx={{ fontSize: { xs: "0.75rem", sm: "0.875rem" } }}
+                sx={{ fontSize: { xs: "0.8rem", sm: "0.875rem" } }}
               >
                 {t('alerts')}
               </Typography>
               <Typography
                 variant="h5"
-                sx={{ fontSize: { xs: "1.25rem", sm: "1.5rem" } }}
+                sx={{ fontSize: { xs: "1.3rem", sm: "1.5rem" } }}
               >
                 {lowGradeAlerts.length}
               </Typography>
@@ -689,12 +664,12 @@ const Dashboard = () => {
       {/* Subject-Specific Averages */}
       {Object.keys(subjectAverages).length > 0 && (
         <Box sx={{ mb: { xs: 2, md: 4 } }}>
-          <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+          <Typography variant="h6" gutterBottom sx={{ mb: 2, fontSize: { xs: "1.1rem", sm: "1.25rem" } }}>
             📊 Subject Averages
           </Typography>
-          <Grid container spacing={2}>
+          <Grid container spacing={{ xs: 2, md: 3 }}>
             {Object.entries(subjectAverages).map(([subject, average]) => (
-              <Grid item xs={6} sm={4} md={3} key={subject}>
+              <Grid item xs={6} sm={4} md={3} lg={2} key={subject}>
                 <Paper
                   elevation={2}
                   sx={{
@@ -733,12 +708,12 @@ const Dashboard = () => {
       <Grid container spacing={{ xs: 2, md: 3 }}>
         {/* Grade Distribution */}
         <Grid item xs={12} lg={8}>
-          <Card elevation={2}>
+          <Card elevation={2} sx={{ height: "100%" }}>
             <CardHeader
               title={
                 <Typography
                   variant="h6"
-                  sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+                  sx={{ fontSize: { xs: "1.1rem", sm: "1.25rem" } }}
                 >
                   {t('gradeDistribution')}
                 </Typography>
@@ -747,7 +722,7 @@ const Dashboard = () => {
             />
             <Divider />
             <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
-              <Box sx={{ height: { xs: 200, sm: 300 } }}>
+              <Box sx={{ height: { xs: 250, sm: 300, md: 350 } }}>
                 <Bar
                   data={gradeDistributionData}
                   options={{
@@ -760,7 +735,7 @@ const Dashboard = () => {
                           boxWidth: 12,
                           padding: 10,
                           font: {
-                            size: window.innerWidth < 600 ? 10 : 12,
+                            size: isSmallScreen ? 10 : 12,
                           },
                         },
                       },
@@ -772,14 +747,14 @@ const Dashboard = () => {
                       x: {
                         ticks: {
                           font: {
-                            size: window.innerWidth < 600 ? 8 : 10,
+                            size: isSmallScreen ? 8 : 10,
                           },
                         },
                       },
                       y: {
                         ticks: {
                           font: {
-                            size: window.innerWidth < 600 ? 8 : 10,
+                            size: isSmallScreen ? 8 : 10,
                           },
                         },
                       },
@@ -791,6 +766,90 @@ const Dashboard = () => {
           </Card>
         </Grid>
 
+        {/* Attendance & Behavior */}
+        <Grid item xs={12} lg={4}>
+          <Grid container spacing={{ xs: 2, md: 3 }}>
+            <Grid item xs={12} sm={6} lg={12}>
+              <Card elevation={2}>
+                <CardHeader
+                  title={
+                    <Typography
+                      variant="h6"
+                      sx={{ fontSize: { xs: "1.1rem", sm: "1.25rem" } }}
+                    >
+                      {t('attendanceOverview')}
+                    </Typography>
+                  }
+                  sx={{ p: { xs: 2, sm: 3 } }}
+                />
+                <Divider />
+                <CardContent>
+                  <Box sx={{ height: { xs: 200, sm: 220 }, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <Pie
+                      data={attendanceChartData}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            position: "bottom",
+                            labels: {
+                              boxWidth: 12,
+                              padding: 15,
+                              font: {
+                                size: isSmallScreen ? 10 : 12,
+                              },
+                            },
+                          },
+                        },
+                      }}
+                    />
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6} lg={12}>
+              <Card elevation={2}>
+                <CardHeader
+                  title={
+                    <Typography
+                      variant="h6"
+                      sx={{ fontSize: { xs: "1.1rem", sm: "1.25rem" } }}
+                    >
+                      {t('behaviorOverview')}
+                    </Typography>
+                  }
+                  sx={{ p: { xs: 2, sm: 3 } }}
+                />
+                <Divider />
+                <CardContent>
+                  <Box sx={{ height: { xs: 200, sm: 220 }, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <Pie
+                      data={behaviorChartData}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            position: "bottom",
+                            labels: {
+                              boxWidth: 12,
+                              padding: 15,
+                              font: {
+                                size: isSmallScreen ? 10 : 12,
+                              },
+                            },
+                          },
+                        },
+                      }}
+                    />
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </Grid>
+
         {/* Subject-Specific Grade Distributions */}
         {Object.keys(subjectGradeDistributionData).length > 0 && (
           <Grid item xs={12}>
@@ -799,7 +858,7 @@ const Dashboard = () => {
                 title={
                   <Typography
                     variant="h6"
-                    sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+                    sx={{ fontSize: { xs: "1.1rem", sm: "1.25rem" } }}
                   >
                     📊 Grade Distribution by Subject
                   </Typography>
@@ -822,7 +881,7 @@ const Dashboard = () => {
                             maintainAspectRatio: false,
                             plugins: {
                               legend: {
-                                display: false, // Hide legend for individual subject charts
+                                display: false,
                               },
                               title: {
                                 display: false,
@@ -832,14 +891,14 @@ const Dashboard = () => {
                               x: {
                                 ticks: {
                                   font: {
-                                    size: window.innerWidth < 600 ? 6 : 8,
+                                    size: isSmallScreen ? 6 : 8,
                                   },
                                 },
                               },
                               y: {
                                 ticks: {
                                   font: {
-                                    size: window.innerWidth < 600 ? 6 : 8,
+                                    size: isSmallScreen ? 6 : 8,
                                   },
                                 },
                               },
@@ -855,108 +914,14 @@ const Dashboard = () => {
           </Grid>
         )}
 
-        {/* Attendance Overview */}
-        <Grid item xs={12} sm={6} lg={4}>
-          <Card elevation={2}>
-            <CardHeader
-              title={
-                <Typography
-                  variant="h6"
-                  sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
-                >
-                  {t('attendanceOverview')}
-                </Typography>
-              }
-              sx={{ p: { xs: 2, sm: 3 } }}
-            />
-            <Divider />
-            <CardContent>
-              <Box sx={{ display: "flex", justifyContent: "center" }}>
-                <Box
-                  sx={{
-                    height: { xs: 180, sm: 200, md: 250 },
-                    width: "100%",
-                    maxWidth: { xs: 180, sm: 200, md: 250 },
-                  }}
-                >
-                  <Pie
-                    data={attendanceChartData}
-                    options={{
-                      plugins: {
-                        legend: {
-                          position: "bottom",
-                          labels: {
-                            boxWidth: 12,
-                            padding: 10,
-                            font: {
-                              size: window.innerWidth < 600 ? 10 : 12,
-                            },
-                          },
-                        },
-                      },
-                    }}
-                  />
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Behavior Overview */}
-        <Grid item xs={12} sm={6} lg={4}>
-          <Card elevation={2}>
-            <CardHeader
-              title={
-                <Typography
-                  variant="h6"
-                  sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
-                >
-                  {t('behaviorOverview')}
-                </Typography>
-              }
-              sx={{ p: { xs: 2, sm: 3 } }}
-            />
-            <Divider />
-            <CardContent>
-              <Box sx={{ display: "flex", justifyContent: "center" }}>
-                <Box
-                  sx={{
-                    height: { xs: 180, sm: 200, md: 250 },
-                    width: "100%",
-                    maxWidth: { xs: 180, sm: 200, md: 250 },
-                  }}
-                >
-                  <Pie
-                    data={behaviorChartData}
-                    options={{
-                      plugins: {
-                        legend: {
-                          position: "bottom",
-                          labels: {
-                            boxWidth: 12,
-                            padding: 10,
-                            font: {
-                              size: window.innerWidth < 600 ? 10 : 12,
-                            },
-                          },
-                        },
-                      },
-                    }}
-                  />
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
         {/* Upcoming Assignments */}
-        <Grid item xs={12} sm={6} lg={4}>
+        <Grid item xs={12} md={6} lg={4}>
           <Card elevation={2} sx={{ height: "100%" }}>
             <CardHeader
               title={
                 <Typography
                   variant="h6"
-                  sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+                  sx={{ fontSize: { xs: "1.1rem", sm: "1.25rem" } }}
                 >
                   {t('upcomingAssignments')}
                 </Typography>
@@ -976,7 +941,7 @@ const Dashboard = () => {
             <CardContent sx={{ p: 0 }}>
               <List
                 sx={{
-                  maxHeight: { xs: 200, sm: 250, md: 300 },
+                  maxHeight: { xs: 240, sm: 280, md: 320 },
                   overflow: "auto",
                 }}
               >
@@ -986,15 +951,12 @@ const Dashboard = () => {
                       <ListItemAvatar>
                         <Avatar
                           sx={{
-                            bgcolor:
-                              assignment.subject === "English"
-                                ? "primary.main"
-                                : "secondary.main",
-                            width: { xs: 32, sm: 40 },
-                            height: { xs: 32, sm: 40 },
+                            bgcolor: getSubjectColor(assignment.subject),
+                            width: { xs: 36, sm: 40 },
+                            height: { xs: 36, sm: 40 },
                           }}
                         >
-                          {assignment.subject === "English" ? "E" : "S"}
+                          {assignment.subject.charAt(0)}
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText
@@ -1022,7 +984,7 @@ const Dashboard = () => {
                     <ListItemText
                       primary={
                         <Typography
-                          sx={{ fontSize: { xs: "0.875rem", sm: "1rem" } }}
+                          sx={{ fontSize: { xs: "0.875rem", sm: "1rem" }, p: 2 }}
                         >
                           {t('noUpcomingAssignments')}
                         </Typography>
@@ -1036,13 +998,13 @@ const Dashboard = () => {
         </Grid>
 
         {/* Low Grade Alerts */}
-        <Grid item xs={12} sm={6} lg={4}>
+        <Grid item xs={12} md={6} lg={4}>
           <Card elevation={2} sx={{ height: "100%" }}>
             <CardHeader
               title={
                 <Typography
                   variant="h6"
-                  sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+                  sx={{ fontSize: { xs: "1.1rem", sm: "1.25rem" } }}
                 >
                   {t('lowGradeAlerts')}
                 </Typography>
@@ -1062,7 +1024,7 @@ const Dashboard = () => {
             <CardContent sx={{ p: 0 }}>
               <List
                 sx={{
-                  maxHeight: { xs: 200, sm: 250, md: 300 },
+                  maxHeight: { xs: 240, sm: 280, md: 320 },
                   overflow: "auto",
                 }}
               >
@@ -1076,8 +1038,8 @@ const Dashboard = () => {
                         <Avatar
                           sx={{
                             bgcolor: "error.main",
-                            width: { xs: 32, sm: 40 },
-                            height: { xs: 32, sm: 40 },
+                            width: { xs: 36, sm: 40 },
+                            height: { xs: 36, sm: 40 },
                           }}
                         >
                           <WarningIcon sx={{ fontSize: { xs: 20, sm: 24 } }} />
@@ -1105,8 +1067,9 @@ const Dashboard = () => {
                         color="primary"
                         onClick={() => navigate("/communication")}
                         sx={{
-                          fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                          fontSize: { xs: "0.7rem", sm: "0.875rem" },
                           height: { xs: 24, sm: 32 },
+                          p: { xs: '0 6px', sm: '0 10px' }
                         }}
                       />
                     </ListItem>
@@ -1116,7 +1079,7 @@ const Dashboard = () => {
                     <ListItemText
                       primary={
                         <Typography
-                          sx={{ fontSize: { xs: "0.875rem", sm: "1rem" } }}
+                          sx={{ fontSize: { xs: "0.875rem", sm: "1rem" }, p: 2 }}
                         >
                           {t('noLowGradeAlerts')}
                         </Typography>
@@ -1130,13 +1093,13 @@ const Dashboard = () => {
         </Grid>
 
         {/* Recent Communications */}
-        <Grid item xs={12}>
-          <Card elevation={2}>
+        <Grid item xs={12} lg={4}>
+          <Card elevation={2} sx={{ height: "100%" }}>
             <CardHeader
               title={
                 <Typography
                   variant="h6"
-                  sx={{ fontSize: { xs: "1rem", sm: "1.25rem" } }}
+                  sx={{ fontSize: { xs: "1.1rem", sm: "1.25rem" } }}
                 >
                   {t('recentCommunications')}
                 </Typography>
@@ -1156,7 +1119,7 @@ const Dashboard = () => {
             <CardContent sx={{ p: 0 }}>
               <List
                 sx={{
-                  maxHeight: { xs: 250, sm: 300, md: 400 },
+                  maxHeight: { xs: 240, sm: 280, md: 320 },
                   overflow: "auto",
                 }}
               >
@@ -1181,8 +1144,8 @@ const Dashboard = () => {
                                 comm.sentStatus === "Sent"
                                   ? "success.main"
                                   : "warning.main",
-                              width: { xs: 32, sm: 40 },
-                              height: { xs: 32, sm: 40 },
+                              width: { xs: 36, sm: 40 },
+                              height: { xs: 36, sm: 40 },
                             }}
                           >
                             {comm.sentStatus === "Sent" ? (
@@ -1223,7 +1186,7 @@ const Dashboard = () => {
                             comm.sentStatus === "Sent" ? "success" : "warning"
                           }
                           sx={{
-                            fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                            fontSize: { xs: "0.7rem", sm: "0.875rem" },
                             height: { xs: 24, sm: 32 },
                           }}
                         />
@@ -1235,7 +1198,7 @@ const Dashboard = () => {
                     <ListItemText
                       primary={
                         <Typography
-                          sx={{ fontSize: { xs: "0.875rem", sm: "1rem" } }}
+                          sx={{ fontSize: { xs: "0.875rem", sm: "1rem" }, p: 2 }}
                         >
                           {t('noRecentCommunications')}
                         </Typography>

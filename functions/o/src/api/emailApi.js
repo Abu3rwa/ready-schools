@@ -214,52 +214,8 @@ export const sendBatchEmails = onRequest(async (req, res) => {
   }
 });
 
-// Get email status
-export const getEmailStatus = onRequest(async (req, res) => {
-  if (!(await requireAuth(req).catch(() => null))) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  if (req.method !== "GET")
-    return res.status(405).json({ error: "Method Not Allowed" });
-  try {
-    const { messageId } = req.query;
-
-    if (!messageId) {
-      return res.status(400).json({
-        error: "Missing 'messageId' query parameter",
-      });
-    }
-
-    const status = await emailService.getEmailStatus(messageId);
-    res.json({
-      success: true,
-      messageId,
-      status,
-    });
-  } catch (error) {
-    console.error("Error getting email status:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Verify email configuration
-export const verifyEmailConfig = onRequest(async (req, res) => {
-  if (!(await requireAuth(req).catch(() => null))) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  if (req.method !== "POST")
-    return res.status(405).json({ error: "Method Not Allowed" });
-  try {
-    const result = await emailService.verifyConfig();
-    res.json({
-      success: true,
-      config: result,
-    });
-  } catch (error) {
-    console.error("Error verifying email config:", error);
-    res.status(500).json({ error: error.message });
-  }
-});
+ 
+ 
 
 // Daily Update Functions - Using onCall for proper authentication
 export const sendDailyUpdates = onCall(
