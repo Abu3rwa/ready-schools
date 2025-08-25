@@ -20,6 +20,11 @@ This document defines the complete data structure schemas for the Teacher Kit ap
 - `academicPeriods` - Academic periods and terms
 - `analytics` - Analytics and reporting data
 - `users` - User accounts and profiles
+- `documents` - General document storage and management
+- `emailContent` - Dynamic email template content
+- `contentSharingRequests` - Content sharing requests between users
+- `developerPageImages` - Developer page image uploads and metadata
+- `developerPageContent` - Developer page text content and settings
 
 ---
 
@@ -529,7 +534,7 @@ This document defines the complete data structure schemas for the Teacher Kit ap
   userId: "string",                // Teacher's user ID (owner)
   
   // Period Information
-  name: "string",                  // Required - Period name (e.g., "Fall 2024", "Q1")
+  name: "string",                  // Required - Period name (e.g., "Fall 2024", "Q1", "2024-2025")
   description: "string",           // Period description
   
   // Date Range
@@ -539,6 +544,24 @@ This document defines the complete data structure schemas for the Teacher Kit ap
   // Academic Information
   academicYear: "string",          // Academic year (e.g., "2024-2025")
   type: "string",                  // "semester", "quarter", "trimester", "term"
+  
+  // Hierarchical Structure
+  semesters: [                     // Array of semester objects (optional)
+    {
+      id: "string",                // Semester ID
+      name: "string",              // Semester name
+      startDate: "string",         // Start date (ISO)
+      endDate: "string",           // End date (ISO)
+      terms: [                     // Array of term objects (optional)
+        {
+          id: "string",            // Term ID
+          name: "string",          // Term name
+          startDate: "string",     // Start date (ISO)
+          endDate: "string"        // End date (ISO)
+        }
+      ]
+    }
+  ],
   
   // Status
   isActive: boolean,               // Is period currently active
@@ -623,9 +646,97 @@ This document defines the complete data structure schemas for the Teacher Kit ap
 
 ---
 
+## 📄 Documents Collection
 
+**Collection:** `documents`
+
+### Document Structure
+```javascript
+{
+  id: "string",                    // Auto-generated document ID
+  userId: "string",                // Teacher's user ID (owner)
+  
+  // Document Information
+  type: "string",                  // Document type (e.g., "daily_update")
+  category: "string",              // Document category
+  subject: "string",               // Document subject/title
+  content: "string",               // Document content
+  status: "string",                // "active", "archived", "deleted"
+  
+  // Classification
+  tags: ["string"],                // Array of tags for organization
+  
+  // Associated Data
+  studentId: "string",             // Associated student (if applicable)
+  
+  // Metadata
+  metadata: {                      // Dynamic metadata object
+    originalDate: "string",        // Original date (for daily updates)
+    sentStatus: "string",          // Email status
+    recipientType: "string",       // Type of recipient
+    attendance: "object",          // Attendance data
+    grades: "array",               // Grades data
+    behavior: "array",             // Behavior data
+    assignments: "array"           // Assignments data
+  },
+  
+  // Timestamps
+  createdAt: "string",             // ISO string timestamp
+  updatedAt: "timestamp"           // Auto-generated
+}
+```
 
 ---
+
+## 📧 Email Content Collection
+
+**Collection:** `emailContent`
+
+### Document Structure
+```javascript
+{
+  id: "string",                    // Content type identifier (e.g., "greetings", "closings")
+  
+  // Content Templates
+  templates: ["string"],           // Array of template strings with placeholders like {firstName}
+  
+  // Metadata
+  lastUpdated: "timestamp",        // When templates were last modified
+  isActive: boolean                // Whether templates are active
+}
+```
+
+---
+
+## 🤝 Content Sharing Requests Collection
+
+**Collection:** `contentSharingRequests`
+
+### Document Structure
+```javascript
+{
+  id: "string",                    // Auto-generated document ID
+  
+  // Request Information
+  fromUserId: "string",            // Sender's user ID
+  toUserId: "string",              // Recipient's user ID
+  contentType: "string",           // Type of content being shared
+  status: "string",                // "pending", "accepted", "rejected", "expired"
+  
+  // Content Details
+  sharedContent: {                 // Content being shared
+    [key: string]: any             // Dynamic content object
+  },
+  
+  // Settings
+  mergeStrategy: "string",         // "merge", "add-only", "replace"
+  expiresAt: "timestamp",          // When request expires
+  
+  // Metadata
+  createdAt: "timestamp",          // Auto-generated
+  updatedAt: "timestamp"           // Auto-generated
+}
+```
 
 ## 🔑 Key Relationships
 
@@ -646,7 +757,10 @@ This document defines the complete data structure schemas for the Teacher Kit ap
 3. **Assignment IDs must exist** in assignments collection before creating grades
 4. **Standard IDs must exist** in educational_standards collection before creating standards_grades
 5. **Academic period IDs must exist** in academicPeriods collection before creating gradebooks
-6. **All timestamps** should use Firestore serverTimestamp() for consistency
+6. **User IDs must exist** in users collection before creating contentSharingRequests
+7. **Document types must be validated** before saving to documents collection
+8. **Content sharing requests must have valid expiration dates**
+9. **All timestamps** should use Firestore serverTimestamp() for consistency
 
 ---
 
@@ -666,12 +780,19 @@ This document defines the complete data structure schemas for the Teacher Kit ap
 
 ### Performance Considerations
 - Index on `userId` for all collections
-- Index on `studentId` for grades, attendance, behaviors, standards_grades, dailyUpdateEmails
+- Index on `studentId` for grades, attendance, behaviors, standards_grades, dailyUpdateEmails, documents
 - Index on `subjectCode` for grades, assignments, lessons, standards_grades
 - Index on `date` for attendance, behaviors, dailyUpdateEmails, lessons
 - Index on `standardId` for standards_grades
 - Index on `academicPeriodId` for gradebooks
 - Index on `assignmentId` for grades
+- Index on `type` and `category` for documents collection
+- Index on `fromUserId` and `toUserId` for contentSharingRequests
+- Index on `status` and `expiresAt` for contentSharingRequests
+- Index on `status` for documents collection
+- Index on `userId` and `section` for developerPageImages collection
+- Index on `uploadedAt` for developerPageImages collection
+- Index on `metadata.isActive` for developerPageImages collection
 
 ---
 
@@ -687,3 +808,97 @@ This document defines the complete data structure schemas for the Teacher Kit ap
 - Support both `subject` and `subjectCode` during transition
 - Gradually migrate to `subjectCode` only
 - Update UI to display subject names from subjects collection
+
+---
+
+## 🖼️ Developer Page Images Collection
+
+**Collection:** `developerPageImages`
+
+### Document Structure
+```javascript
+{
+  id: "string",                    // Auto-generated document ID
+  userId: "string",                // User ID (owner)
+  
+  // Image Information
+  url: "string",                   // Firebase Storage download URL
+  fileName: "string",              // Original filename
+  originalFileName: "string",      // Original filename for display
+  size: number,                    // File size in bytes
+  type: "string",                  // MIME type (e.g., "image/jpeg")
+  section: "string",               // "profile", "classroom", "projects", "gallery"
+  storagePath: "string",           // Firebase Storage path
+  
+  // Metadata
+  metadata: {
+    alt: "string",                 // Alt text for accessibility
+    caption: "string",             // Image caption
+    category: "string",            // Image category
+    isActive: boolean,             // Whether image is active/visible
+    order: number                  // Display order (optional)
+  },
+  
+  // Timestamps
+  uploadedAt: "timestamp",         // When image was uploaded
+  updatedAt: "timestamp"           // Auto-generated on updates
+}
+```
+
+---
+
+## 👨‍💻 Developer Page Content Collection
+
+**Collection:** `developerPageContent`
+
+### Document Structure
+```javascript
+{
+  id: "string",                    // User ID (document ID matches userId)
+  userId: "string",                // User ID (owner)
+  
+  // Profile Information
+  profile: {
+    name: "string",               // Developer name
+    role: "string",               // Professional role
+    bio: "string",                // Biography
+    experience: "string",         // Years of experience
+    specialization: "string",     // Teaching specialization
+    school: "string",             // Current school
+    background: "string",         // Educational background
+    
+    // Contact Information
+    contact: {
+      email: "string",           // Contact email
+      linkedin: "string",        // LinkedIn profile URL
+      github: "string",          // GitHub profile URL
+      portfolio: "string",       // Portfolio website URL
+      consulting: "string"       // Consulting/speaking contact
+    }
+  },
+  
+  // Journey Information
+  journey: {
+    motivation: "string",          // Why built Ready-Teacher
+    painPoints: "string",          // Classroom pain points
+    philosophy: "string"           // Teaching philosophy
+  },
+  
+  // Credentials
+  credentials: {
+    teaching: ["string"],          // Teaching credentials array
+    technical: ["string"]          // Technical skills array
+  },
+  
+  // Image References (for easy access)
+  images: {
+    profile: "string",            // Profile image ID
+    classroom: ["string"],        // Classroom image IDs
+    projects: ["string"],         // Project image IDs
+    gallery: ["string"]           // Gallery image IDs
+  },
+  
+  // Timestamps
+  updatedAt: "timestamp"           // Auto-generated on updates
+}
+```

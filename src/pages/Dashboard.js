@@ -9,6 +9,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  CardMedia,
   Divider,
   List,
   ListItem,
@@ -93,20 +94,21 @@ const Dashboard = () => {
 
   // Helper function to get consistent colors for subjects
   const getSubjectColor = (subject) => {
+    const { palette } = theme;
     const colorMap = {
-      'ELA': '#1976d2',      // Blue
-      'English': '#1976d2',  // Blue
-      'Math': '#2e7d32',     // Green
-      'Mathematics': '#2e7d32', // Green
-      'Science': '#ed6c02',  // Orange
-      'Social Studies': '#9c27b0', // Purple
-      'History': '#9c27b0',  // Purple
-      'Art': '#d32f2f',      // Red
-      'Music': '#d32f2f',    // Red
-      'PE': '#388e3c',       // Dark Green
-      'Physical Education': '#388e3c', // Dark Green
+        'ELA': palette.primary.main,
+        'English': palette.primary.main,
+        'Math': palette.success.main,
+        'Mathematics': palette.success.main,
+        'Science': palette.warning.main,
+        'Social Studies': palette.info.main,
+        'History': palette.info.main,
+        'Art': palette.error.main,
+        'Music': palette.error.main,
+        'PE': palette.success.dark,
+        'Physical Education': palette.success.dark,
     };
-    return colorMap[subject] || '#666666'; // Default gray
+    return colorMap[subject] || palette.grey[500]; // Default gray - use specific shade
   };
 
   const englishGrades = useMemo(
@@ -353,8 +355,8 @@ const Dashboard = () => {
         {
           label: "All Subjects",
           data: bins,
-          backgroundColor: "rgba(25, 118, 210, 0.5)", // MUI primary
-          borderColor: "rgba(25, 118, 210, 1)",
+          backgroundColor: theme.palette.primary.light,
+          borderColor: theme.palette.primary.main,
           borderWidth: 1,
         },
       ],
@@ -439,14 +441,14 @@ const Dashboard = () => {
           attendanceData.tardy,
         ],
         backgroundColor: [
-          "rgba(75, 192, 192, 0.6)",
-          "rgba(255, 99, 132, 0.6)",
-          "rgba(255, 206, 86, 0.6)",
+          theme.palette.success.light,
+          theme.palette.error.light,
+          theme.palette.warning.light,
         ],
         borderColor: [
-          "rgba(75, 192, 192, 1)",
-          "rgba(255, 99, 132, 1)",
-          "rgba(255, 206, 86, 1)",
+          theme.palette.success.main,
+          theme.palette.error.main,
+          theme.palette.warning.main,
         ],
         borderWidth: 1,
       },
@@ -458,8 +460,8 @@ const Dashboard = () => {
     datasets: [
       {
         data: [behaviorData.positive, behaviorData.negative],
-        backgroundColor: ["rgba(75, 192, 192, 0.6)", "rgba(255, 99, 132, 0.6)"],
-        borderColor: ["rgba(75, 192, 192, 1)", "rgba(255, 99, 132, 1)"],
+        backgroundColor: [theme.palette.success.light, theme.palette.error.light],
+        borderColor: [theme.palette.success.main, theme.palette.error.main],
         borderWidth: 1,
       },
     ],
@@ -511,7 +513,7 @@ const Dashboard = () => {
 
       {/* Quick Stats */}
       <Grid container spacing={{ xs: 2, md: 3 }} sx={{ mb: { xs: 2, md: 4 } }}>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Paper
             elevation={2}
             sx={{
@@ -548,7 +550,7 @@ const Dashboard = () => {
             </Box>
           </Paper>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Paper
             elevation={2}
             sx={{
@@ -585,7 +587,7 @@ const Dashboard = () => {
             </Box>
           </Paper>
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={12} sm={6} md={4}>
           <Paper
             elevation={2}
             sx={{
@@ -707,7 +709,7 @@ const Dashboard = () => {
       {/* Main Dashboard Content */}
       <Grid container spacing={{ xs: 2, md: 3 }}>
         {/* Grade Distribution */}
-        <Grid item xs={12} lg={8}>
+        <Grid item xs={12} md={6}>
           <Card elevation={2} sx={{ height: "100%" }}>
             <CardHeader
               title={
@@ -719,6 +721,12 @@ const Dashboard = () => {
                 </Typography>
               }
               sx={{ p: { xs: 2, sm: 3 } }}
+            />
+            <CardMedia
+              component="img"
+              height="194"
+              image="/static/images/cards/paella.jpg"
+              alt="Paella dish"
             />
             <Divider />
             <CardContent sx={{ p: { xs: 1, sm: 2 } }}>
@@ -767,7 +775,7 @@ const Dashboard = () => {
         </Grid>
 
         {/* Attendance & Behavior */}
-        <Grid item xs={12} lg={4}>
+        <Grid item xs={12} md={6}>
           <Grid container spacing={{ xs: 2, md: 3 }}>
             <Grid item xs={12} sm={6} lg={12}>
               <Card elevation={2}>
@@ -850,6 +858,17 @@ const Dashboard = () => {
           </Grid>
         </Grid>
 
+        <Grid item xs={12}>
+          <Card>
+            <CardHeader title="Additional Content" />
+            <CardContent>
+              <Typography>
+                This card is added to demonstrate the responsive layout.
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+ 
         {/* Subject-Specific Grade Distributions */}
         {Object.keys(subjectGradeDistributionData).length > 0 && (
           <Grid item xs={12}>

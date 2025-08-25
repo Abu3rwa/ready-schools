@@ -1,0 +1,47 @@
+DailyUpdateManager (Frontend)
+├── contexts object
+│   ├── students: Student[]
+│   ├── attendance: Attendance[]
+│   ├── assignments: Assignment[]
+│   ├── grades: Grade[]
+│   ├── behavior: Behavior[]
+│   ├── lessons: Lesson[]
+│   ├── includeSections: {
+│   │   ├── attendance: boolean
+│   │   ├── grades: boolean
+│   │   ├── behavior: boolean
+│   │   ├── assignments: boolean
+│   │   ├── upcoming: boolean
+│   │   └── lessons: boolean
+│   │ }
+│   └── emailContentLibrary: object
+│
+└── sendStudentEmailsCallable(dataSources, date)
+    │
+    ▼
+emailApi.js (Backend)
+├── dataSources.includeSections
+│
+└── emailContext = {
+    ├── ...update,
+    ├── includeSections: dataSources.includeSections || {}
+    └── emailContentLibrary: dataSources.emailContentLibrary
+    }
+    │
+    ▼
+studentDailyUpdateEmail.js
+├── normalizeContext(context)
+│   └── includeSections: data.includeSections || {
+│       ├── attendance: true,
+│       ├── grades: true,
+│       ├── behavior: true,
+│       ├── assignments: true,
+│       ├── upcoming: true,
+│       └── lessons: true
+│   }
+│
+└── Template rendering
+    ├── ${includeSections?.lessons !== false && lessons?.length > 0 ? ...}
+    ├── ${includeSections?.attendance !== false && attendanceSummary ? ...}
+    ├── ${includeSections?.behavior !== false && behaviorHighlights ? ...}
+    └── ${includeSections?.upcoming !== false && assignmentsDueSoon?.length > 0 ? ...}

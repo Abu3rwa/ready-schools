@@ -1,8 +1,16 @@
 import dayjs from "dayjs";
+import { createEmailContentFilter } from "./EmailContentFilter.js";
+import { 
+  EMAIL_SECTIONS, 
+  createUnifiedEmailPreferences,
+  validateEmailPreferences 
+} from "../constants/emailSections.js";
 
 export class DailyUpdateService {
   constructor() {
     this.dataSources = {};
+    this.emailContentLibrary = null;
+    this.emailPreferences = null;
   }
 
   // Set data sources (students, attendance, assignments, grades, behavior, lessons)
@@ -16,6 +24,7 @@ export class DailyUpdateService {
       lessonsCount: (sources.lessons || []).length,
       teacher: sources.teacher,
       schoolName: sources.schoolName,
+      hasEmailPreferences: !!sources.emailPreferences,
     });
 
     // Ensure we have arrays for all data sources
@@ -28,7 +37,26 @@ export class DailyUpdateService {
       lessons: sources.lessons || [],
       teacher: sources.teacher,
       schoolName: sources.schoolName,
+      emailContentLibrary: sources.emailContentLibrary || {},
     };
+
+    // Handle email preferences - convert legacy format if needed
+    if (sources.emailPreferences) {
+      // Validate the preferences structure
+      const validation = validateEmailPreferences(sources.emailPreferences);
+      if (validation.isValid) {
+        this.emailPreferences = sources.emailPreferences;
+      } else {
+        console.error("Invalid email preferences:", validation.errors);
+        // Try to create unified preferences from legacy data if available
+        this.emailPreferences = createUnifiedEmailPreferences(sources);
+      }
+    } else {
+      // Create unified preferences from legacy data or use defaults
+      this.emailPreferences = createUnifiedEmailPreferences(sources);
+    }
+
+    console.log("Processed email preferences:", this.emailPreferences);
   }
 
   // Generate daily update data for a specific student
@@ -40,34 +68,20 @@ export class DailyUpdateService {
       throw new Error(`Student with ID ${studentId} not found`);
     }
 
-    // Get today's attendance
+    // Get today's data for each section
     const attendance = this.getTodayAttendance(studentId, dateString);
-
-    // Get today's assignments/activities
     const assignments = this.getTodayAssignments(studentId, dateString);
-
-    // Get new grades from today
     const grades = this.getTodayGrades(studentId, dateString);
-
-    // Get today's behavior incidents
     const behavior = this.getTodayBehavior(studentId, dateString);
-
-    // Get today's lessons
     const lessons = this.getTodayLessons(studentId, dateString);
-
-    // Get upcoming assignments (next 7 days)
     const upcomingAssignments = this.getUpcomingAssignments(studentId, date);
 
-    // Calculate overall grade
+    // Calculate grades and rates
     const overallGrade = this.calculateOverallGrade(studentId);
-
-    // Calculate per-subject grades
     const subjectGrades = this.calculateSubjectGrades(studentId);
-
-    // Calculate attendance rate
     const attendanceRate = this.calculateAttendanceRate(studentId, dateString);
 
-    // Get parent emails and optional parent display name
+    // Get parent contact info
     const parentEmails = this.getParentEmails(student);
     const parentName = this.getParentName(student);
 
@@ -80,10 +94,11 @@ export class DailyUpdateService {
       processedGender: student.gender || null,
     });
 
-    return {
+    // Prepare the complete daily update data
+    const dailyUpdateData = {
       studentId,
       studentName: `${student.firstName} ${student.lastName}`,
-      studentGender: student.gender || null, // Add gender information - allow null for proper fallback
+      studentGender: student.gender || null,
       parentEmails,
       parentName,
       date: dateString,
@@ -98,12 +113,35 @@ export class DailyUpdateService {
       attendanceRate,
       // Additional metadata
       schoolName: this.dataSources.schoolName || "AMLY School",
-      teacherName:
-        this.dataSources.teacher?.name ||
-        this.dataSources.teacher?.displayName ||
-        "Teacher",
+      teacherName: this.dataSources.teacher?.name || this.dataSources.teacher?.displayName || "Teacher",
       teacherEmail: this.dataSources.teacher?.email || "",
+      emailContentLibrary: this.dataSources.emailContentLibrary || {},
+      // Pass unified email preferences instead of normalized legacy formats
+      emailPreferences: this.emailPreferences,
     };
+
+    // Create content filters for both parent and student emails
+    const parentFilter = createEmailContentFilter(this.emailPreferences, 'parent');
+    const studentFilter = createEmailContentFilter(this.emailPreferences, 'student');
+
+    // Add filtering summary for debugging
+    dailyUpdateData.filteringSummary = {
+      parent: parentFilter.getFilteringSummary(dailyUpdateData),
+      student: studentFilter.getFilteringSummary(dailyUpdateData)
+    };
+
+    console.log(`Generated daily update for ${dailyUpdateData.studentName}:`, {
+      hasAttendance: !!dailyUpdateData.attendance,
+      gradesCount: dailyUpdateData.grades?.length || 0,
+      behaviorCount: dailyUpdateData.behavior?.length || 0,
+      lessonsCount: dailyUpdateData.lessons?.length || 0,
+      assignmentsCount: dailyUpdateData.assignments?.length || 0,
+      upcomingCount: dailyUpdateData.upcomingAssignments?.length || 0,
+      parentIncludedSections: dailyUpdateData.filteringSummary.parent.includedSections,
+      studentIncludedSections: dailyUpdateData.filteringSummary.student.includedSections,
+    });
+
+    return dailyUpdateData;
   }
 
   // Generate daily updates for all students
@@ -115,8 +153,10 @@ export class DailyUpdateService {
       assignmentsCount: (this.dataSources.assignments || []).length,
       gradesCount: (this.dataSources.grades || []).length,
       behaviorCount: (this.dataSources.behavior || []).length,
+      lessonsCount: (this.dataSources.lessons || []).length,
       teacher: this.dataSources.teacher,
       schoolName: this.dataSources.schoolName,
+      emailPreferences: this.emailPreferences,
     });
 
     const updates = [];
@@ -125,7 +165,11 @@ export class DailyUpdateService {
       try {
         console.log("Generating update for student:", student.id);
         const update = this.generateDailyUpdate(student.id, date);
-        console.log("Generated update:", update);
+        console.log("Generated update:", {
+          studentId: update.studentId,
+          studentName: update.studentName,
+          hasParentEmails: update.parentEmails?.length > 0,
+        });
         updates.push(update);
       } catch (error) {
         console.error(
@@ -139,7 +183,7 @@ export class DailyUpdateService {
     return updates;
   }
 
-  // Helper methods
+  // Helper methods (unchanged from original)
   getStudent(studentId) {
     return (this.dataSources.students || []).find((s) => s.id === studentId);
   }
@@ -501,7 +545,7 @@ export class DailyUpdateService {
   async sendDailyUpdatesToAllParents(dataSources, date = new Date()) {
     try {
       this.setDataSources(dataSources);
-      const dailyUpdates = this.generateAllDailyUpdates(date);
+      const dailyUpdates = await this.generateAllDailyUpdates(date);
       const classSummary = this.getClassSummary(date);
 
       return {
@@ -527,7 +571,7 @@ export class DailyUpdateService {
   async sendDailyUpdateForStudent(studentId, dataSources, date = new Date()) {
     try {
       this.setDataSources(dataSources);
-      const dailyUpdate = this.generateDailyUpdate(studentId, date);
+      const dailyUpdate = await this.generateDailyUpdate(studentId, date);
 
       return {
         success: true,
@@ -558,6 +602,7 @@ export class DailyUpdateService {
           behaviorCount: (dataSources.behavior || []).length,
           teacher: dataSources.teacher,
           schoolName: dataSources.schoolName,
+          hasEmailPreferences: !!dataSources.emailPreferences,
         },
       });
 
@@ -565,7 +610,7 @@ export class DailyUpdateService {
 
       if (studentId) {
         console.log("Generating single student update");
-        const dailyUpdate = this.generateDailyUpdate(studentId, date);
+        const dailyUpdate = await this.generateDailyUpdate(studentId, date);
         console.log("Generated single student update:", dailyUpdate);
         return {
           success: true,
@@ -574,7 +619,7 @@ export class DailyUpdateService {
         };
       } else {
         console.log("Generating all student updates");
-        const dailyUpdates = this.generateAllDailyUpdates(date);
+        const dailyUpdates = await this.generateAllDailyUpdates(date);
         console.log("Generated updates for", dailyUpdates.length, "students");
 
         const classSummary = this.getClassSummary(date);
@@ -600,6 +645,45 @@ export class DailyUpdateService {
         error: error.message,
         stack: error.stack,
         data: null,
+      };
+    }
+  }
+
+  // Get email content library from dataSources (no longer needs backend loading)
+  getEmailContentLibrary() {
+    try {
+      return this.dataSources.emailContentLibrary || {};
+    } catch (error) {
+      console.error("Error getting email content library from dataSources:", error);
+      // Return empty object as fallback
+      return {};
+    }
+  }
+
+  // New method: Check if content would be generated for any email type
+  hasContentForAnyEmailType(studentId, date = new Date()) {
+    try {
+      const dailyUpdate = this.generateDailyUpdate(studentId, date);
+      
+      // Create filters for both parent and student emails
+      const parentFilter = createEmailContentFilter(this.emailPreferences, 'parent');
+      const studentFilter = createEmailContentFilter(this.emailPreferences, 'student');
+      
+      return {
+        parent: {
+          enabled: this.emailPreferences?.parent?.enabled || false,
+          hasContent: parentFilter.hasAnyContent(dailyUpdate)
+        },
+        student: {
+          enabled: this.emailPreferences?.student?.enabled || false,
+          hasContent: studentFilter.hasAnyContent(dailyUpdate)
+        }
+      };
+    } catch (error) {
+      console.error("Error checking content availability:", error);
+      return {
+        parent: { enabled: false, hasContent: false },
+        student: { enabled: false, hasContent: false }
       };
     }
   }

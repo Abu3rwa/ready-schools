@@ -1,134 +1,48 @@
 import { createTheme } from "@mui/material/styles";
 
-const theme = createTheme({
+// Brand colors from DailyUpdateManager.jsx
+const BRAND_BLUE = "#1459a9";
+const BRAND_RED = "#ed2024";
+const BRAND_LIGHT_GREY = "#f8f9fa";
+const BRAND_WHITE = "#ffffff";
+const ACCENT_COLOR = "#FFC107"; // A nice professional amber color
+
+export const theme = createTheme({
   palette: {
-    mode: "light",
     primary: {
-      main: "#2C3E50", // Professional Dark Blue-Gray
-      light: "#34495E",
-      dark: "#1B2631",
-      contrastText: "#ffffff",
+      main: BRAND_BLUE,
+      contrastText: BRAND_WHITE,
     },
     secondary: {
-      main: "#3498DB", // Modern Blue
-      light: "#5DADE2",
-      dark: "#2980B9",
-      contrastText: "#ffffff",
+      main: BRAND_RED,
+      contrastText: BRAND_WHITE,
     },
     background: {
-      default: "#F5F5F5", // Softer Gray
-      paper: "#FFFFFF",
+      default: BRAND_LIGHT_GREY,
+      paper: BRAND_WHITE,
     },
-    text: {
-      primary: "#212121",
-      secondary: "#757575",
+    accent: {
+      main: ACCENT_COLOR,
+      contrastText: BRAND_WHITE,
     },
-    error: {
-      main: "#D32F2F",
-    },
-    success: {
-      main: "#2E7D32",
-    },
-    info: {
-      main: "#0288D1",
-    },
-    warning: {
-      main: "#ED6C02",
-    },
-  },
-  typography: {
-    fontFamily: ['"Inter"', '"Helvetica"', '"Arial"', "sans-serif"].join(","),
-    h1: {
-      fontWeight: 700,
-      fontSize: "2.75rem",
-    },
-    h2: {
-      fontWeight: 700,
-      fontSize: "2.25rem",
-    },
-    h3: {
-      fontWeight: 600,
-      fontSize: "1.75rem",
-    },
-    h4: {
-      fontWeight: 600,
-      fontSize: "1.5rem",
-    },
-    h5: {
-      fontWeight: 600,
-      fontSize: "1.25rem",
-    },
-    h6: {
-      fontWeight: 600,
-      fontSize: "1.1rem",
-    },
-    button: {
-      textTransform: "none",
-      fontWeight: 600,
-    },
-  },
-  shape: {
-    borderRadius: 12,
+    // You can add more colors here if needed
   },
   components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: 8,
-          padding: "10px 24px",
-          boxShadow: "none",
-          "&:hover": {
-            boxShadow: "none",
-          },
-        },
-        containedPrimary: {
-          "&:hover": {
-            backgroundColor: "#4527A0",
-          },
-        },
-      },
-    },
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-        },
-      },
-    },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-          borderBottom: "none",
-          background: "linear-gradient(135deg, #2C3E50 0%, #34495E 100%)",
+          // Background handled by component-level gradient
+          color: BRAND_WHITE,
         },
       },
     },
     MuiDrawer: {
-      styleOverrides: {
-        paper: {
-          borderRight: "none",
-        },
-      },
-    },
-    MuiTextField: {
-      styleOverrides: {
-        root: {
-          "& .MuiOutlinedInput-root": {
-            borderRadius: 8,
-          },
-        },
-      },
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          borderRadius: 12,
-          boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-        },
-      },
-    },
+        styleOverrides: {
+            paper: {
+                // Background handled by component-level gradient
+                color: BRAND_WHITE,
+            }
+        }
+    }
   },
 });
-
-export default theme;

@@ -31,9 +31,11 @@ import { useLessons } from '../../contexts/LessonContext';
 import { useGradeBooks } from '../../contexts/GradeBookContext';
 import { useSubjects } from '../../contexts/SubjectsContext';
 import useDrivePicker from 'react-google-drive-picker';
+import { useTheme } from '@mui/material/styles';
 
 
 const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
+  const theme = useTheme();
   const { addLesson, updateLesson } = useLessons();
   const { gradeBooks } = useGradeBooks();
   const { subjects, loading: subjectsLoading } = useSubjects();
@@ -206,14 +208,32 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Card>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
+      <Card 
+        elevation={3}
+        sx={{
+          bgcolor: theme.palette.background.paper,
+          borderRadius: 3,
+          border: `1px solid ${theme.palette.divider}`,
+          overflow: 'hidden'
+        }}
+      >
+        <CardContent sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+          <Typography 
+            variant="h5" 
+            gutterBottom
+            sx={{
+              fontSize: { xs: '1.25rem', sm: '1.5rem' },
+              fontWeight: 600,
+              color: theme.palette.primary.main,
+              mb: { xs: 2, sm: 3 },
+              textAlign: { xs: 'center', sm: 'left' }
+            }}
+          >
             {initialData ? 'Edit Lesson' : 'Add New Lesson'}
           </Typography>
           
-          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
-            <Grid container spacing={2}>
+          <Box component="form" onSubmit={handleSubmit} sx={{ mt: { xs: 1, sm: 2 } }}>
+            <Grid container spacing={{ xs: 2, sm: 2, md: 3 }}>
               {/* Basic Information */}
               <Grid item xs={12} md={6}>
                 <TextField
@@ -223,6 +243,17 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
                   onChange={(e) => handleInputChange('title', e.target.value)}
                   required
                   margin="normal"
+                  size={window.innerWidth < 600 ? "small" : "medium"}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      "&:hover fieldset": {
+                        borderColor: theme.palette.primary.main
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: theme.palette.primary.main
+                      }
+                    }
+                  }}
                 />
               </Grid>
               
@@ -236,13 +267,24 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth margin="normal">
+                <FormControl fullWidth margin="normal" size={window.innerWidth < 600 ? "small" : "medium"}>
                   <InputLabel>Subject</InputLabel>
                   <Select
                     value={formData.subject}
                     onChange={(e) => handleInputChange('subject', e.target.value)}
                     label="Subject"
                     disabled={subjectsLoading}
+                    sx={{
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: theme.palette.divider
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: theme.palette.primary.main
+                      },
+                      "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                        borderColor: theme.palette.primary.main
+                      }
+                    }}
                   >
                     <MenuItem value="">No Subject</MenuItem>
                     {subjects && subjects.map((s) => (
@@ -253,12 +295,23 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth margin="normal">
+                <FormControl fullWidth margin="normal" size={window.innerWidth < 600 ? "small" : "medium"}>
                   <InputLabel>Gradebook</InputLabel>
                   <Select
                     value={formData.gradebookId}
                     onChange={(e) => handleInputChange('gradebookId', e.target.value)}
                     label="Gradebook"
+                    sx={{
+                      "& .MuiOutlinedInput-notchedOutline": {
+                        borderColor: theme.palette.divider
+                      },
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: theme.palette.primary.main
+                      },
+                      "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                        borderColor: theme.palette.primary.main
+                      }
+                    }}
                   >
                     <MenuItem value="">No Gradebook</MenuItem>
                     {gradeBooks.map(gradebook => (
@@ -277,9 +330,20 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
                   value={formData.description}
                   onChange={(e) => handleInputChange('description', e.target.value)}
                   multiline
-                  rows={3}
+                  rows={window.innerWidth < 600 ? 2 : 3}
                   margin="normal"
                   required
+                  size={window.innerWidth < 600 ? "small" : "medium"}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      "&:hover fieldset": {
+                        borderColor: theme.palette.primary.main
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: theme.palette.primary.main
+                      }
+                    }
+                  }}
                 />
               </Grid>
 
@@ -291,9 +355,20 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
                   value={formData.learningObjectives}
                   onChange={(e) => handleInputChange('learningObjectives', e.target.value)}
                   multiline
-                  rows={2}
+                  rows={window.innerWidth < 600 ? 2 : 2}
                   margin="normal"
+                  size={window.innerWidth < 600 ? "small" : "medium"}
                   helperText="Enter learning objectives separated by commas"
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      "&:hover fieldset": {
+                        borderColor: theme.palette.primary.main
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: theme.palette.primary.main
+                      }
+                    }
+                  }}
                 />
               </Grid>
 
@@ -305,9 +380,20 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
                   value={formData.activities}
                   onChange={(e) => handleInputChange('activities', e.target.value)}
                   multiline
-                  rows={2}
+                  rows={window.innerWidth < 600 ? 2 : 2}
                   margin="normal"
+                  size={window.innerWidth < 600 ? "small" : "medium"}
                   helperText="Enter activities separated by commas"
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      "&:hover fieldset": {
+                        borderColor: theme.palette.primary.main
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: theme.palette.primary.main
+                      }
+                    }
+                  }}
                 />
               </Grid>
 
@@ -319,45 +405,93 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
                   value={formData.homework}
                   onChange={(e) => handleInputChange('homework', e.target.value)}
                   multiline
-                  rows={2}
+                  rows={window.innerWidth < 600 ? 2 : 2}
                   margin="normal"
+                  size={window.innerWidth < 600 ? "small" : "medium"}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      "&:hover fieldset": {
+                        borderColor: theme.palette.primary.main
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: theme.palette.primary.main
+                      }
+                    }
+                  }}
                 />
               </Grid>
 
               {/* Materials */}
               <Grid item xs={12}>
-                <Typography variant="subtitle1" gutterBottom>
+                <Typography 
+                  variant="subtitle1" 
+                  gutterBottom
+                  sx={{
+                    fontWeight: 600,
+                    color: theme.palette.text.primary,
+                    fontSize: { xs: '1rem', sm: '1.125rem' }
+                  }}
+                >
                   Materials
                 </Typography>
                 
-                {formData.materials.map((material, index) => (
-                  <Chip
-                    key={index}
-                    label={`${material.name} (${material.type})`}
-                    onDelete={() => handleMaterialDelete(index)}
-                    sx={{ m: 0.5 }}
-                  />
-                ))}
+                <Box sx={{ mb: { xs: 1, sm: 2 } }}>
+                  {formData.materials.map((material, index) => (
+                    <Chip
+                      key={index}
+                      label={`${material.name} (${material.type})`}
+                      onDelete={() => handleMaterialDelete(index)}
+                      sx={{ 
+                        m: { xs: 0.25, sm: 0.5 },
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                        height: { xs: 24, sm: 32 }
+                      }}
+                      color="primary"
+                      variant="outlined"
+                    />
+                  ))}
+                </Box>
 
-                <Divider sx={{ my: 2 }} />
+                <Divider sx={{ my: { xs: 1, sm: 2 } }} />
                 
-                <Grid container spacing={1} alignItems="center">
-                  <Grid item xs={12} md={3}>
+                <Grid container spacing={{ xs: 1, sm: 1, md: 2 }} alignItems="center">
+                  <Grid item xs={12} sm={6} md={3}>
                     <TextField
                       fullWidth
                       size="small"
                       label="Material Name"
                       value={newMaterial.name}
                       onChange={(e) => setNewMaterial(prev => ({ ...prev, name: e.target.value }))}
+                      sx={{
+                        "& .MuiOutlinedInput-root": {
+                          "&:hover fieldset": {
+                            borderColor: theme.palette.primary.main
+                          },
+                          "&.Mui-focused fieldset": {
+                            borderColor: theme.palette.primary.main
+                          }
+                        }
+                      }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={2}>
+                  <Grid item xs={12} sm={6} md={2}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Type</InputLabel>
                       <Select
                         value={newMaterial.type}
                         onChange={(e) => setNewMaterial(prev => ({ ...prev, type: e.target.value }))}
                         label="Type"
+                        sx={{
+                          "& .MuiOutlinedInput-notchedOutline": {
+                            borderColor: theme.palette.divider
+                          },
+                          "&:hover .MuiOutlinedInput-notchedOutline": {
+                            borderColor: theme.palette.primary.main
+                          },
+                          "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                            borderColor: theme.palette.primary.main
+                          }
+                        }}
                       >
                         <MenuItem value="google_drive">Google Drive</MenuItem>
                         <MenuItem value="youtube">YouTube</MenuItem>
@@ -374,64 +508,106 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
                       label="URL"
                       value={newMaterial.url}
                       onChange={(e) => setNewMaterial(prev => ({ ...prev, url: e.target.value }))}
+                      sx={{
+                        "& .MuiOutlinedInput-root": {
+                          "&:hover fieldset": {
+                            borderColor: theme.palette.primary.main
+                          },
+                          "&.Mui-focused fieldset": {
+                            borderColor: theme.palette.primary.main
+                          }
+                        }
+                      }}
                     />
                   </Grid>
                   <Grid item xs={12} md={2}>
-                    <IconButton onClick={handleMaterialAdd} color="primary">
-                      <AddIcon />
-                    </IconButton>
-                    <Button variant="outlined" size="small" onClick={() => {
-                      console.log('=== OPENING GOOGLE DRIVE PICKER DIRECTLY ===');
-                      openPicker({
-                        clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID,
-                        developerKey: "AIzaSyAYI6vd9LWfIsuTM6sCFtDz915QLlFlOdc",
-                        viewId: 'DOCS',
-                        showUploadView: false,
-                        setIncludeFolders: false,
-                        multiselect: false,
-                        customScopes: ['https://www.googleapis.com/auth/drive.readonly'],
-                        setOrigin: window.location.origin,
-                        setParentFolder: '',
-                        setSelectFolderEnabled: false,
-                        setEnableFeature: 'MINE_ONLY',
-                        callbackFunction: (data) => {
-                          console.log('=== GOOGLE DRIVE FILE SELECTED ===');
-                          console.log('Raw file object:', data);
-                          
-                          if (data.action === 'picked') {
-                            const selectedFile = data.docs[0];
-                            if (selectedFile) {
-                              console.log('File name:', selectedFile.name);
-                              console.log('File URL:', selectedFile.url);
-                              console.log('File type:', selectedFile.mimeType);
-                              console.log('File ID:', selectedFile.id);
+                    <Box sx={{ 
+                      display: 'flex', 
+                      flexDirection: { xs: 'column', sm: 'row' },
+                      gap: { xs: 1, sm: 1 },
+                      width: '100%'
+                    }}>
+                      <IconButton 
+                        onClick={handleMaterialAdd} 
+                        color="primary"
+                        sx={{
+                          backgroundColor: theme.palette.primary.light,
+                          '&:hover': {
+                            backgroundColor: theme.palette.primary.main,
+                            color: theme.palette.primary.contrastText
+                          },
+                          width: { xs: '100%', sm: 'auto' },
+                          borderRadius: { xs: 1, sm: '50%' }
+                        }}
+                      >
+                        <AddIcon />
+                      </IconButton>
+                      <Button 
+                        variant="outlined" 
+                        size="small" 
+                        onClick={() => {
+                          console.log('=== OPENING GOOGLE DRIVE PICKER DIRECTLY ===');
+                          openPicker({
+                            clientId: process.env.REACT_APP_GOOGLE_CLIENT_ID,
+                            developerKey: "AIzaSyAYI6vd9LWfIsuTM6sCFtDz915QLlFlOdc",
+                            viewId: 'DOCS',
+                            showUploadView: false,
+                            setIncludeFolders: false,
+                            multiselect: false,
+                            customScopes: ['https://www.googleapis.com/auth/drive.readonly'],
+                            setOrigin: window.location.origin,
+                            setParentFolder: '',
+                            setSelectFolderEnabled: false,
+                            setEnableFeature: 'MINE_ONLY',
+                            callbackFunction: (data) => {
+                              console.log('=== GOOGLE DRIVE FILE SELECTED ===');
+                              console.log('Raw file object:', data);
                               
-                              const updatedMaterial = {
-                                name: selectedFile.name || 'Drive File',
-                                type: 'google_drive',
-                                url: selectedFile.url || '',
-                                description: ''
-                              };
-                              
-                              console.log('Updated material object:', updatedMaterial);
-                              setNewMaterial(updatedMaterial);
-                              console.log('Material set successfully!');
+                              if (data.action === 'picked') {
+                                const selectedFile = data.docs[0];
+                                if (selectedFile) {
+                                  console.log('File name:', selectedFile.name);
+                                  console.log('File URL:', selectedFile.url);
+                                  console.log('File type:', selectedFile.mimeType);
+                                  console.log('File ID:', selectedFile.id);
+                                  
+                                  const updatedMaterial = {
+                                    name: selectedFile.name || 'Drive File',
+                                    type: 'google_drive',
+                                    url: selectedFile.url || '',
+                                    description: ''
+                                  };
+                                  
+                                  console.log('Updated material object:', updatedMaterial);
+                                  setNewMaterial(updatedMaterial);
+                                  console.log('Material set successfully!');
+                                }
+                              } else if (data.action === 'cancel') {
+                                console.log('User cancelled file selection');
+                              }
+                            },
+                            onAuthFailed: (data) => {
+                              console.error('Auth failed:', data);
+                              alert('Authentication failed. Please try again.');
+                            },
+                            onPickerInited: (picker) => {
+                              console.log('Picker initialized successfully');
                             }
-                          } else if (data.action === 'cancel') {
-                            console.log('User cancelled file selection');
+                          });
+                        }} 
+                        sx={{ 
+                          width: { xs: '100%', sm: 'auto' },
+                          borderColor: theme.palette.primary.main,
+                          color: theme.palette.primary.main,
+                          '&:hover': {
+                            borderColor: theme.palette.primary.dark,
+                            backgroundColor: theme.palette.primary.light
                           }
-                        },
-                        onAuthFailed: (data) => {
-                          console.error('Auth failed:', data);
-                          alert('Authentication failed. Please try again.');
-                        },
-                        onPickerInited: (picker) => {
-                          console.log('Picker initialized successfully');
-                        }
-                      });
-                    }} sx={{ ml: 1 }}>
-                      Add from Drive
-                    </Button>
+                        }}
+                      >
+                        Add from Drive
+                      </Button>
+                    </Box>
                   </Grid>
                 </Grid>
               </Grid>
@@ -444,9 +620,20 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
                   value={formData.notes}
                   onChange={(e) => handleInputChange('notes', e.target.value)}
                   multiline
-                  rows={3}
+                  rows={window.innerWidth < 600 ? 2 : 3}
                   margin="normal"
+                  size={window.innerWidth < 600 ? "small" : "medium"}
                   helperText="Any additional notes or observations"
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      "&:hover fieldset": {
+                        borderColor: theme.palette.primary.main
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: theme.palette.primary.main
+                      }
+                    }
+                  }}
                 />
               </Grid>
 
@@ -459,16 +646,44 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
                   value={formData.duration}
                   onChange={(e) => handleInputChange('duration', parseInt(e.target.value) || 0)}
                   margin="normal"
+                  size={window.innerWidth < 600 ? "small" : "medium"}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      "&:hover fieldset": {
+                        borderColor: theme.palette.primary.main
+                      },
+                      "&.Mui-focused fieldset": {
+                        borderColor: theme.palette.primary.main
+                      }
+                    }
+                  }}
                 />
               </Grid>
             </Grid>
 
             {/* Action Buttons */}
-            <Box sx={{ mt: 3, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+            <Box sx={{ 
+              mt: { xs: 2, sm: 3 }, 
+              display: 'flex', 
+              flexDirection: { xs: 'column', sm: 'row' },
+              gap: { xs: 1, sm: 2 }, 
+              justifyContent: { xs: 'center', sm: 'flex-end' },
+              alignItems: { xs: 'stretch', sm: 'center' }
+            }}>
               <Button
                 variant="outlined"
                 startIcon={<ClearIcon />}
                 onClick={handleClear}
+                size={window.innerWidth < 600 ? "large" : "medium"}
+                sx={{
+                  order: { xs: 3, sm: 1 },
+                  borderColor: theme.palette.grey[400],
+                  color: theme.palette.text.secondary,
+                  '&:hover': {
+                    borderColor: theme.palette.grey[600],
+                    backgroundColor: theme.palette.grey[50]
+                  }
+                }}
               >
                 Clear
               </Button>
@@ -476,6 +691,16 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
                 <Button
                   variant="outlined"
                   onClick={onCancel}
+                  size={window.innerWidth < 600 ? "large" : "medium"}
+                  sx={{
+                    order: { xs: 2, sm: 2 },
+                    borderColor: theme.palette.secondary.main,
+                    color: theme.palette.secondary.main,
+                    '&:hover': {
+                      borderColor: theme.palette.secondary.dark,
+                      backgroundColor: theme.palette.secondary.light
+                    }
+                  }}
                 >
                   Cancel
                 </Button>
@@ -484,6 +709,15 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
                 type="submit"
                 variant="contained"
                 startIcon={<SaveIcon />}
+                size={window.innerWidth < 600 ? "large" : "medium"}
+                sx={{
+                  order: { xs: 1, sm: 3 },
+                  backgroundColor: theme.palette.primary.main,
+                  '&:hover': {
+                    backgroundColor: theme.palette.primary.dark
+                  },
+                  fontWeight: 600
+                }}
               >
                 {initialData ? 'Update Lesson' : 'Save Lesson'}
               </Button>
@@ -531,9 +765,20 @@ const LessonEntryForm = ({ onSave, initialData = null, onCancel }) => {
         open={snackbar.open}
         autoHideDuration={6000}
         onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ 
+          vertical: 'bottom', 
+          horizontal: window.innerWidth < 600 ? 'center' : 'right'
+        }}
       >
-        <Alert severity={snackbar.severity} onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}>
-          {snackbar.message}
+        <Alert 
+          severity={snackbar.severity || 'info'} 
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+          sx={{
+            fontSize: { xs: '0.875rem', sm: '1rem' },
+            width: { xs: '90vw', sm: 'auto' }
+          }}
+        >
+          {snackbar.message || ''}
         </Alert>
       </Snackbar>
     </LocalizationProvider>

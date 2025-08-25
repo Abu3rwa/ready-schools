@@ -1,33 +1,95 @@
 import dayjs from 'dayjs';
 
 /**
- * Deterministically selects an item from an array based on student ID, date, and content type.
- * This ensures the same student gets consistent but unique content each day.
- * 
- * @param {Array} array - Array of items to select from
- * @param {string} studentId - Student's unique identifier
- * @param {Date|string} date - Date to use for selection (defaults to today)
- * @param {string} contentType - Type of content being selected (e.g., 'greeting', 'header')
- * @returns {any} Selected item from the array, or null if array is empty/invalid
+ * Deterministic Content Selector
+ * Ensures consistent content selection for each student on each date
+ * while providing variation across different students and dates
  */
-export const selectDeterministicItem = (array, studentId, date = new Date(), contentType) => {
-  // Validate inputs
-  if (!array || !Array.isArray(array) || array.length === 0) return null;
-  if (!studentId) return array[0]; // Fallback to first item if no student ID
 
-  // Create a deterministic seed string
-  const dateString = dayjs(date).format('YYYY-MM-DD');
+/**
+ * Selects a deterministic item from an array based on student ID, date, and content type
+ * @param {Array} array - Array of content items to select from
+ * @param {string} studentId - Unique student identifier
+ * @param {string|Date} date - Date for content selection
+ * @param {string} contentType - Type of content being selected
+ * @returns {*} Selected item from array, or null if array is empty
+ */
+export const selectDeterministicItem = (array, studentId, date, contentType) => {
+  if (!array || array.length === 0) return null;
+  
+  // Normalize date to YYYY-MM-DD format
+  const dateString = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+  
+  // Create a unique seed for this combination
   const seed = `${studentId}-${dateString}-${contentType}`;
-
-  // Generate a hash from the seed string
+  
+  // Simple but effective hash function
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
     hash = ((hash << 5) - hash) + seed.charCodeAt(i);
-    hash |= 0; // Convert to 32bit integer
+    hash |= 0; // Convert to 32-bit integer
   }
-
-  // Use the hash to select an item from the array
+  
+  // Return item at hash position, ensuring it's within array bounds
   return array[Math.abs(hash) % array.length];
+};
+
+/**
+ * Selects multiple items from an array with deterministic ordering
+ * @param {Array} array - Array of content items to select from
+ * @param {string} studentId - Unique student identifier
+ * @param {string|Date} date - Date for content selection
+ * @param {string} contentType - Type of content being selected
+ * @param {number} count - Number of items to select
+ * @returns {Array} Array of selected items
+ */
+export const selectMultipleDeterministicItems = (array, studentId, date, contentType, count) => {
+  if (!array || array.length === 0) return [];
+  
+  const selected = [];
+  const available = [...array]; // Create a copy to avoid modifying original
+  
+  for (let i = 0; i < Math.min(count, array.length); i++) {
+    const item = selectDeterministicItem(available, studentId, date, `${contentType}-${i}`);
+    if (item) {
+      selected.push(item);
+      // Remove selected item to avoid duplicates
+      const index = available.indexOf(item);
+      if (index > -1) {
+        available.splice(index, 1);
+      }
+    }
+  }
+  
+  return selected;
+};
+
+/**
+ * Validates content selection parameters
+ * @param {Array} array - Array to validate
+ * @param {string} studentId - Student ID to validate
+ * @param {string|Date} date - Date to validate
+ * @param {string} contentType - Content type to validate
+ * @returns {Object} Validation result with isValid boolean and error message
+ */
+export const validateSelectionParams = (array, studentId, date, contentType) => {
+  if (!Array.isArray(array)) {
+    return { isValid: false, error: 'Array parameter must be an array' };
+  }
+  
+  if (!studentId || typeof studentId !== 'string') {
+    return { isValid: false, error: 'Student ID must be a non-empty string' };
+  }
+  
+  if (!date) {
+    return { isValid: false, error: 'Date parameter is required' };
+  }
+  
+  if (!contentType || typeof contentType !== 'string') {
+    return { isValid: false, error: 'Content type must be a non-empty string' };
+  }
+  
+  return { isValid: true, error: null };
 };
 
 /**

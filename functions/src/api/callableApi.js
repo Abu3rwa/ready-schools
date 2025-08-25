@@ -37,7 +37,7 @@ export const sendDailyUpdates = async (data, context) => {
 
     const dailyUpdateService = new DailyUpdateService();
     dailyUpdateService.setDataSources(dataSources);
-    const dailyUpdates = dailyUpdateService.generateAllDailyUpdates(new Date(date));
+    const dailyUpdates = await dailyUpdateService.generateAllDailyUpdates(new Date(date));
     
     let emailsSent = 0;
     const savedEmails = [];
@@ -69,7 +69,14 @@ export const sendDailyUpdates = async (data, context) => {
             recipients: update.parentEmails,
             date: new Date().toISOString(),
             sentStatus: "sent",
+            recipientType: "parent",
             userId: auth.uid,
+            metadata: {
+              createdAt: new Date().toISOString(),
+              sentAt: new Date().toISOString(),
+              teacherName: dataSources.teacher?.name || "Teacher",
+              schoolName: dataSources.schoolName || "School",
+            }
           };
           
           await adminDb.collection("dailyUpdateEmails").add(emailRecord);
@@ -126,6 +133,8 @@ export const sendStudentDailyUpdate = async (data, context) => {
     });
     
     const results = [];
+    const savedEmails = [];
+    
     for (const parentEmail of dailyUpdate.parentEmails) {
       try {
         const result = await emailService.sendEmail({
@@ -134,6 +143,31 @@ export const sendStudentDailyUpdate = async (data, context) => {
           html: emailContent.html,
         }, auth.uid);
         results.push({ email: parentEmail, success: true, messageId: result?.messageId });
+        
+        // Save email record to Firestore
+        const emailRecord = {
+          studentId: dailyUpdate.studentId,
+          studentName: dailyUpdate.studentName,
+          subject: emailContent.subject,
+          recipients: [parentEmail],
+          date: new Date().toISOString(),
+          sentStatus: "sent",
+          recipientType: "parent",
+          userId: auth.uid,
+          messageId: result?.messageId,
+          metadata: {
+            createdAt: new Date().toISOString(),
+            sentAt: new Date().toISOString(),
+            teacherName: dataSources.teacher?.name || "Teacher",
+            schoolName: dataSources.schoolName || "School",
+          }
+        };
+        
+        await adminDb.collection("dailyUpdateEmails").add(emailRecord);
+        savedEmails.push({
+          id: `email-${Date.now()}-${dailyUpdate.studentId}`,
+          ...emailRecord,
+        });
       } catch (emailError) {
         console.error(`Error sending email to ${parentEmail}:`, emailError);
         results.push({ email: parentEmail, success: false, error: emailError.message });
@@ -146,6 +180,7 @@ export const sendStudentDailyUpdate = async (data, context) => {
       studentName: dailyUpdate.studentName,
       parentEmails: dailyUpdate.parentEmails,
       results,
+      savedEmails,
     };
   } catch (error) {
     console.error("sendStudentDailyUpdate error:", error);
@@ -200,7 +235,7 @@ export const getDailyUpdateData = async (data, context) => {
       };
     } else {
       console.log("Generating daily updates for all students");
-      const dailyUpdates = dailyUpdateService.generateAllDailyUpdates(new Date(date));
+      const dailyUpdates = await dailyUpdateService.generateAllDailyUpdates(new Date(date));
       console.log(`Generated updates for ${dailyUpdates.length} students`);
       
       const classSummary = dailyUpdateService.getClassSummary(new Date(date));

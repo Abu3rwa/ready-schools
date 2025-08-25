@@ -33,9 +33,9 @@ const Settings = () => {
         <Grid item xs={12}>
           <EmailSettings />
         </Grid>
-        <Grid item xs={12}>
+        {/* <Grid item xs={12}>
           <GmailSetup />
-        </Grid>
+        </Grid> */}
       </Grid>
     </Container>
   );

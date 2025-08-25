@@ -2,12 +2,13 @@ import { httpsCallable } from "firebase/functions";
 import { functions, auth } from "../firebase";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { db } from "../firebase";
+import { getContentLibrary } from "./contentLibraryService.js";
 
 // Daily Update API functions (callable v2)
 const sendDailyUpdates = httpsCallable(functions, "sendDailyUpdates");
 // Parent-targeted student-specific sender (legacy, HTTP onRequest). Keep for backward compatibility where used.
 const sendStudentDailyUpdate = httpsCallable(functions, "sendStudentDailyUpdate");
-// New student-targeted callables
+// New student-targeted callables (match backend exported names)
 const sendStudentEmails = httpsCallable(functions, "sendStudentEmails");
 const sendStudentEmail = httpsCallable(functions, "sendStudentEmail");
 const getDailyUpdateData = httpsCallable(functions, "getDailyUpdateData");
@@ -157,9 +158,9 @@ export class FrontendDailyUpdateService {
   /**
    * Prepare data sources from context data
    * @param {Object} contexts - Object containing all context data
-   * @returns {Object} Formatted data sources
+   * @returns {Promise<Object>} Formatted data sources with email content library
    */
-  prepareDataSources(contexts) {
+  async prepareDataSources(contexts) {
     const {
       students = [],
       attendance = [],
@@ -169,7 +170,24 @@ export class FrontendDailyUpdateService {
       lessons = [],
       teacher,
       schoolName,
+      // Pass through unified email preferences from UI
+      emailPreferences,
     } = contexts;
+
+    // Load email content library for the current teacher
+    let emailContentLibrary = {};
+    try {
+      const currentUser = auth.currentUser;
+      if (currentUser?.uid) {
+        emailContentLibrary = await getContentLibrary(currentUser.uid);
+        console.log("Frontend: Loaded email content library for teacher:", currentUser.uid);
+      } else {
+        console.warn("Frontend: No authenticated user found, using empty email content library");
+      }
+    } catch (error) {
+      console.error("Frontend: Error loading email content library:", error);
+      emailContentLibrary = {}; // Fallback to empty object
+    }
 
     return {
       students: students.map((student) => ({
@@ -240,6 +258,10 @@ export class FrontendDailyUpdateService {
       // Add teacher and school name to the data sources
       teacher,
       schoolName,
+      // Add email content library for backend to use
+      emailContentLibrary,
+      // Forward unified email preferences so backend respects student.enabled and section toggles
+      emailPreferences,
     };
   }
 
@@ -251,7 +273,7 @@ export class FrontendDailyUpdateService {
    * @returns {Promise<Object>} Preview data
    */
   async previewDailyUpdate(studentId, contexts, date = new Date()) {
-    const dataSources = this.prepareDataSources(contexts);
+    const dataSources = await this.prepareDataSources(contexts);
     return await this.fetchDailyUpdateData(studentId, dataSources, date);
   }
 
@@ -262,7 +284,7 @@ export class FrontendDailyUpdateService {
    * @returns {Promise<Object>} Preview data for all students
    */
   async previewAllDailyUpdates(contexts, date = new Date()) {
-    const dataSources = this.prepareDataSources(contexts);
+    const dataSources = await this.prepareDataSources(contexts);
     return await this.fetchDailyUpdateData(null, dataSources, date);
   }
 
@@ -278,7 +300,7 @@ export class FrontendDailyUpdateService {
     date = new Date(),
     onProgress = null
   ) {
-    const dataSources = this.prepareDataSources(contexts);
+    const dataSources = await this.prepareDataSources(contexts);
 
     if (onProgress) {
       onProgress({
@@ -326,7 +348,7 @@ export class FrontendDailyUpdateService {
    * Send daily updates to all students (to studentEmail)
    */
   async sendStudentEmailsToAll(contexts, date = new Date()) {
-    const dataSources = this.prepareDataSources(contexts);
+    const dataSources = await this.prepareDataSources(contexts);
     try {
       // Ensure auth token present to populate context.auth in callable
       const currentUser = auth.currentUser;

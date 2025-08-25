@@ -33,9 +33,6 @@ import {
   Tab,
   Tabs,
   Checkbox,
-  Menu,
-  ListItemIcon,
-  ListItemText,
 } from "@mui/material";
 import {
   Save as SaveIcon,
@@ -49,7 +46,6 @@ import {
   EventBusy as ExcusedIcon,
   BarChart as ChartIcon,
   TableChart as TableIcon,
-  MoreVert as MoreVertIcon,
 } from "@mui/icons-material";
 import { useStudents } from "../contexts/StudentContext";
 import { useAttendance } from "../contexts/AttendanceContext";
@@ -57,6 +53,7 @@ import Loading from "../components/common/Loading";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { LocalizationProvider, DatePicker } from "@mui/x-date-pickers";
 import dayjs from "dayjs";
+import {theme } from "../theme";
 
 // Chart.js components
 import {
@@ -104,31 +101,11 @@ const Attendance = () => {
   const [tabValue, setTabValue] = useState(0);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
-  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
-  const [selectedStudentId, setSelectedStudentId] = useState(null);
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: "",
     severity: "success",
   });
-
-  // Menu handlers
-  const handleMenuClick = (event, studentId) => {
-    setSelectedStudentId(studentId);
-    setMenuAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setMenuAnchorEl(null);
-    setSelectedStudentId(null);
-  };
-
-  const handleStatusMenuSelect = (newStatus) => {
-    if (selectedStudentId) {
-      handleStatusChange(selectedStudentId, newStatus);
-    }
-    handleMenuClose();
-  };
 
   // Loading state
   const loading = studentsLoading || attendanceLoading;
@@ -304,10 +281,10 @@ const Attendance = () => {
 
   // Close snackbar
   const handleCloseSnackbar = () => {
-    setSnackbar({
-      ...snackbar,
+    setSnackbar((prev) => ({
+      ...prev,
       open: false,
-    });
+    }));
   };
 
   // Format date for display
@@ -662,176 +639,345 @@ const Attendance = () => {
             </Paper>
 
             {/* Attendance Table */}
-            <Card elevation={2}>
-              <CardContent>
-                <Typography variant="h6" gutterBottom>
+            <Card 
+              elevation={2}
+              sx={{
+                bgcolor: theme.palette.background.paper,
+                borderRadius: 2,
+                overflow: "hidden"
+              }}
+            >
+              <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                <Typography 
+                  variant="h6" 
+                  gutterBottom
+                  sx={{
+                    fontSize: { xs: "1rem", sm: "1.25rem" },
+                    fontWeight: 600,
+                    color: theme.palette.primary.main,
+                    mb: { xs: 2, sm: 3 }
+                  }}
+                >
                   {formatDate(selectedDate)}
                 </Typography>
-                <Divider sx={{ mb: 2 }} />
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell padding="checkbox">
-                          <Checkbox
-                            color="primary"
-                            indeterminate={
-                              attendanceRecords.some(record => record.status === "Present") &&
-                              !attendanceRecords.every(record => record.status === "Present")
-                            }
-                            checked={attendanceRecords.every(record => record.status === "Present")}
-                            onChange={(event) => {
-                              const newStatus = event.target.checked ? "Present" : "Absent";
+                
+                {/* Quick Actions */}
+                <Box sx={{ 
+                  mb: { xs: 2, sm: 3 },
+                  display: 'flex',
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  gap: { xs: 1, sm: 2 },
+                  alignItems: { xs: 'stretch', sm: 'center' }
+                }}>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    size="medium"
+                    startIcon={<PresentIcon />}
+                    onClick={() => {
                               attendanceRecords.forEach(record => {
-                                handleStatusChange(record.studentId, newStatus);
+                        handleStatusChange(record.studentId, "Present");
                               });
                             }}
-                          />
-                        </TableCell>
-                        <TableCell>Student</TableCell>
-                        <TableCell>Status</TableCell>
-                        <TableCell>Notes</TableCell>
-                        <TableCell align="right">Actions</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
+                    sx={{ 
+                      bgcolor: theme.palette.success.main,
+                      "&:hover": { bgcolor: theme.palette.success.dark },
+                      fontSize: { xs: "0.875rem", sm: "1rem" },
+                      py: { xs: 1, sm: 1.5 },
+                      fontWeight: 600
+                    }}
+                  >
+                    Mark All Present
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="medium"
+                    startIcon={<AbsentIcon />}
+                    onClick={() => {
+                      attendanceRecords.forEach(record => {
+                        handleStatusChange(record.studentId, "Absent");
+                      });
+                    }}
+                    sx={{ 
+                      borderColor: theme.palette.error.main,
+                      color: theme.palette.error.main,
+                      borderWidth: 2,
+                      "&:hover": { 
+                        borderColor: theme.palette.error.dark,
+                        bgcolor: `${theme.palette.error.main}10`,
+                        borderWidth: 2
+                      },
+                      fontSize: { xs: "0.875rem", sm: "1rem" },
+                      py: { xs: 1, sm: 1.5 },
+                      fontWeight: 600
+                    }}
+                  >
+                    Mark All Absent
+                  </Button>
+                </Box>
+
+                <Divider sx={{ mb: { xs: 2, sm: 3 }, bgcolor: theme.palette.divider }} />
+
+                {/* Student Cards Layout */}
+                <Grid container spacing={{ xs: 2, sm: 3 }}>
                       {attendanceRecords.map((record) => {
+                    const studentName = getStudentName(record.studentId);
                         return (
-                          <TableRow key={record.id || `${record.studentId}-${record.date}`}>
-                            <TableCell padding="checkbox">
-                              <Checkbox
-                                checked={record.status === "Present"}
-                                onChange={(event) => {
-                                  handleStatusChange(
-                                    record.studentId,
-                                    event.target.checked ? "Present" : "Absent"
-                                  );
+                      <Grid item xs={12} sm={6} lg={4} key={record.id || `${record.studentId}-${record.date}`}>
+                        <Card 
+                          elevation={3}
+                          sx={{
+                            border: `3px solid ${
+                              record.status === 'Present' 
+                                ? theme.palette.success.main
+                                : record.status === 'Absent'
+                                ? theme.palette.error.main
+                                : record.status === 'Tardy'
+                                ? theme.palette.warning.main
+                                : theme.palette.divider
+                            }`,
+                            borderRadius: 3,
+                            bgcolor: record.status === 'Present' 
+                              ? `${theme.palette.success.main}12` 
+                              : record.status === 'Absent'
+                              ? `${theme.palette.error.main}12`
+                              : record.status === 'Tardy'
+                              ? `${theme.palette.warning.main}12`
+                              : theme.palette.background.paper,
+                            transition: 'all 0.3s ease',
+                            '&:hover': {
+                              transform: 'translateY(-2px)',
+                              boxShadow: theme.shadows[6]
+                            }
+                          }}
+                        >
+                          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                            {/* Student Name and Current Status */}
+                            <Box sx={{ 
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'flex-start',
+                              mb: 2
+                            }}>
+                              <Typography 
+                                variant="h6"
+                                sx={{ 
+                                  fontSize: { xs: '1rem', sm: '1.1rem' },
+                                  fontWeight: 700,
+                                  color: theme.palette.text.primary,
+                                  flex: 1,
+                                  lineHeight: 1.2
                                 }}
-                                color="primary"
-                              />
-                            </TableCell>
-                            <TableCell>{getStudentName(record.studentId)}</TableCell>
-                            <TableCell>
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              >
+                                {studentName}
+                              </Typography>
                                 <Chip
                                   icon={getStatusIcon(record.status)}
                                   label={record.status}
                                   color={getStatusColor(record.status)}
-                                  size="small"
-                                />
-                                <IconButton 
-                                  size="small"
-                                  onClick={(e) => handleMenuClick(e, record.studentId)}
-                                  sx={{ ml: 1 }}
-                                >
-                                  <MoreVertIcon />
-                                </IconButton>
+                                size="medium"
+                                sx={{ 
+                                  ml: 1,
+                                  fontWeight: 600,
+                                  fontSize: '0.75rem'
+                                }}
+                              />
+                            </Box>
+                            
+                            {/* Large, Touch-Friendly Status Buttons */}
+                            <Box sx={{ 
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(2, 1fr)',
+                              gap: 1.5,
+                              mb: 2
+                            }}>
+                              <Button
+                                variant={record.status === 'Present' ? 'contained' : 'outlined'}
+                                color="success"
+                                size="large"
+                                startIcon={<PresentIcon />}
+                                onClick={() => handleStatusChange(record.studentId, 'Present')}
+                                sx={{
+                                  py: { xs: 1.5, sm: 2 },
+                                  fontSize: { xs: '0.875rem', sm: '1rem' },
+                                  fontWeight: 700,
+                                  borderWidth: 2,
+                                  textTransform: 'none',
+                                  borderRadius: 2,
+                                  minHeight: { xs: 48, sm: 56 },
+                                  "&:hover": {
+                                    borderWidth: 2,
+                                    transform: 'scale(1.02)'
+                                  },
+                                  transition: 'all 0.2s ease'
+                                }}
+                              >
+                                Present
+                              </Button>
+                              <Button
+                                variant={record.status === 'Absent' ? 'contained' : 'outlined'}
+                                color="error"
+                                size="large"
+                                startIcon={<AbsentIcon />}
+                                onClick={() => handleStatusChange(record.studentId, 'Absent')}
+                                sx={{
+                                  py: { xs: 1.5, sm: 2 },
+                                  fontSize: { xs: '0.875rem', sm: '1rem' },
+                                  fontWeight: 700,
+                                  borderWidth: 2,
+                                  textTransform: 'none',
+                                  borderRadius: 2,
+                                  minHeight: { xs: 48, sm: 56 },
+                                  "&:hover": {
+                                    borderWidth: 2,
+                                    transform: 'scale(1.02)'
+                                  },
+                                  transition: 'all 0.2s ease'
+                                }}
+                              >
+                                Absent
+                              </Button>
+                              <Button
+                                variant={record.status === 'Tardy' ? 'contained' : 'outlined'}
+                                color="warning"
+                                size="large"
+                                startIcon={<TardyIcon />}
+                                onClick={() => handleStatusChange(record.studentId, 'Tardy')}
+                                sx={{
+                                  py: { xs: 1.5, sm: 2 },
+                                  fontSize: { xs: '0.875rem', sm: '1rem' },
+                                  fontWeight: 700,
+                                  borderWidth: 2,
+                                  textTransform: 'none',
+                                  borderRadius: 2,
+                                  minHeight: { xs: 48, sm: 56 },
+                                  "&:hover": {
+                                    borderWidth: 2,
+                                    transform: 'scale(1.02)'
+                                  },
+                                  transition: 'all 0.2s ease'
+                                }}
+                              >
+                                Tardy
+                              </Button>
+                              <Button
+                                variant={record.status === 'Absent with Excuse' ? 'contained' : 'outlined'}
+                                color="info"
+                                size="large"
+                                startIcon={<ExcusedIcon />}
+                                onClick={() => handleStatusChange(record.studentId, 'Absent with Excuse')}
+                                sx={{
+                                  py: { xs: 1.5, sm: 2 },
+                                  fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                                  fontWeight: 700,
+                                  borderWidth: 2,
+                                  textTransform: 'none',
+                                  borderRadius: 2,
+                                  minHeight: { xs: 48, sm: 56 },
+                                  "&:hover": {
+                                    borderWidth: 2,
+                                    transform: 'scale(1.02)'
+                                  },
+                                  transition: 'all 0.2s ease'
+                                }}
+                              >
+                                Excused
+                              </Button>
                               </Box>
-                            </TableCell>
-                            <TableCell>
+                            
+                            {/* Notes Field */}
                               <TextField
                                 value={record.notes}
-                                onChange={(e) =>
-                                  handleNotesChange(
-                                    record.studentId,
-                                    e.target.value
-                                  )
-                                }
+                              onChange={(e) => handleNotesChange(record.studentId, e.target.value)}
                                 placeholder="Add notes here..."
                                 size="small"
                                 fullWidth
-                              />
-                            </TableCell>
-                            <TableCell align="right">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleOpenDeleteDialog(record)}
-                                disabled={!record.id}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </TableCell>
-                          </TableRow>
+                              multiline
+                              rows={2}
+                              sx={{
+                                "& .MuiOutlinedInput-root": {
+                                  borderRadius: 2,
+                                  "&:hover fieldset": {
+                                    borderColor: theme.palette.primary.main,
+                                    borderWidth: 2
+                                  },
+                                  "&.Mui-focused fieldset": {
+                                    borderColor: theme.palette.primary.main,
+                                    borderWidth: 2
+                                  }
+                                }
+                              }}
+                            />
+                          </CardContent>
+                        </Card>
+                      </Grid>
                         );
                       })}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                </Grid>
               </CardContent>
             </Card>
           </>
         )}
 
-        {/* Add the Menu outside of the map function */}
-        <Menu
-          anchorEl={menuAnchorEl}
-          open={Boolean(menuAnchorEl)}
-          onClose={handleMenuClose}
-        >
-          <MenuItem onClick={() => handleStatusMenuSelect("Present")}>
-            <ListItemIcon><PresentIcon /></ListItemIcon>
-            <ListItemText>Present</ListItemText>
-          </MenuItem>
-          <MenuItem onClick={() => handleStatusMenuSelect("Absent")}>
-            <ListItemIcon><AbsentIcon /></ListItemIcon>
-            <ListItemText>Absent</ListItemText>
-          </MenuItem>
-          <MenuItem onClick={() => handleStatusMenuSelect("Absent with Excuse")}>
-            <ListItemIcon><ExcusedIcon /></ListItemIcon>
-            <ListItemText>Absent (Excused)</ListItemText>
-          </MenuItem>
-          <MenuItem onClick={() => handleStatusMenuSelect("Tardy")}>
-            <ListItemIcon><TardyIcon /></ListItemIcon>
-            <ListItemText>Tardy</ListItemText>
-          </MenuItem>
-          <MenuItem onClick={() => handleStatusMenuSelect("Tardy with Excuse")}>
-            <ListItemIcon><ExcusedIcon /></ListItemIcon>
-            <ListItemText>Tardy (Excused)</ListItemText>
-          </MenuItem>
-        </Menu>
-
         {/* Attendance Reports Tab */}
         {tabValue === 1 && (
-          <>
+          <Box sx={{ px: { xs: 1, sm: 0 } }}>
             {/* Controls */}
-            <Paper sx={{ p: 2, mb: 3 }}>
+            <Paper 
+              elevation={2}
+              sx={{ 
+                p: { xs: 2, sm: 3 }, 
+                mb: { xs: 2, sm: 3 },
+                bgcolor: theme.palette.background.paper,
+                borderLeft: `4px solid ${theme.palette.primary.main}`
+              }}
+            >
               <Grid container spacing={2} alignItems="center">
-                <Grid item>
+                <Grid item xs={12} sm={6} md={4}>
                   <ToggleButtonGroup
                     value={dateRange}
                     exclusive
                     onChange={handleDateRangeChange}
                     aria-label="date range"
                     size="small"
+                    sx={{
+                      width: "100%",
+                      "& .MuiToggleButton-root": {
+                        fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                        px: { xs: 1, sm: 2 },
+                        "&.Mui-selected": {
+                          bgcolor: theme.palette.primary.main,
+                          color: theme.palette.primary.contrastText
+                        }
+                      }
+                    }}
                   >
-                    <ToggleButton value="day" aria-label="today">
-                      Today
-                    </ToggleButton>
-                    <ToggleButton value="week" aria-label="week">
-                      Week
-                    </ToggleButton>
-                    <ToggleButton value="month" aria-label="month">
-                      Month
-                    </ToggleButton>
-                    <ToggleButton value="all" aria-label="all time">
-                      All Time
-                    </ToggleButton>
+                    <ToggleButton value="day">Today</ToggleButton>
+                    <ToggleButton value="week">Week</ToggleButton>
+                    <ToggleButton value="month">Month</ToggleButton>
+                    <ToggleButton value="all">All Time</ToggleButton>
                   </ToggleButtonGroup>
                 </Grid>
-                <Grid item>
+                <Grid item xs={12} sm={6} md={4}>
                   <ToggleButtonGroup
                     value={viewMode}
                     exclusive
                     onChange={handleViewModeChange}
                     aria-label="view mode"
                     size="small"
+                    sx={{
+                      width: "100%",
+                      "& .MuiToggleButton-root": {
+                        "&.Mui-selected": {
+                          bgcolor: theme.palette.secondary.main,
+                          color: theme.palette.secondary.contrastText
+                        }
+                      }
+                    }}
                   >
-                    <ToggleButton value="table" aria-label="table view">
-                      <TableIcon />
-                    </ToggleButton>
-                    <ToggleButton value="chart" aria-label="chart view">
-                      <ChartIcon />
-                    </ToggleButton>
+                    <ToggleButton value="table"><TableIcon /></ToggleButton>
+                    <ToggleButton value="chart"><ChartIcon /></ToggleButton>
                   </ToggleButtonGroup>
                 </Grid>
               </Grid>
@@ -839,23 +985,110 @@ const Attendance = () => {
 
             {/* Table View */}
             {viewMode === "table" && (
-              <Card elevation={2}>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
+              <Card 
+                elevation={2}
+                sx={{
+                  bgcolor: theme.palette.background.paper,
+                  borderRadius: 2,
+                  overflow: "hidden"
+                }}
+              >
+                <CardContent sx={{ p: { xs: 1, sm: 2, md: 3 } }}>
+                  <Typography 
+                    variant="h6" 
+                    gutterBottom
+                    sx={{
+                      fontSize: { xs: "1rem", sm: "1.25rem" },
+                      fontWeight: 600,
+                      color: theme.palette.primary.main,
+                      mb: { xs: 1, sm: 2 }
+                    }}
+                  >
                     Attendance Summary
                   </Typography>
-                  <Divider sx={{ mb: 2 }} />
-                  <TableContainer>
-                    <Table size="small">
+                  <Divider sx={{ mb: { xs: 1, sm: 2 }, bgcolor: theme.palette.primary.light }} />
+                  <TableContainer sx={{ overflowX: "auto" }}>
+                    <Table size={window.innerWidth < 600 ? "small" : "medium"}>
                       <TableHead>
-                        <TableRow>
-                          <TableCell>Student</TableCell>
-                          <TableCell align="center">Present</TableCell>
-                          <TableCell align="center">Absent</TableCell>
-                          <TableCell align="center">Absent (Excused)</TableCell>
-                          <TableCell align="center">Tardy</TableCell>
-                          <TableCell align="center">Tardy (Excused)</TableCell>
-                          <TableCell align="center">Attendance Rate</TableCell>
+                        <TableRow sx={{ bgcolor: `${theme.palette.primary.main}08` }}>
+                          <TableCell sx={{ 
+                            fontWeight: 600, 
+                            color: theme.palette.primary.main,
+                            fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                            minWidth: { xs: 120, sm: 150 }
+                          }}>
+                            Student
+                          </TableCell>
+                          <TableCell 
+                            align="center"
+                            sx={{ 
+                              fontWeight: 600, 
+                              color: theme.palette.primary.main,
+                              fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                              minWidth: { xs: 60, sm: 80 }
+                            }}
+                          >
+                            Present
+                          </TableCell>
+                          <TableCell 
+                            align="center"
+                            sx={{ 
+                              fontWeight: 600, 
+                              color: theme.palette.primary.main,
+                              fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                              display: { xs: "none", sm: "table-cell" },
+                              minWidth: 80
+                            }}
+                          >
+                            Absent
+                          </TableCell>
+                          <TableCell 
+                            align="center"
+                            sx={{ 
+                              fontWeight: 600, 
+                              color: theme.palette.primary.main,
+                              fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                              display: { xs: "none", md: "table-cell" },
+                              minWidth: 120
+                            }}
+                          >
+                            Absent (Excused)
+                          </TableCell>
+                          <TableCell 
+                            align="center"
+                            sx={{ 
+                              fontWeight: 600, 
+                              color: theme.palette.primary.main,
+                              fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                              display: { xs: "none", md: "table-cell" },
+                              minWidth: 80
+                            }}
+                          >
+                            Tardy
+                          </TableCell>
+                          <TableCell 
+                            align="center"
+                            sx={{ 
+                              fontWeight: 600, 
+                              color: theme.palette.primary.main,
+                              fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                              display: { xs: "none", lg: "table-cell" },
+                              minWidth: 120
+                            }}
+                          >
+                            Tardy (Excused)
+                          </TableCell>
+                          <TableCell 
+                            align="center"
+                            sx={{ 
+                              fontWeight: 600, 
+                              color: theme.palette.primary.main,
+                              fontSize: { xs: "0.75rem", sm: "0.875rem" },
+                              minWidth: { xs: 100, sm: 120 }
+                            }}
+                          >
+                            Rate
+                          </TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -913,22 +1146,38 @@ const Attendance = () => {
 
             {/* Chart View */}
             {viewMode === "chart" && (
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <Card elevation={2}>
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>
+              <Grid container spacing={{ xs: 2, sm: 3 }}>
+                <Grid item xs={12} lg={6}>
+                  <Card 
+                    elevation={2}
+                    sx={{
+                      bgcolor: theme.palette.background.paper,
+                      borderRadius: 2,
+                      overflow: "hidden"
+                    }}
+                  >
+                    <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                      <Typography 
+                        variant="h6" 
+                        gutterBottom
+                        sx={{
+                          fontSize: { xs: "1rem", sm: "1.25rem" },
+                          fontWeight: 600,
+                          color: theme.palette.primary.main,
+                          mb: { xs: 1, sm: 2 }
+                        }}
+                      >
                         Overall Attendance
                       </Typography>
-                      <Divider sx={{ mb: 2 }} />
+                      <Divider sx={{ mb: { xs: 1, sm: 2 }, bgcolor: theme.palette.primary.light }} />
                       <Box
                         sx={{
-                          height: 300,
+                          height: { xs: 250, sm: 300 },
                           display: "flex",
                           justifyContent: "center",
                         }}
                       >
-                        <Box sx={{ width: "100%", maxWidth: 400 }}>
+                        <Box sx={{ width: "100%", maxWidth: { xs: 300, sm: 400 } }}>
                           <Pie
                             data={getAttendanceChartData()}
                             options={{
@@ -937,10 +1186,17 @@ const Attendance = () => {
                               plugins: {
                                 legend: {
                                   position: "bottom",
+                                  labels: {
+                                    fontSize: window.innerWidth < 600 ? 10 : 12,
+                                    padding: window.innerWidth < 600 ? 10 : 20
+                                  }
                                 },
                                 title: {
                                   display: true,
                                   text: "Attendance Distribution",
+                                  font: {
+                                    size: window.innerWidth < 600 ? 12 : 14
+                                  }
                                 },
                               },
                             }}
@@ -950,14 +1206,30 @@ const Attendance = () => {
                     </CardContent>
                   </Card>
                 </Grid>
-                <Grid item xs={12} md={6}>
-                  <Card elevation={2}>
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>
+                <Grid item xs={12} lg={6}>
+                  <Card 
+                    elevation={2}
+                    sx={{
+                      bgcolor: theme.palette.background.paper,
+                      borderRadius: 2,
+                      overflow: "hidden"
+                    }}
+                  >
+                    <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                      <Typography 
+                        variant="h6" 
+                        gutterBottom
+                        sx={{
+                          fontSize: { xs: "1rem", sm: "1.25rem" },
+                          fontWeight: 600,
+                          color: theme.palette.primary.main,
+                          mb: { xs: 1, sm: 2 }
+                        }}
+                      >
                         Attendance Trend
                       </Typography>
-                      <Divider sx={{ mb: 2 }} />
-                      <Box sx={{ height: 300 }}>
+                      <Divider sx={{ mb: { xs: 1, sm: 2 }, bgcolor: theme.palette.primary.light }} />
+                      <Box sx={{ height: { xs: 250, sm: 300 } }}>
                         <Bar
                           data={getAttendanceTrendData()}
                           options={{
@@ -966,19 +1238,32 @@ const Attendance = () => {
                             plugins: {
                               legend: {
                                 position: "top",
+                                labels: {
+                                  fontSize: window.innerWidth < 600 ? 9 : 11,
+                                  padding: window.innerWidth < 600 ? 5 : 10
+                                }
                               },
                               title: {
                                 display: true,
                                 text: "Attendance Trend (Last 14 Days)",
+                                font: {
+                                  size: window.innerWidth < 600 ? 11 : 13
+                                }
                               },
                             },
                             scales: {
                               x: {
                                 stacked: true,
+                                ticks: {
+                                  fontSize: window.innerWidth < 600 ? 8 : 10
+                                }
                               },
                               y: {
                                 stacked: true,
                                 beginAtZero: true,
+                                ticks: {
+                                  fontSize: window.innerWidth < 600 ? 8 : 10
+                                }
                               },
                             },
                           }}
@@ -988,13 +1273,29 @@ const Attendance = () => {
                   </Card>
                 </Grid>
                 <Grid item xs={12}>
-                  <Card elevation={2}>
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom>
+                  <Card 
+                    elevation={2}
+                    sx={{
+                      bgcolor: theme.palette.background.paper,
+                      borderRadius: 2,
+                      overflow: "hidden"
+                    }}
+                  >
+                    <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+                      <Typography 
+                        variant="h6" 
+                        gutterBottom
+                        sx={{
+                          fontSize: { xs: "1rem", sm: "1.25rem" },
+                          fontWeight: 600,
+                          color: theme.palette.primary.main,
+                          mb: { xs: 1, sm: 2 }
+                        }}
+                      >
                         Student Attendance Comparison
                       </Typography>
-                      <Divider sx={{ mb: 2 }} />
-                      <Box sx={{ height: 400 }}>
+                      <Divider sx={{ mb: { xs: 1, sm: 2 }, bgcolor: theme.palette.primary.light }} />
+                      <Box sx={{ height: { xs: 300, sm: 400 } }}>
                         <Bar
                           data={getStudentAttendanceData()}
                           options={{
@@ -1003,10 +1304,17 @@ const Attendance = () => {
                             plugins: {
                               legend: {
                                 position: "top",
+                                labels: {
+                                  fontSize: window.innerWidth < 600 ? 9 : 11,
+                                  padding: window.innerWidth < 600 ? 5 : 10
+                                }
                               },
                               title: {
                                 display: true,
                                 text: "Attendance by Student",
+                                font: {
+                                  size: window.innerWidth < 600 ? 11 : 13
+                                }
                               },
                             },
                             scales: {
@@ -1015,10 +1323,14 @@ const Attendance = () => {
                                   autoSkip: false,
                                   maxRotation: 90,
                                   minRotation: 45,
+                                  fontSize: window.innerWidth < 600 ? 8 : 10
                                 },
                               },
                               y: {
                                 beginAtZero: true,
+                                ticks: {
+                                  fontSize: window.innerWidth < 600 ? 8 : 10
+                                }
                               },
                             },
                           }}
@@ -1029,7 +1341,7 @@ const Attendance = () => {
                 </Grid>
               </Grid>
             )}
-          </>
+          </Box>
         )}
 
         {/* Snackbar for notifications */}
@@ -1037,32 +1349,64 @@ const Attendance = () => {
           open={snackbar.open}
           autoHideDuration={6000}
           onClose={handleCloseSnackbar}
-          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+          anchorOrigin={{ 
+            vertical: "bottom", 
+            horizontal: "center"
+          }}
         >
           <Alert
             onClose={handleCloseSnackbar}
-            severity={snackbar.severity}
-            sx={{ width: "100%" }}
+            severity={snackbar.severity && typeof snackbar.severity === 'string' ? snackbar.severity : 'info'}
           >
-            {snackbar.message}
+            {snackbar.message || ''}
           </Alert>
         </Snackbar>
 
         {/* Delete Confirmation Dialog */}
-        <Dialog open={openDeleteDialog} onClose={handleCloseDeleteDialog}>
-          <DialogTitle>Delete Attendance Record</DialogTitle>
+        <Dialog 
+          open={openDeleteDialog} 
+          onClose={handleCloseDeleteDialog}
+          sx={{
+            "& .MuiDialog-paper": {
+              bgcolor: theme.palette.background.paper,
+              mx: { xs: 2, sm: 0 },
+              width: { xs: '90%', sm: 'auto' }
+            }
+          }}
+        >
+          <DialogTitle sx={{ 
+            color: theme.palette.primary.main,
+            fontWeight: 600,
+            fontSize: { xs: '1.1rem', sm: '1.25rem' }
+          }}>
+            Delete Attendance Record
+          </DialogTitle>
           <DialogContent>
-            <Typography>
+            <Typography sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
               Are you sure you want to delete this attendance record? This
               action cannot be undone.
             </Typography>
           </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
+          <DialogActions sx={{ p: { xs: 2, sm: 3 }, gap: 1 }}>
+            <Button 
+              onClick={handleCloseDeleteDialog}
+              sx={{
+                color: theme.palette.text.secondary,
+                fontSize: { xs: '0.875rem', sm: '1rem' }
+              }}
+            >
+              Cancel
+            </Button>
             <Button
               onClick={handleDeleteAttendance}
               variant="contained"
-              color="error"
+              sx={{
+                bgcolor: theme.palette.error.main,
+                "&:hover": {
+                  bgcolor: theme.palette.error.dark
+                },
+                fontSize: { xs: '0.875rem', sm: '1rem' }
+              }}
             >
               Delete
             </Button>

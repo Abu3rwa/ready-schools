@@ -68,6 +68,7 @@ const Lessons = () => {
   };
 
   const handleEditLesson = (lesson) => {
+    console.log('Editing lesson:', lesson);
     setEditingLesson(lesson);
     setShowForm(true);
   };
@@ -201,15 +202,16 @@ const Lessons = () => {
                     setSelectedGradebook('');
                   }}
                   fullWidth
+                  sx={{ height: '100%' }}
                 >
-                  Clear Filters
+                  Reset Filters
                 </Button>
               </Grid>
             </Grid>
           </CardContent>
         </Card>
 
-        {/* Lessons List */}
+        {/* Lesson list */}
         {filteredLessons.length === 0 ? (
           <Card>
             <CardContent>
@@ -310,35 +312,41 @@ const Lessons = () => {
 
                     {lesson.materials && lesson.materials.length > 0 && (
                       <Box sx={{ mb: 1 }}>
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Materials:
-                        </Typography>
-                        {lesson.materials.map((material, index) => (
-                          <Link
-                            key={index}
-                            href={material.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            display="block"
-                            sx={{ mb: 0.5 }}
-                          >
-                            <Chip
-                              icon={<LinkIcon />}
-                              label={material.name}
-                              size="small"
-                              variant="outlined"
-                            />
-                          </Link>
-                        ))}
+                        {/* Materials list would go here */}
                       </Box>
                     )}
-
+                    
+                    {/* Notes */}
                     {lesson.notes && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block">
+                      <Box sx={{ mt: 'auto' }}>
+                        <Typography 
+                          variant="caption" 
+                          color="text.secondary" 
+                          display="block"
+                          sx={{ 
+                            fontSize: { xs: '0.625rem', sm: '0.75rem' },
+                            fontWeight: 600,
+                            textTransform: 'uppercase',
+                            letterSpacing: 0.5,
+                            mb: 0.5
+                          }}
+                        >
                           Notes:
                         </Typography>
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography 
+                          variant="body2" 
+                          color="text.secondary"
+                          sx={{
+                            fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                            lineHeight: 1.3,
+                            fontStyle: 'italic',
+                            overflow: 'hidden',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            textOverflow: 'ellipsis'
+                          }}
+                        >
                           {lesson.notes}
                         </Typography>
                       </Box>
@@ -352,7 +360,20 @@ const Lessons = () => {
 
         {/* Add/Edit Lesson Form */}
         {showForm && (
-          <Box sx={{ mt: 3, mb: 4 }}>
+          <Box sx={{ mt: { xs: 2, sm: 3 }, mb: { xs: 3, sm: 4 } }}>
+            <Alert 
+              severity="info" 
+              sx={{ 
+                mb: { xs: 1.5, sm: 2 },
+                borderRadius: 2,
+                fontSize: { xs: '0.875rem', sm: '1rem' },
+                "& .MuiAlert-icon": {
+                  fontSize: { xs: '1rem', sm: '1.25rem' }
+                }
+              }}
+            >
+              {editingLesson ? `Editing lesson: ${editingLesson.title}` : 'Adding new lesson'}
+            </Alert>
             <LessonEntryForm
               onSave={handleSaveLesson}
               onCancel={handleCancel}
@@ -366,9 +387,25 @@ const Lessons = () => {
           open={snackbar.open}
           autoHideDuration={6000}
           onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+          anchorOrigin={{ 
+            vertical: 'bottom', 
+            horizontal: 'center'
+          }}
+          sx={{
+            '& .MuiSnackbar-root': {
+              width: { xs: '90%', sm: 'auto' }
+            }
+          }}
         >
-          <Alert severity={snackbar.severity} onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}>
-            {snackbar.message}
+          <Alert 
+            severity={snackbar.severity || 'info'} 
+            onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+            sx={{
+              fontSize: { xs: '0.875rem', sm: '1rem' },
+              width: '100%'
+            }}
+          >
+            {snackbar.message || ''}
           </Alert>
         </Snackbar>
       </Box>

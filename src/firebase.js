@@ -45,7 +45,9 @@ try {
 }
 
 const storage = getStorage(app);
+console.log('Firebase Storage initialized:', storage.app.name);
 const functions = getFunctions(app, "us-central1"); // Explicitly set region
+
 
 // Initialize and configure auth
 const auth = getAuth(app);
@@ -60,5 +62,5 @@ setPersistence(auth, browserLocalPersistence).catch((e) => {
 
 // Do not override auth domain; rely on Firebase default handling for localhost
 
-// Export the initialized app, db, auth, functions and config
-export { app, db, auth, functions, authConfig, enableNetwork, disableNetwork };
+// Export the initialized app, db, auth, storage, functions and config
+export { app, db, auth, storage, functions, authConfig, enableNetwork, disableNetwork };

@@ -10,7 +10,10 @@ import {
   Button,
   Alert,
   Avatar,
+  Box,
+  useMediaQuery
 } from "@mui/material";
+import { useTheme } from '@mui/material/styles';
 import {
   Google as GoogleIcon,
   LockOutlined as LockOutlinedIcon,
@@ -18,6 +21,8 @@ import {
 import "./Login.css";
 
 const Login = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
   const { signInWithGoogle } = useAuth();
   const [loginError, setLoginError] = React.useState(null);
@@ -26,8 +31,6 @@ const Login = () => {
     setLoginError(null);
     try {
       const user = await signInWithGoogle();
-      // Wait a brief moment to ensure Firestore document is created
-      await new Promise((resolve) => setTimeout(resolve, 1000));
       navigate("/", {
         replace: true,
         state: {
@@ -56,39 +59,127 @@ const Login = () => {
 
   return (
     <div className="login-background">
-      <Container component="main" maxWidth="xs">
+      <Container 
+        component="main" 
+        maxWidth="xs"
+        sx={{
+          height: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          px: { xs: 2, sm: 3 }
+        }}
+      >
         <CssBaseline />
-        <Paper elevation={12} className="login-paper">
-          <Avatar sx={{ m: 1, bgcolor: "secondary.main" }}>
-            <LockOutlinedIcon />
+        <Paper 
+          elevation={isMobile ? 6 : 12} 
+          className="login-paper"
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            p: { xs: 3, sm: 4 },
+            borderRadius: { xs: 2, sm: 3 },
+            backgroundColor: theme.palette.background.paper,
+            border: `1px solid ${theme.palette.divider}`,
+            width: '100%',
+            maxWidth: { xs: '100%', sm: '400px' }
+          }}
+        >
+          <Avatar 
+            sx={{ 
+              m: 1, 
+              bgcolor: theme.palette.primary.main,
+              width: { xs: 48, sm: 56 },
+              height: { xs: 48, sm: 56 }
+            }}
+          >
+            <LockOutlinedIcon sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }} />
           </Avatar>
-          <Typography component="h1" variant="h5">
-            Sign in
+          
+          <Typography 
+            component="h1" 
+            variant={isMobile ? "h6" : "h5"}
+            sx={{
+              fontWeight: 600,
+              color: theme.palette.text.primary,
+              textAlign: 'center'
+            }}
+          >
+            Welcome to Teacher Kit
           </Typography>
+          
           <Typography
             variant="body2"
             color="textSecondary"
             align="center"
-            sx={{ mt: 1, mb: 3 }}
+            sx={{ 
+              mt: 1, 
+              mb: 3,
+              fontSize: { xs: '0.875rem', sm: '1rem' },
+              lineHeight: 1.5
+            }}
           >
-            Use your Google account to continue.
+            Use your Google account to continue to your dashboard.
           </Typography>
+          
           {loginError && (
-            <Alert severity="error" sx={{ mb: 2, width: "100%" }}>
+            <Alert 
+              severity="error" 
+              sx={{ 
+                mb: 2, 
+                width: "100%",
+                fontSize: { xs: '0.875rem', sm: '1rem' },
+                borderRadius: 2
+              }}
+            >
               {loginError}
             </Alert>
           )}
+          
           <Button
             onClick={handleGoogleSignIn}
             variant="outlined"
             fullWidth
-            startIcon={<GoogleIcon />}
+            startIcon={<GoogleIcon sx={{ fontSize: { xs: '1.25rem', sm: '1.5rem' } }} />}
             className="google-signin-button"
-            sx={{ py: 1.5 }}
-            data-client-id={authConfig.clientId} // Add client ID for verification
+            size={isMobile ? "large" : "medium"}
+            sx={{ 
+              py: { xs: 1.5, sm: 2 },
+              fontSize: { xs: '1rem', sm: '1.125rem' },
+              fontWeight: 600,
+              borderRadius: 2,
+              borderColor: theme.palette.primary.main,
+              color: theme.palette.primary.main,
+              backgroundColor: 'transparent',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                borderColor: theme.palette.primary.dark,
+                backgroundColor: theme.palette.primary.light,
+                transform: 'translateY(-1px)',
+                boxShadow: theme.shadows[4]
+              },
+              '&:active': {
+                transform: 'translateY(0px)'
+              }
+            }}
+            data-client-id={authConfig.clientId}
           >
             Sign in with Google
           </Button>
+          
+          <Box sx={{ mt: 2, textAlign: 'center' }}>
+            <Typography 
+              variant="caption" 
+              color="textSecondary"
+              sx={{ 
+                fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                opacity: 0.8
+              }}
+            >
+              Secure authentication powered by Google
+            </Typography>
+          </Box>
         </Paper>
       </Container>
     </div>

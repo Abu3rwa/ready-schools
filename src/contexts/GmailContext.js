@@ -26,7 +26,8 @@ export const GMAIL_STATUS = {
   CONFIGURED: 'configured',
   ERROR: 'error',
   TOKEN_EXPIRED: 'token_expired',
-  CHECKING: 'checking'
+  CHECKING: 'checking',
+  DISMISSED: 'dismissed'
 };
 
 // Error types for better error handling
@@ -280,7 +281,7 @@ export const GmailProvider = ({ children }) => {
 
   // Computed properties for UI
   const isConfigured = status === GMAIL_STATUS.CONFIGURED;
-  const shouldPrompt = [GMAIL_STATUS.UNCONFIGURED, GMAIL_STATUS.TOKEN_EXPIRED].includes(status);
+  const shouldPrompt = [GMAIL_STATUS.UNCONFIGURED, GMAIL_STATUS.TOKEN_EXPIRED].includes(status) && status !== GMAIL_STATUS.DISMISSED;
   const canRetry = error?.canRetry || false;
   const requiresReauth = error?.requiresReauth || status === GMAIL_STATUS.TOKEN_EXPIRED;
 

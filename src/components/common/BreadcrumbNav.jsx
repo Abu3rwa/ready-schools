@@ -80,6 +80,10 @@ const BreadcrumbNav = () => {
           label = 'Settings';
           icon = <SettingsIcon />;
           break;
+        case 'developer':
+          label = 'Developer';
+          icon = <AdminIcon />;
+          break;
         case 'admin':
           label = 'Admin';
           icon = <AdminIcon />;

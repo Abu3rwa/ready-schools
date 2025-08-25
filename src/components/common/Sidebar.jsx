@@ -11,6 +11,7 @@ import {
   Box,
   Typography,
   alpha,
+  useTheme,
 } from "@mui/material";
 import {
   Dashboard as DashboardIcon,
@@ -25,86 +26,101 @@ import {
   School as SchoolIcon,
   AdminPanelSettings as AdminIcon,
   Book as BookIcon,
+  AccountBox as AccountBoxIcon,
+  Code as CodeIcon,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const drawerWidth = 240;
 
 // Define unique colors for each menu item
-const menuItems = [
-  { text: "navigation.dashboard", icon: <DashboardIcon />, path: "/", color: "#3498DB" },
-  {
-    text: "navigation.students",
-    icon: <PeopleIcon />,
-    path: "/students",
-    color: "#2ECC71",
-  },
-  {
-    text: "navigation.gradebooks",
-    icon: <AssessmentIcon />,
-    path: "/gradebooks",
-    color: "#F39C12",
-  },
-  {
-    text: "navigation.assignments",
-    icon: <AssignmentIcon />,
-    path: "/assignments",
-    color: "#E74C3C",
-  },
-  {
-    text: "navigation.lessons",
-    icon: <BookIcon />,
-    path: "/lessons",
-    color: "#FF6B6B",
-  },
-  {
-    text: "navigation.attendance",
-    icon: <EventNoteIcon />,
-    path: "/attendance",
-    color: "#9B59B6",
-  },
-  {
-    text: "navigation.behavior",
-    icon: <PsychologyIcon />,
-    path: "/behavior",
-    color: "#1ABC9C",
-  },
-  {
-    text: "navigation.communication",
-    icon: <EmailIcon />,
-    path: "/communication",
-    color: "#E67E22",
-  },
-  {
-    text: "navigation.reports",
-    icon: <AssessmentIcon />,
-    path: "/reports",
-    color: "#34495E",
-  },
-  {
-    text: "navigation.standards",
-    icon: <SchoolIcon />,
-    path: "/standards",
-    color: "#B266FF",
-  },
-  {
-    text: "navigation.settings",
-    icon: <SettingsIcon />,
-    path: "/settings",
-    color: "#95A5A6",
-  },
-  {
-    text: "navigation.adminUsers",
-    icon: <AdminIcon />,
-    path: "/admin/users",
-    color: "#2C3E50",
-  },
-];
-
 const Sidebar = ({ open, variant = "permanent", onClose }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const theme = useTheme();
   const location = useLocation();
+
+  const menuItems = [
+    { text: "navigation.dashboard", icon: <DashboardIcon />, path: "/", color: "#3498DB" },
+    {
+      text: "navigation.students",
+      icon: <PeopleIcon />,
+      path: "/students",
+      color: "#2ECC71",
+    },
+    {
+      text: "navigation.gradebooks",
+      icon: <AssessmentIcon />,
+      path: "/gradebooks",
+      color: "#F39C12",
+    },
+    {
+      text: "navigation.assignments",
+      icon: <AssignmentIcon />,
+      path: "/assignments",
+      color: theme.palette.secondary.main, // Using brand red
+    },
+    {
+      text: "navigation.lessons",
+      icon: <BookIcon />,
+      path: "/lessons",
+      color: "#FF6B6B",
+    },
+    {
+      text: "navigation.attendance",
+      icon: <EventNoteIcon />,
+      path: "/attendance",
+      color: "#9B59B6",
+    },
+    {
+      text: "navigation.behavior",
+      icon: <PsychologyIcon />,
+      path: "/behavior",
+      color: "#1ABC9C",
+    },
+    {
+      text: "navigation.communication",
+      icon: <EmailIcon />,
+      path: "/communication",
+      color: "#E67E22",
+    },
+    {
+      text: "navigation.reports",
+      icon: <AssessmentIcon />,
+      path: "/reports",
+      color: theme.palette.secondary.main, // Using brand red
+    },
+    {
+      text: "navigation.standards",
+      icon: <SchoolIcon />,
+      path: "/standards",
+      color: "#B266FF",
+    },
+    {
+      text: "navigation.profile",
+      icon: <AccountBoxIcon />,
+      path: "/profile",
+      color: "#3498DB",
+    },
+    {
+      text: "navigation.developer",
+      icon: <CodeIcon />,
+      path: "/developer",
+      color: "#FF6B35",
+    },
+    {
+      text: "navigation.settings",
+      icon: <SettingsIcon />,
+      path: "/settings",
+      color: "#95A5A6",
+    },
+    {
+      text: "navigation.adminUsers",
+      icon: <AdminIcon />,
+      path: "/admin/users",
+      color: "#2C3E50",
+    },
+  ];
 
   // Check if a menu item is active based on the current path
   const isActive = (path) => {
@@ -129,8 +145,8 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
           width: drawerWidth,
           boxSizing: "border-box",
           borderRight: "none",
-          background: "linear-gradient(180deg, #2C3E50 0%, #34495E 100%)",
-          boxShadow: "2px 0 10px rgba(0,0,0,0.15)",
+          background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+          backdropFilter: 'blur(20px)',
           transition: "transform 225ms cubic-bezier(0, 0, 0.2, 1) 0ms",
         },
       }}
@@ -144,12 +160,27 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
       }}
     >
       <Toolbar /> {/* This creates space for the AppBar */}
-      <Box sx={{ overflow: "auto" }}>
-        <Box sx={{ p: 2, pb: 1 }}>
+      <Box sx={{ overflow: "auto", position: 'relative' }}>
+        {/* Background Pattern */}
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            opacity: 0.05,
+            backgroundImage: 'radial-gradient(circle at 12px 12px, white 1px, transparent 0)',
+            backgroundSize: '24px 24px',
+            pointerEvents: 'none'
+          }}
+        />
+        <Box sx={{ p: 2, pb: 1, position: 'relative', zIndex: 1 }}>
           <Typography
             variant="subtitle2"
             sx={{
-              color: "rgba(255, 255, 255, 0.7)",
+              color: "primary.contrastText",
+              opacity: 0.7,
               fontWeight: 600,
               textTransform: "uppercase",
               letterSpacing: 1,
@@ -159,7 +190,7 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
             Main Navigation
           </Typography>
         </Box>
-        <List sx={{ p: 1 }}>
+        <List sx={{ p: 1, position: 'relative', zIndex: 1 }}>
           {menuItems.map((item) => {
             const active = isActive(item.path);
             return (
@@ -177,51 +208,37 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
                 sx={{
                   margin: "4px 8px",
                   padding: "10px 16px",
-                  borderRadius: "0",
-                  color: active ? "#ffffff" : "rgba(255, 255, 255, 0.6)",
+                  borderRadius: "12px",
+                  color: active ? "primary.contrastText" : "rgba(255, 255, 255, 0.7)",
                   transition: "all 0.3s ease-in-out",
                   position: "relative",
                   overflow: "hidden",
                   cursor: "pointer",
                   backgroundColor: active
-                    ? "rgba(52, 152, 219, 0.15)"
+                    ? `${theme.palette.background.paper}20`
                     : "transparent",
-                  border: active
-                    ? "1px solid rgba(52, 152, 219, 0.3)"
-                    : "1px solid transparent",
+                  backdropFilter: active ? 'blur(10px)' : 'none',
+                  border: active ? `1px solid ${theme.palette.primary.contrastText}30` : '1px solid transparent',
+                  borderLeft: active ? `4px solid ${theme.palette.accent.main}` : "4px solid transparent",
                   "&.Mui-selected": {
-                    backgroundColor: "rgba(52, 152, 219, 0.15)",
-                    border: "1px solid rgba(52, 152, 219, 0.3)",
-                    "&::before": {
-                      content: '""',
-                      position: "absolute",
-                      left: 0,
-                      top: "10%",
-                      height: "80%",
-                      width: "4px",
-                      backgroundColor: "#3498DB",
-                      borderRadius: "0",
-                      boxShadow: "0 0 8px rgba(52, 152, 219, 0.5)",
-                    },
+                    backgroundColor: `${theme.palette.background.paper}20`,
+                    backdropFilter: 'blur(10px)',
                     "&:hover": {
-                      backgroundColor: "rgba(52, 152, 219, 0.25)",
-                      border: "1px solid rgba(52, 152, 219, 0.5)",
+                      backgroundColor: `${theme.palette.background.paper}30`,
                     },
                   },
                   "&:hover": {
-                    backgroundColor: active
-                      ? "rgba(52, 152, 219, 0.25)"
-                      : "rgba(255, 255, 255, 0.1)",
-                    color: "#ffffff",
-                    border: active
-                      ? "1px solid rgba(52, 152, 219, 0.5)"
-                      : "1px solid rgba(255, 255, 255, 0.2)",
+                    backgroundColor: `${theme.palette.background.paper}20`,
+                    backdropFilter: 'blur(10px)',
+                    border: `1px solid ${theme.palette.primary.contrastText}20`,
+                    color: "primary.contrastText",
+                    transform: 'translateX(4px)',
                   },
                 }}
               >
                 <ListItemIcon
                   sx={{
-                    color: active ? "#ffffff" : item.color,
+                    color: active ? "primary.contrastText" : item.color,
                     opacity: active ? 1 : 0.8,
                     minWidth: "40px",
                     transition: "all 0.3s ease-in-out",
@@ -230,7 +247,7 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
                       transition: "transform 0.2s ease",
                       transform: active ? "scale(1.1)" : "scale(1)",
                       filter: active
-                        ? "drop-shadow(0 0 4px rgba(255, 255, 255, 0.3))"
+                        ? `drop-shadow(0 0 4px ${theme.palette.accent.main})`
                         : "none",
                     },
                   }}
@@ -245,26 +262,12 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
                     fontSize: "0.95rem",
                   }}
                 />
-                {active && (
-                  <Box
-                    sx={{
-                      position: "absolute",
-                      right: 12,
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      backgroundColor: "#ffffff",
-                      boxShadow: "0 0 8px rgba(255, 255, 255, 0.8)",
-                      border: "2px solid rgba(52, 152, 219, 0.8)",
-                    }}
-                  />
-                )}
               </ListItem>
             );
           })}
         </List>
         <Divider sx={{ backgroundColor: "rgba(255, 255, 255, 0.1)", my: 1 }} />
-        <Box sx={{ p: 2, textAlign: "center" }}>
+        <Box sx={{ p: 2, textAlign: "center", position: 'relative', zIndex: 1 }}>
           <Typography
             variant="caption"
             sx={{

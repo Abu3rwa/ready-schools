@@ -18,6 +18,7 @@ import BreadcrumbNav from "./BreadcrumbNav";
 import { useAuth } from "../../contexts/AuthContext";
 import { useGmail } from "../../contexts/GmailContext";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "react-router-dom";
 
 const Layout = ({ children }) => {
   const theme = useTheme();
@@ -26,9 +27,14 @@ const Layout = ({ children }) => {
   const { i18n } = useTranslation();
   const isRTL = i18n?.dir?.(i18n?.language) === "rtl";
   const { currentUser } = useAuth();
-  const { shouldPrompt, setShouldPrompt, setupGmail, checkGmailConfiguration } =
+  const { shouldPrompt, status, setStatus, setupGmail, checkGmailConfiguration } =
     useGmail();
   const [openPrompt, setOpenPrompt] = useState(false);
+  const location = useLocation();
+  
+  // Define full-screen pages that should not have padding or breadcrumbs
+  const fullScreenPages = ['/developer'];
+  const isFullScreenPage = fullScreenPages.includes(location.pathname);
 
   useEffect(() => {
     if (currentUser) {
@@ -42,7 +48,8 @@ const Layout = ({ children }) => {
 
   const handleDismiss = () => {
     setOpenPrompt(false);
-    setShouldPrompt(false);
+    // Set status to dismissed so the prompt won't show again
+    setStatus('dismissed');
   };
 
   const toggleSidebar = () => {
@@ -69,7 +76,7 @@ const Layout = ({ children }) => {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: isFullScreenPage ? 0 : 3,
           transition: theme.transitions.create("margin", {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.leavingScreen,
@@ -89,8 +96,8 @@ const Layout = ({ children }) => {
           }),
         }}
       >
-        <Toolbar /> {/* This creates space for the AppBar */}
-        <BreadcrumbNav />
+        {!isFullScreenPage && <Toolbar />} {/* This creates space for the AppBar */}
+        {!isFullScreenPage && <BreadcrumbNav />}
         {children}
       </Box>
 

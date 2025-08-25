@@ -26,6 +26,7 @@ export const useAuth = () => {
 // Create the provider component
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -39,7 +40,7 @@ export const AuthProvider = ({ children }) => {
 
           // If user doesn't have a document in Firestore, create one
           if (!userDoc.exists()) {
-            await setDoc(userRef, {
+            const newUserData = {
               uid: user.uid,
               email: user.email,
               displayName: user.displayName || "",
@@ -54,7 +55,10 @@ export const AuthProvider = ({ children }) => {
               gmail_token_last_refresh: null,
               gmail_token_error: null,
               gmail_token_error_time: null,
-            });
+            };
+            
+            await setDoc(userRef, newUserData);
+            setUserProfile(newUserData);
 
             // Initialize default frameworks for new user
             try {
@@ -66,6 +70,9 @@ export const AuthProvider = ({ children }) => {
               // Don't throw the error - we want the user to be able to log in even if framework creation fails
               // They can retry framework creation later
             }
+          } else {
+            // Load existing user profile data
+            setUserProfile(userDoc.data());
           }
         } catch (error) {
           console.warn("Firestore operation failed (possibly offline):", error);
@@ -80,6 +87,8 @@ export const AuthProvider = ({ children }) => {
           // Don't prevent user authentication due to Firestore errors
           // The user document can be created/updated when connection is restored
         }
+      } else {
+        setUserProfile(null);
       }
       setCurrentUser(user);
       setLoading(false);
@@ -128,6 +137,9 @@ export const AuthProvider = ({ children }) => {
   const isAuthenticated = () => {
     return !!currentUser;
   };
+
+  // Check if user is admin
+  const isAdmin = userProfile?.admin === true;
 
   // Update Gmail tokens
   const updateGmailTokens = async (tokens) => {
@@ -188,6 +200,8 @@ export const AuthProvider = ({ children }) => {
   // Create the value object to be provided by the context
   const value = {
     currentUser,
+    userProfile,
+    isAdmin,
     loading,
     error,
     signIn,

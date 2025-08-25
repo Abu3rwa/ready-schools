@@ -1,5 +1,6 @@
 import sanitizeHtml from "sanitize-html";
 import dayjs from "dayjs";
+import { createEmailContentFilter } from "../services/EmailContentFilter.js";
 
 export const buildDailyUpdateTemplate = (data) => {
   const {
@@ -23,13 +24,16 @@ export const buildDailyUpdateTemplate = (data) => {
     behaviorSummary,
     // New optional preferences
     subjectTemplate,
-    includeSections = {}, // { attendance:true, grades:true, behavior:true, assignments:true, upcoming:true, lessons:true }
+    emailPreferences = {}, // Unified email preferences object
     // New lesson data
     lessons = [],
     lessonSummary = {},
     // Phase 2: Teacher preferences for personalization
     teacherPreferences = {} // { tone: "casual", focus: "academic", length: "brief", style: "conversational" }
   } = data;
+
+  // Create centralized content filter for parent emails
+  const contentFilter = createEmailContentFilter(emailPreferences, 'parent');
 
   // Build subject using template if provided
   const subjectFromTemplate = () => {
@@ -248,22 +252,9 @@ export const buildDailyUpdateTemplate = (data) => {
     return messages.length > 0 ? messages.join(" ") : null;
   };
 
-  // Phase 2: Smart Content Selection
+  // Use centralized content filtering service
   const shouldIncludeSection = (section, data) => {
-    switch(section) {
-      case "grades":
-        return data.grades && data.grades.length > 0;
-      case "behavior":
-        return data.behavior && data.behavior.length > 0;
-      case "attendance":
-        return data.attendance && data.attendance.status !== "Not Recorded";
-      case "assignments":
-        return data.assignments && data.assignments.length > 0;
-      case "lessons":
-        return data.lessons && data.lessons.length > 0;
-      default:
-        return true;
-    }
+    return contentFilter.shouldIncludeSection(section, data);
   };
 
   // Phase 2: Dynamic Section Ordering
@@ -829,7 +820,7 @@ export const buildDailyUpdateTemplate = (data) => {
     }
 
     // Add lesson-specific encouragement (only if lessons exist and are enabled)
-    if (lessons && Array.isArray(lessons) && lessons.length > 0 && includeSections?.lessons !== false) {
+    if (lessons && Array.isArray(lessons) && lessons.length > 0 && contentFilter.shouldIncludeSection('lessons', data)) {
       try {
         const totalDuration = lessons.reduce((sum, lesson) => sum + (lesson.duration || 0), 0);
         const subjects = [...new Set(lessons.map(lesson => lesson.subject || 'Unknown Subject').filter(subject => subject !== 'Unknown Subject'))];
@@ -1276,7 +1267,7 @@ export const buildDailyUpdateTemplate = (data) => {
               ${getEncouragementMessage()}
 
               <!-- Quick Summary -->
-                  ${includeSections && includeSections.attendance === false && includeSections.subjectGrades === false && includeSections.lessons === false ? '' : `
+                  ${!contentFilter.shouldIncludeSection('attendance', data) && !contentFilter.shouldIncludeSection('subjectGrades', data) && !contentFilter.shouldIncludeSection('lessons', data) ? '' : `
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="summary-grid">
                     <tr>
                       <td style="padding: 0 7.5px 0 0;">
@@ -1303,7 +1294,7 @@ export const buildDailyUpdateTemplate = (data) => {
                           </tr>
                         </table>
                       </td>
-                      ${includeSections.lessons !== false && lessons && Array.isArray(lessons) && lessons.length > 0 ? `
+                      ${contentFilter.shouldIncludeSection('lessons', data) && lessons && Array.isArray(lessons) && lessons.length > 0 ? `
                       <td style="padding: 0 0 0 7.5px;">
                         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="summary-card">
                           <tr>
@@ -1322,7 +1313,7 @@ export const buildDailyUpdateTemplate = (data) => {
                   `}
 
               <!-- Subject Grades Section -->
-                  ${includeSections.subjectGrades === false ? '' : `
+                  ${!contentFilter.shouldIncludeSection('subjectGrades', data) ? '' : `
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="section">
                     <tr>
                       <td class="section-title">📊 Subject Grades</td>
@@ -1335,7 +1326,7 @@ export const buildDailyUpdateTemplate = (data) => {
                   </table>`}
 
               <!-- Attendance Section -->
-                  ${includeSections.attendance === false ? '' : `
+                  ${!contentFilter.shouldIncludeSection('attendance', data) ? '' : `
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="section">
                     <tr>
                       <td class="section-title">📅 Today\'s Attendance</td>
@@ -1351,7 +1342,7 @@ export const buildDailyUpdateTemplate = (data) => {
                   </table>`}
 
               <!-- Today\'s Lessons Section -->
-                  ${(includeSections.lessons !== false && lessons && Array.isArray(lessons) && lessons.length > 0) || (includeSections.assignments !== false && assignments && assignments.length > 0) ? `
+                  ${contentFilter.shouldIncludeSection('lessons', data) && lessons && Array.isArray(lessons) && lessons.length > 0 ? `
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="section">
                     <tr>
                       <td class="section-title">
@@ -1365,13 +1356,26 @@ export const buildDailyUpdateTemplate = (data) => {
                     </tr>
                     <tr>
                       <td class="section-content">
-                        ${includeSections.lessons !== false && lessons && Array.isArray(lessons) && lessons.length > 0 ? formatLessons(lessons) : ''}
+                        ${formatLessons(lessons)}
+                      </td>
+                    </tr>
+                  </table>` : ''}
+
+              <!-- Today\'s Activities Section -->
+                  ${contentFilter.shouldIncludeSection('assignments', data) && assignments && assignments.length > 0 ? `
+                  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="section">
+                    <tr>
+                      <td class="section-title">📝 Today\'s Activities</td>
+                    </tr>
+                    <tr>
+                      <td class="section-content">
+                        ${formatAssignments(assignments)}
                       </td>
                     </tr>
                   </table>` : ''}
 
               <!-- New Grades -->
-              ${includeSections.grades === false ? '' : (grades && grades.length > 0 ? `
+              ${!contentFilter.shouldIncludeSection('grades', data) ? '' : (grades && grades.length > 0 ? `
                     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="section">
                       <tr>
                         <td class="section-title">📊 Recent Grades & Assessments</td>
@@ -1385,7 +1389,7 @@ export const buildDailyUpdateTemplate = (data) => {
               ` : '')}
 
               <!-- Behavior Summary -->
-                  ${includeSections.behavior === false ? '' : `
+                  ${!contentFilter.shouldIncludeSection('behavior', data) ? '' : `
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="section">
                     <tr>
                       <td class="section-title">🌟 Behavior & Social Learning</td>
@@ -1398,7 +1402,7 @@ export const buildDailyUpdateTemplate = (data) => {
                   </table>`}
 
               <!-- Upcoming Assignments -->
-                  ${includeSections.upcoming === false ? '' : `
+                  ${!contentFilter.shouldIncludeSection('upcoming', data) ? '' : `
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" class="section">
                     <tr>
                       <td class="section-title">⏰ Upcoming Due Dates</td>

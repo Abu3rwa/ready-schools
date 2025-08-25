@@ -161,6 +161,44 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
 
+    // Email content collection rules
+    match /emailContent/{documentId} {
+      // Extract teacher ID from document ID (format: teacher_{teacherId})
+      function getTeacherIdFromDocumentId() {
+        return documentId.replace('teacher_', '');
+      }
+      
+      allow read, create, update: if isAuthenticated() &&
+        request.auth.uid == getTeacherIdFromDocumentId();
+      
+      // Allow backend service to read all documents
+      allow read: if request.auth.token.admin == true;
+      
+      // Prevent deleting email content documents
+      allow delete: if false;
+    }
+
+    // Developer page images collection rules
+    match /developerPageImages/{imageId} {
+      allow read: if true; // Public read access
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // Developer page content collection rules
+    match /developerPageContent/{contentId} {
+      allow read: if true; // Public read access
+      allow create, update: if isAuthenticated() && request.auth.uid != null;
+      allow delete: if isAuthenticated() && request.auth.uid != null;
+    }
+
+    // Developer page content collection rules
+    match /developerPageContent/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+    
     // Your existing rules for other collections
     match /{document=**} {
       allow read, write: if false;  // Deny access to all other collections by default

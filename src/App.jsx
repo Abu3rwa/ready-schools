@@ -17,6 +17,9 @@ import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import AdminUsers from "./pages/AdminUsers";
 import Lessons from "./pages/Lessons";
+import UserProfile from "./pages/UserProfile";
+import DeveloperPage from "./pages/DeveloperPage.js";
+import AdminDeveloperImageDashboard from "./components/admin/AdminDeveloperImageDashboard";
 
 // Components
 import Layout from "./components/common/Layout";
@@ -34,7 +37,10 @@ const AppRoutes = () => {
 
   return (
     <Routes>
-      <Route path="/login" element={<Login />} />
+      <Route
+        path="/login"
+        element={currentUser ? <Navigate to="/" /> : <Login />}
+      />
       <Route
         path="/"
         element={currentUser ? <Dashboard /> : <Navigate to="/login" />}
@@ -84,8 +90,20 @@ const AppRoutes = () => {
         element={currentUser ? <Settings /> : <Navigate to="/login" />}
       />
       <Route
+        path="/profile"
+        element={currentUser ? <UserProfile /> : <Navigate to="/login" />}
+      />
+      <Route
         path="/admin/users"
         element={currentUser ? <AdminUsers /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/developer"
+        element={<DeveloperPage />}
+      />
+      <Route
+        path="/admin/developer-images"
+        element={currentUser ? <AdminDeveloperImageDashboard /> : <Navigate to="/login" />}
       />
       <Route
         path="/auth/gmail/callback"

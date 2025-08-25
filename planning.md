@@ -1,5 +1,4 @@
 <!-- AIzaSyB8lnhJKFBx_acW1r79jc2NAcy8QSSzWhI -->
-<!-- AIzaSyChgJBha7WC-9ovDf3c1bDQ4vwOFKgKbiM -->
 <!-- AIzaSyAl-gStJEfvUuPLAbMMOS1f4B5mqgOt-9M -->
 AIzaSyCaL5vBY2RGo9gHBeEnGZ1Vpae6bHNvuGg
 AIzaSyAKCQMh3SVQT3wHnlMKV62qTL9_H0aYekM
@@ -18,6 +17,10 @@ AIzaSyD8QMwAEgby5HZNARGpRJAJsVT4juQ2Hzc
 AIzaSyB3iokABS5-X_qsFRM543TgjMRLP9v_iKY
 
 xgwv lchq wfvb enfz
+gemini pro: AIzaSyB3iokABS5-X_qsFRM543TgjMRLP9v_iKY
+WORKING KEYS:
+<!-- AIzaSyChgJBha7WC-9ovDf3c1bDQ4vwOFKgKbiM -->
+
 claud: 
 
 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

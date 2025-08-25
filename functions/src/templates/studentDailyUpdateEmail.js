@@ -5,6 +5,7 @@ import sanitizeHtml from "sanitize-html";
 
 // Import character traits service
 import { getCurrentMonthTrait, getDailyQuote, getDailyChallenge } from "../services/characterTraitsService.js";
+import { createEmailContentFilter } from "../services/EmailContentFilter.js";
 
 // ------------------------------
 // Context Normalization (new + legacy)
@@ -38,6 +39,9 @@ const normalizeContext = (input) => {
   const schoolName = data.schoolName || legacySchoolName || "School";
   const teacherName = data.teacherName || legacyTeacherName || "Your Teacher";
   const userId = data.userId || null; // Add userId for character traits
+  
+  // Create centralized content filter for student emails
+  const contentFilter = createEmailContentFilter(data.emailPreferences || {}, 'student');
 
   // Compute canonical fields
   const studentName = (student.name || legacyStudentName || "Student").trim();
@@ -49,6 +53,13 @@ const normalizeContext = (input) => {
     ? data.lessons
     : Array.isArray(legacyLessons)
     ? legacyLessons
+    : [];
+
+  // Today's assignments (activities)
+  const assignments = Array.isArray(data.assignments)
+    ? data.assignments
+    : Array.isArray(legacyAssignments)
+    ? legacyAssignments
     : [];
 
   // Subject grades and overall grade if provided (optional)
@@ -78,8 +89,13 @@ const normalizeContext = (input) => {
     userId, // Include userId
     // optional/legacy-friendly
     lessons,
+    assignments,
     subjectGrades,
     overallGrade,
+    // Content filter for centralized filtering
+    contentFilter,
+    // Email content library for personalization
+    emailContentLibrary: data.emailContentLibrary || {},
   };
 };
 
@@ -95,6 +111,194 @@ const formatList = (items, mapper) => {
       ${items.map(mapper).join("")}
     </ul>`;
 };
+
+const formatLessons = (lessons, getPersonalizedContent, studentName, firstName) => {
+  if (!lessons || lessons.length === 0) {
+    // Use personalized content for empty state message
+    const emptyMessage = getPersonalizedContent('lessonEmptyStates', 'No lessons recorded for today - but every day is a learning adventure! 🌟');
+    return `<p style="color:#666; text-align:center; font-style:italic;">${safe(emptyMessage)}</p>`;
+  }
+  
+  // Group lessons by subject like the parent email does
+  const groupLessonsBySubject = (lessons) => {
+    if (!Array.isArray(lessons)) return {};
+    
+    return lessons.reduce((acc, lesson) => {
+      const subject = lesson.subject || 'Unknown Subject';
+      if (!acc[subject]) {
+        acc[subject] = [];
+      }
+      acc[subject].push(lesson);
+      return acc;
+    }, {});
+  };
+  
+  const lessonsBySubject = groupLessonsBySubject(lessons);
+  
+  return Object.entries(lessonsBySubject).map(([subject, subjectLessons]) => `
+    <div style="margin-bottom: 25px;">
+      <h4 style="margin: 0 0 15px 0; color: #1459a9; font-size: 16px; font-weight: 600; font-family: 'Segoe UI', sans-serif; border-bottom: 2px solid #e3f2fd; padding-bottom: 8px;">
+        ${getPersonalizedContent('lessonTitlePrefixes', '📚')} ${safe(subject)}
+      </h4>
+      ${subjectLessons.map(lesson => formatIndividualLesson(lesson, getPersonalizedContent)).join('')}
+    </div>
+  `).join('');
+};
+
+// Format individual lesson with ALL the dynamic data from frontend
+const formatIndividualLesson = (lesson, getPersonalizedContent) => {
+  // Ensure all lesson fields are properly handled with fallbacks
+  const safeLesson = {
+    ...lesson,
+    subject: lesson.subject || 'Unknown Subject',
+    title: lesson.title || 'Untitled Lesson',
+    description: lesson.description || '',
+    duration: lesson.duration || 0,
+    learningObjectives: Array.isArray(lesson.learningObjectives) ? lesson.learningObjectives : [],
+    activities: Array.isArray(lesson.activities) ? lesson.activities : [],
+    materials: Array.isArray(lesson.materials) ? lesson.materials : [],
+    homework: lesson.homework || '',
+    notes: lesson.notes || ''
+  };
+  
+  return `
+    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom: 15px;">
+      <tr>
+        <td style="padding: 15px; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border: 1px solid #dee2e6; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+          <table cellpadding="0" cellspacing="0" border="0" width="100%">
+            <!-- Lesson Header -->
+            <tr>
+              <td style="padding-bottom: 10px; border-bottom: 2px solid #e9ecef;">
+                <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                  <tr>
+                    <td>
+                      <h4 style="margin: 0; color: #1459a9; font-size: 16px; font-weight: 600; font-family: 'Segoe UI', sans-serif; word-break: break-word;">
+                        ${getPersonalizedContent('lessonTitlePrefixes', '📚')} ${safe(safeLesson.title)}
+                      </h4>
+                    </td>
+                    <td align="right" style="width: 80px;">
+                      <span style="background: #e3f2fd; color: #1459a9; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; font-family: 'Segoe UI', sans-serif;">
+                        ${safeLesson.duration} min
+                      </span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            
+            <!-- Lesson Description -->
+            ${safeLesson.description ? `
+              <tr>
+                <td style="padding: 15px 0 10px 0;">
+                  <p style="margin: 0; color: #555; font-size: 14px; line-height: 1.6; font-family: 'Segoe UI', sans-serif; word-break: break-word;">
+                    ${safe(safeLesson.description)}
+                  </p>
+                </td>
+              </tr>
+            ` : ''}
+            
+            <!-- Learning Objectives -->
+            ${safeLesson.learningObjectives && safeLesson.learningObjectives.length > 0 ? `
+              <tr>
+                <td style="padding: 10px 0;">
+                  <div style="margin-bottom: 8px;">
+                    <strong style="color: #2e7d32; font-family: 'Segoe UI', sans-serif;">🎯 Learning Objectives:</strong>
+                  </div>
+                  <ul style="margin: 8px 0; padding-left: 20px; font-family: 'Segoe UI', sans-serif;">
+                    ${safeLesson.learningObjectives.map(obj => `
+                      <li style="margin-bottom: 5px; color: #666; font-size: 13px;">
+                        ${safe(obj)}
+                      </li>
+                    `).join('')}
+                  </ul>
+                </td>
+              </tr>
+            ` : ''}
+            
+            <!-- Activities -->
+            ${safeLesson.activities && safeLesson.activities.length > 0 ? `
+              <tr>
+                <td style="padding: 10px 0;">
+                  <div style="margin-bottom: 8px;">
+                    <strong style="color: #1976d2; font-family: 'Segoe UI', sans-serif;">🔄 Activities:</strong>
+                  </div>
+                  <ul style="margin: 8px 0; padding-left: 20px; font-family: 'Segoe UI', sans-serif;">
+                    ${safeLesson.activities.map(act => `
+                      <li style="margin-bottom: 5px; color: #666; font-size: 13px;">
+                        ${safe(act)}
+                      </li>
+                    `).join('')}
+                  </ul>
+                </td>
+              </tr>
+            ` : ''}
+            
+            <!-- Homework -->
+            ${safeLesson.homework ? `
+              <tr>
+                <td style="padding: 10px 0;">
+                  <div style="margin-bottom: 8px;">
+                    <strong style="color: #f57c00; font-family: 'Segoe UI', sans-serif;">📝 Homework:</strong>
+                  </div>
+                  <p style="margin: 0; color: #666; font-size: 13px; font-family: 'Segoe UI', sans-serif; word-break: break-word;">
+                    ${safe(safeLesson.homework)}
+                  </p>
+                </td>
+              </tr>
+            ` : ''}
+            
+            <!-- Materials -->
+            ${safeLesson.materials && safeLesson.materials.length > 0 ? `
+              <tr>
+                <td style="padding: 10px 0;">
+                  <div style="margin-bottom: 8px;">
+                    <strong style="color: #7b1fa2; font-family: 'Segoe UI', sans-serif;">📚 Materials:</strong>
+                  </div>
+                  <div style="display: inline-block;">
+                    ${safeLesson.materials.map(material => `
+                      <a href="${material.url || '#'}" target="_blank" style="
+                        background: #fff; 
+                        color: #1976d2; 
+                        padding: 6px 12px; 
+                        border-radius: 6px; 
+                        text-decoration: none; 
+                        border: 1px solid #1976d2; 
+                        font-size: 12px; 
+                        margin-right: 8px; 
+                        margin-bottom: 8px; 
+                        display: inline-block;
+                        font-family: 'Segoe UI', sans-serif;
+                      ">
+                        ${safe(material.name || 'Material')} 
+                        ${material.type ? `(${safe(material.type)})` : ''}
+                      </a>
+                    `).join('')}
+                  </div>
+                </td>
+              </tr>
+            ` : ''}
+            
+            <!-- Teacher Notes -->
+            ${safeLesson.notes ? `
+              <tr>
+                <td style="padding: 10px 0;">
+                  <div style="margin-bottom: 8px;">
+                    <strong style="color: #d32f2f; font-family: 'Segoe UI', sans-serif;">💭 Teacher Notes:</strong>
+                  </div>
+                  <p style="margin: 0; color: #666; font-size: 13px; font-style: italic; font-family: 'Segoe UI', sans-serif; word-break: break-word;">
+                    ${safe(safeLesson.notes)}
+                  </p>
+                </td>
+              </tr>
+            ` : ''}
+          </table>
+        </td>
+      </tr>
+    </table>
+  `;
+};
+
+
 
 const getGradeColor = (percentage) => {
   if (percentage >= 90) return "#2e7d32"; // Green
@@ -291,6 +495,7 @@ export const buildHtml = async (context) => {
     schoolName,
     teacherName,
     assignmentsDueSoon,
+    assignments,
     newGrades,
     attendanceSummary,
     behaviorHighlights,
@@ -300,7 +505,131 @@ export const buildHtml = async (context) => {
     subjectGrades,
     overallGrade,
     userId,
+    contentFilter,
   } = ctx;
+
+  // Debug logging for student email preferences
+  console.log("Student email template - studentEmailPreferences:", {
+    studentName,
+    firstName,
+    date,
+    hasContentFilter: !!contentFilter,
+    // Check what data we have
+    hasLessons: !!lessons,
+    lessonsCount: lessons?.length || 0,
+    hasAttendance: !!attendanceSummary,
+    hasBehavior: !!behaviorHighlights,
+    hasGrades: !!newGrades,
+    gradesCount: newGrades?.length || 0,
+    hasAssignments: !!assignmentsDueSoon,
+    assignmentsCount: assignmentsDueSoon?.length || 0,
+  });
+
+  // Get email content library from passed context
+  let emailContentLibrary = ctx.emailContentLibrary || {};
+
+  // Helper function to get personalized content with deterministic daily rotation
+  const getPersonalizedContent = (contentType, fallback) => {
+    try {
+      console.log(`getPersonalizedContent called for ${contentType}:`, {
+        hasEmailContentLibrary: !!emailContentLibrary,
+        emailContentLibraryKeys: Object.keys(emailContentLibrary || {}),
+        contentType,
+        templatesCount: (emailContentLibrary[contentType] || []).length,
+        firstName,
+        studentName
+      });
+      
+      const templates = emailContentLibrary[contentType] || [];
+      if (templates.length > 0) {
+        // ROTATION SYSTEM: Each student gets a different header each day
+        // - Uses day-of-year (1-365) to ensure daily variety
+        // - Each student has a unique seed to stagger their rotation
+        // - With 33-40 content items, students will cycle through in ~1-2 months
+        // - This provides good variety while allowing content to repeat naturally
+        const dayOfYear = dayjs(date).dayOfYear();
+        const studentId = studentName || firstName || 'student';
+        
+        // Create a unique seed for each student to stagger their rotation
+        const studentSeed = studentId.split('').reduce((a, b) => {
+          a = ((a << 5) - a) + b.charCodeAt(0);
+          return a & a;
+        }, 0);
+        
+        // Combine day of year with student seed for deterministic rotation
+        // This ensures each student sees different content each day
+        const rotationIndex = (dayOfYear + studentSeed) % templates.length;
+        const selected = templates[rotationIndex];
+        
+        if (selected) {
+          // Replace placeholders in the template
+          const personalizedContent = selected
+            .replace(/{firstName}/g, firstName || 'Student')
+            .replace(/{studentName}/g, studentName || 'Student')
+            .replace(/{schoolName}/g, schoolName || 'School')
+            .replace(/{teacherName}/g, teacherName || 'Your Teacher');
+          
+          console.log(`Personalized content for ${contentType}:`, {
+            original: selected,
+            personalized: personalizedContent,
+            firstName,
+            studentName
+          });
+          
+          return safe(personalizedContent); // Apply safe here
+        }
+      }
+    } catch (error) {
+      console.warn(`Error getting personalized content for ${contentType}:`, error);
+    }
+    return fallback;
+  };
+
+  // Get personalized theme with deterministic daily rotation
+  const getPersonalizedTheme = () => {
+    try {
+      const themes = emailContentLibrary.visualThemes || [];
+      if (themes.length > 0) {
+        // Deterministic daily rotation for themes
+        // With 3-4 theme options, students will cycle through themes every few days
+        const dayOfYear = dayjs(date).dayOfYear();
+        const studentId = studentName || firstName || 'student';
+        
+        // Create a unique seed for each student to stagger their theme rotation
+        const studentSeed = studentId.split('').reduce((a, b) => {
+          a = ((a << 5) - a) + b.charCodeAt(0);
+          return a & a;
+        }, 0);
+        
+        // Combine day of year with student seed for deterministic rotation
+        const rotationIndex = (dayOfYear + studentSeed) % themes.length;
+        const selected = themes[rotationIndex];
+        
+        if (selected) {
+          return {
+            primary: selected.primary || "#1459a9",
+            secondary: selected.secondary || "#ed2024",
+            header: "linear-gradient(135deg, #1459a9 0%, #0d3d7a 100%)",
+            winsBorder: selected.winsBorder || "#1459a9",
+            assignmentsBorder: selected.assignmentsBorder || "#ed2024",
+            starsBorder: selected.starsBorder || "#ed2024"
+          };
+        }
+      }
+    } catch (error) {
+      console.warn("Error getting personalized theme:", error);
+    }
+    return {
+      primary: "#1459a9",
+      secondary: "#ed2024",
+      header: "linear-gradient(135deg, #1459a9 0%, #0d3d7a 100%)",
+      winsBorder: "#1459a9",
+      assignmentsBorder: "#ed2024",
+      starsBorder: "#ed2024"
+    };
+  };
+
+  const theme = getPersonalizedTheme();
 
   const gradesSummary = () => {
     const entries = Object.entries(subjectGrades || {});
@@ -344,164 +673,77 @@ export const buildHtml = async (context) => {
     const width = Math.max(0, Math.min(100, averageForBar));
     const color = getGradeColor(width);
     const message = width >= 90
-      ? 'On fire! 🔥'
+      ? getPersonalizedContent('progressMessages', 'On fire! 🔥')
       : width >= 80
-      ? 'Great momentum! 🚀'
+      ? getPersonalizedContent('progressMessages', 'Great momentum! 🚀')
       : width >= 70
-      ? 'Keep climbing! 🧗'
-      : 'You\'ve got this! 🌱';
+      ? getPersonalizedContent('progressMessages', 'Keep climbing! 🧗')
+      : getPersonalizedContent('progressMessages', 'You\'ve got this! 🌱');
     return `
-      <div style="margin:16px 0;">
-        <div style="font-weight:800; color:#1459a9; margin-bottom:8px;">📈 Learning Progress</div>
-        <div style="background:#eceff1; border-radius:12px; height:16px; overflow:hidden; border:1px solid #1459a9;">
+        <div style="background:#eceff1; border-radius:12px; height:16px; overflow:hidden; border:1px solid ${theme.primary};">
           <div style="width:${width}%; height:16px; background:${color};"></div>
         </div>
-        <div style="font-size:13px; color:#1459a9; margin-top:8px;">Current average: <strong>${width}%</strong> • ${message}</div>
-      </div>`;
+      <div style="font-size:13px; color:#1459a9; margin-top:8px;">Current average: <strong>${width}%</strong> • ${message}</div>`;
   };
 
-  // Achievement badges
+  // Achievement badges using content library
   const achievementBadges = () => {
-    const badges = [];
-    if (attendanceSummary && attendanceSummary.status === 'Present') badges.push({ label: '✅ Attendance Champion', bg:'#f8f9fa', color:'#1459a9' });
-    if (Array.isArray(newGrades) && newGrades.length > 0) badges.push({ label: '📊 Grade Collector', bg:'#f8f9fa', color:'#ed2024' });
-    if (Array.isArray(lessons) && lessons.length > 0) badges.push({ label: '🔎 Curious Learner', bg:'#f8f9fa', color:'#1459a9' });
-    if (Array.isArray(behaviorHighlights) && behaviorHighlights.some(b=>b.type === 'Positive')) badges.push({ label: '💜 Kindness Hero', bg:'#f8f9fa', color:'#ed2024' });
-    if (badges.length === 0) return '';
-    return `
-      <div style="margin:16px 0;">
-        <div style="font-weight:800; color:#1459a9; margin-bottom:8px;">🏅 Achievement Badges</div>
-        <div style="display:flex; flex-wrap:wrap; gap:10px;">
-          ${badges.map(b => `<span style="background:${b.bg}; color:${b.color}; padding:8px 12px; border-radius:18px; font-size:13px; box-shadow:0 1px 0 rgba(0,0,0,0.06); border:1px solid ${b.color};">${b.label}</span>`).join('')}
-        </div>
-      </div>`;
-  };
-
-  // Focus tip based on lowest subject grade
-  const focusTip = () => {
     try {
-      const entries = Object.entries(subjectGrades || {});
-      if (!entries.length) return '';
-      const sorted = entries.filter(([,v]) => typeof v === 'number').sort((a,b)=>a[1]-b[1]);
-      if (!sorted.length) return '';
-      const [lowestSubject, lowestGrade] = sorted[0];
-      const tips = {
-        default: `Try reviewing class notes, practicing a few problems, and asking one question tomorrow. You’ve got this! 💪`,
-        ELA: `Read for 10 minutes and jot 3 new words. Practice makes progress! 📖`,
-        Math: `Practice 5 quick problems and explain your steps to a friend. ➗`,
-        Science: `Write one “why” question about today’s topic and try to answer it. 🔬`,
-        SS: `Tell a family member one fact you learned and why it matters. 🗺️`
-      };
-      const subjectKey = (lowestSubject || '').toString();
-      const tip = tips[subjectKey] || tips.default;
-      return `
-        <div style="margin:16px 0; padding:14px; border-radius:10px; background:#f8f9fa; border:1px solid #1459a9; color:#1459a9;">
-          <strong>🎯 Focus Tip (${safe(lowestSubject)} – ${lowestGrade}%):</strong> ${safe(tip)}
-        </div>`;
-    } catch(_) {
+      const libraryBadges = emailContentLibrary.achievementBadges || [];
+      if (libraryBadges.length === 0) return '';
+      
+      // Get personalized badge selection based on student and date
+      const dayOfYear = dayjs(date).dayOfYear();
+      const studentId = studentName || firstName || 'student';
+      const studentSeed = studentId.split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0);
+        return a & a;
+      }, 0);
+      
+      // Select badges based on student achievements and rotate through library
+      const selectedBadges = [];
+      
+      if (attendanceSummary && attendanceSummary.status === 'Present') {
+        const attendanceBadge = libraryBadges.find(b => b.name === 'Attendance Champion') || 
+          { name: 'Attendance Champion', icon: '✅', color: '#4caf50' };
+        selectedBadges.push(attendanceBadge);
+      }
+      
+      if (Array.isArray(newGrades) && newGrades.length > 0) {
+        const gradeBadge = libraryBadges.find(b => b.name === 'Grade Collector') || 
+          { name: 'Grade Collector', icon: '🏅', color: '#2196f3' };
+        selectedBadges.push(gradeBadge);
+      }
+      
+      if (Array.isArray(lessons) && lessons.length > 0) {
+        const lessonBadge = libraryBadges.find(b => b.name === 'Curious Learner') || 
+          { name: 'Curious Learner', icon: '🔎', color: '#1459a9' };
+        selectedBadges.push(lessonBadge);
+      }
+      
+      if (Array.isArray(behaviorHighlights) && behaviorHighlights.some(b=>b.type === 'Positive')) {
+        const behaviorBadge = libraryBadges.find(b => b.name === 'Kindness Hero') || 
+          { name: 'Kindness Hero', icon: '❤️', color: '#e91e63' };
+        selectedBadges.push(behaviorBadge);
+      }
+      
+      if (selectedBadges.length === 0) return '';
+      
+    return `
+        <div style="display:flex; flex-wrap:wrap; gap:10px;">
+          ${selectedBadges.map(badge => `
+            <span style="background:#f8f9fa; color:${badge.color}; padding:8px 12px; border-radius:18px; font-size:13px; box-shadow:0 1px 0 rgba(0,0,0,0.06); border:1px solid ${badge.color};">
+              ${badge.icon} ${badge.name}
+            </span>
+          `).join('')}
+      </div>`;
+    } catch (error) {
+      console.warn('Error getting achievement badges from content library:', error);
       return '';
     }
   };
 
-  // Rotation motivation quote
-  const motivation = async () => {
-    try {
-      // Try to get character trait-based quote first
-      if (userId) {
-        const currentTrait = await getCurrentMonthTrait(userId, date);
-        if (currentTrait) {
-          // Use student name as ID for unique selection
-          const studentId = studentName || firstName || "student";
-          const quote = getDailyQuote(currentTrait, studentId, date);
-          return `
-            <div style="margin:18px 0; padding:12px; border-radius:10px; background:#fffde7; border:1px solid #fff59d; color:#795548; text-align:center;">
-              <div style="font-size:14px; margin-bottom:4px; color:#8d6e63;">🌟 ${currentTrait.name} Focus 🌟</div>
-              ${quote}
-            </div>`;
-        }
-      }
-    } catch (error) {
-      console.error("Error getting character trait quote:", error);
-    }
-
-    // Fallback to built-in quotes with student-specific selection
-    const weekday = dayjs(date).day();
-    const isWeekend = weekday === 5 || weekday === 6; // Friday (5) and Saturday (6) are weekends
-    const studentId = studentName || firstName || "student";
-    const quote = getBuiltInQuotes(weekday, isWeekend, studentId);
-    return `
-      <div style="margin:18px 0; padding:12px; border-radius:10px; background:#fffde7; border:1px solid #fff59d; color:#795548; text-align:center;">
-        ${quote}
-      </div>`;
-  };
-
-  const formatGrades = (gradesArray) => {
-    if (!gradesArray || gradesArray.length === 0) return '<p style="color:#666">No new grades today.</p>';
-    return `
-      <ul style="margin:8px 0; padding-left:18px; color:#444;">
-        ${gradesArray
-          .map((g) => {
-            let displayText = "";
-            let pct = null;
-            if (!g.points && g.points !== 0) {
-              displayText = `${g.score}`;
-            } else if (g.points === 0) {
-              displayText = `${g.score}`;
-            } else {
-              pct = Math.round((g.score / g.points) * 100);
-              displayText = `${g.score}/${g.points} (${pct}%)`;
-            }
-            const color = pct == null ? "#444" : getGradeColor(pct);
-            return `<li>${safe(g.assignmentName || "Assignment")}: <span style=\"color:${color}\">${displayText}</span>${g.subject ? ` - <em>${safe(g.subject)}</em>` : ""}</li>`;
-          })
-          .join("")}
-      </ul>
-    `;
-  };
-
-  const formatAssignmentsDueSoon = (items) => {
-    return formatList(items, (a) => `<li>${safe(a.name || "Assignment")}${a.dueDate ? ` (Due ${dayjs(a.dueDate).format("MMM DD")})` : ""}</li>`);
-  };
-
-  const formatBehavior = (items) => {
-    if (!items || items.length === 0) return '<p style="color:#2e7d32">No behavior incidents. Great job!</p>';
-    return `
-      <ul style="margin:8px 0; padding-left:18px; color:#444;">
-        ${items
-          .map((b) => `<li>${b.type === "Positive" ? "🌟" : "⚠️"} ${safe(b.description || "")}</li>`)
-          .join("")}
-      </ul>
-    `;
-  };
-
-  const formatAttendance = (att) => {
-    if (!att) return '<p style="color:#666">Attendance not recorded.</p>';
-    const status = att.status || "Not Recorded";
-    const colors = {
-      Present: { color: "#2e7d32", icon: "✅" },
-      Tardy: { color: "#f57c00", icon: "⏰" },
-      Absent: { color: "#d32f2f", icon: "❌" },
-      Excused: { color: "#1976d2", icon: "📋" },
-    };
-    const cfg = colors[status] || { color: "#666", icon: "📅" };
-    return `<div style=\"font-weight:600;color:${cfg.color}\">${cfg.icon} ${status}</div>${att.notes ? `<div style=\"color:#666;margin-top:4px\">${safe(att.notes)}</div>` : ""}`;
-  };
-
-  const formatReminders = (items) => {
-    if (!items || items.length === 0) return '<p style="color:#666">No reminders.</p>';
-    return formatList(items, (r) => `<li>${safe(typeof r === "string" ? r : r.text || "")}</li>`);
-  };
-
-  const encouragementBlock = () => {
-    const parts = [];
-    if (encouragement) parts.push(encouragement);
-    if (parts.length === 0) return "";
-    return `
-      <div style="margin:18px 0; padding:14px; background:#e8f5e9; border:1px solid #c8e6c9; border-radius:8px; color:#2e7d32;">
-        ${safe(parts.join(" "))}
-      </div>
-    `;
-  };
+ 
 
   // Today's Challenge function
   const todaysChallenge = async () => {
@@ -514,9 +756,11 @@ export const buildHtml = async (context) => {
           const studentId = studentName || firstName || "student";
           const challenge = getDailyChallenge(currentTrait, studentId, date);
           return `
-            <div class="section" style="border-color:#c8e6c9; background:#f1f8f2;">
-              <div class="section-title" style="background:#2e7d32;">🌟 Today's Challenge: ${currentTrait.name}</div>
-              <div class="section-content" style="color:#1b5e20;">${safe(challenge)}</div>
+            <div style="margin:16px 0;">
+              <div style="font-weight:600; color:#2e7d32; margin-bottom:8px;">🎯 Today's Challenge</div>
+              <div style="color:#1b5e20; padding:12px; background:rgba(255,255,255,0.7); border-radius:8px; border-left:4px solid #2e7d32;">
+                ${safe(challenge)}
+              </div>
             </div>`;
         }
       }
@@ -529,10 +773,157 @@ export const buildHtml = async (context) => {
     const studentId = studentName || firstName || "student";
     const challenge = getBuiltInChallenges(weekday, null, studentId);
     return `
-      <div class="section" style="border-color:#c8e6c9; background:#f1f8f2;">
-        <div class="section-title" style="background:#2e7d32;">🌟 Today's Challenge</div>
-        <div class="section-content" style="color:#1b5e20;">${safe(challenge)}</div>
+      <div style="margin:16px 0;">
+        <div style="font-weight:600; color:#2e7d32; margin-bottom:8px;">🎯 Today's Challenge</div>
+        <div style="color:#1b5e20; padding:12px; background:rgba(255,255,255,0.7); border-radius:8px; border-left:4px solid #2e7d32;">
+          ${safe(challenge)}
+        </div>
       </div>`;
+  };
+
+  // Rotation motivation quote using content library
+  const motivation = async () => {
+    try {
+      // Try to get character trait-based quote first
+      if (userId) {
+        const currentTrait = await getCurrentMonthTrait(userId, date);
+        if (currentTrait) {
+          // Use student name as ID for unique selection
+          const studentId = studentName || firstName || 'student';
+          const quote = getDailyQuote(currentTrait, studentId, date);
+    return `
+            <div style="margin:16px 0;">
+              <div style="font-weight:600; color:#2e7d32; margin-bottom:8px;">💫 Today's Quote</div>
+              <div style="font-style:italic; color:#1b5e20; padding:12px; background:rgba(255,255,255,0.7); border-radius:8px; border-left:4px solid #2e7d32;">
+                "${safe(quote)}"
+              </div>
+            </div>`;
+        }
+      }
+      
+      // Try content library motivational quotes with deterministic rotation
+      const libraryQuotes = emailContentLibrary.motivationalQuotes || [];
+      if (libraryQuotes.length > 0) {
+        const dayOfYear = dayjs(date).dayOfYear();
+        const studentId = studentName || firstName || 'student';
+        
+        // Create a unique seed for each student to stagger their rotation
+        const studentSeed = studentId.split('').reduce((a, b) => {
+          a = ((a << 5) - a) + b.charCodeAt(0);
+          return a & a;
+        }, 0);
+        
+        // Combine day of year with student seed for deterministic rotation
+        const rotationIndex = (dayOfYear + studentSeed) % libraryQuotes.length;
+        const selected = libraryQuotes[rotationIndex];
+        
+        if (selected) {
+          // Replace placeholders in the quote
+          const personalizedQuote = selected
+            .replace(/{firstName}/g, firstName || 'Student')
+            .replace(/{studentName}/g, studentName || 'Student')
+            .replace(/{schoolName}/g, schoolName || 'School')
+            .replace(/{teacherName}/g, teacherName || 'Your Teacher');
+          
+          return `
+            <div style="margin:16px 0;">
+              <div style="font-weight:600; color:#2e7d32; margin-bottom:8px;">💫 Today's Quote</div>
+              <div style="font-style:italic; color:#1b5e20; padding:12px; background:rgba(255,255,255,0.7); border-radius:8px; border-left:4px solid #2e7d32;">
+                "${safe(personalizedQuote)}"
+              </div>
+            </div>`;
+        }
+      }
+      
+      // Fallback to built-in quotes with deterministic selection
+      const weekday = dayjs(date).day();
+      const isWeekend = weekday === 5 || weekday === 6; // Friday or Saturday
+      const fallbackQuote = getBuiltInQuotes(weekday, isWeekend, studentName || firstName);
+      
+      return `
+        <div style="margin:16px 0;">
+          <div style="font-weight:600; color:#2e7d32; margin-bottom:8px;">💫 Today's Quote</div>
+          <div style="font-style:italic; color:#1b5e20; padding:12px; background:rgba(255,255,255,0.7); border-radius:8px; border-left:4px solid #2e7d32;">
+            "${safe(fallbackQuote)}"
+          </div>
+        </div>`;
+    } catch (error) {
+      console.warn('Error in motivation function:', error);
+      // Final fallback
+      return `
+        <div style="margin:16px 0;">
+          <div style="font-weight:600; color:#2e7d32; margin-bottom:8px;">💫 Today's Quote</div>
+          <div style="font-style:italic; color:#1b5e20; padding:12px; background:rgba(255,255,255,0.7); border-radius:8px; border-left:4px solid #2e7d32;">
+            "Every day is a new opportunity to grow and learn! 🌟"
+          </div>
+        </div>`;
+    }
+  };  
+
+  // Helper functions for formatting sections
+  const formatAttendance = (attendance) => {
+    if (!attendance) return '<p style="color:#666">No attendance data.</p>';
+    return `
+      <div style="margin:8px 0;">
+        <strong>📅 ${safe(attendance.status || 'Not Recorded')}</strong><br>
+        <span style="color:#666; font-size:14px;">${safe(attendance.notes || 'Attendance not yet recorded for today')}</span>
+      </div>`;
+  };
+
+  const formatBehavior = (behavior) => {
+    if (!behavior || behavior.length === 0) {
+      return '<p style="color:#666">No behavior incidents. Great job!</p>';
+    }
+    return formatList(behavior, (b) => 
+      `<li><strong>${safe(b.type || 'Incident')}:</strong> ${safe(b.description || 'No description')}</li>`
+    );
+  };
+
+  const formatReminders = (reminders) => {
+    if (!reminders || reminders.length === 0) {
+      return '<p style="color:#666">No reminders.</p>';
+    }
+    return formatList(reminders, (r) => `<li>${safe(r)}</li>`);
+  };
+
+  const formatAssignments = (assignments) => {
+    if (!assignments || assignments.length === 0) {
+      return '<p style="color:#666">No assignments due soon.</p>';
+    }
+    return formatList(assignments, (a) => 
+      `<li><strong>${safe(a.name || 'Assignment')}</strong> (Due ${dayjs(a.dueDate).format('MMM DD')})</li>`
+    );
+  };
+
+  const formatGrades = (grades) => {
+    if (!grades || grades.length === 0) {
+      return '<p style="color:#666">No new grades today.</p>';
+    }
+    return formatList(grades, (g) => 
+      `<li><strong>${safe(g.assignmentName || 'Assignment')}:</strong> ${g.score}/${g.points} (${Math.round((g.score/g.points)*100)}%)</li>`
+    );
+  };
+
+  const encouragementBlock = () => {
+    const parts = [];
+    if (assignmentsDueSoon && assignmentsDueSoon.length > 0) {
+      parts.push(getPersonalizedContent('achievementMessages', "You have upcoming work — planning ahead shows real leadership! ⏰📋"));
+    }
+    if (newGrades && newGrades.length > 0) {
+      parts.push(getPersonalizedContent('achievementMessages', "You earned new grades today — your hard work is paying off! 🏆📊"));
+    }
+    if (attendanceSummary && attendanceSummary.status === 'Present') {
+      parts.push(getPersonalizedContent('achievementMessages', "Perfect attendance today — you're building great habits! ✅📅"));
+    }
+    if (behaviorHighlights && behaviorHighlights.some(b => b.type === 'Positive')) {
+      parts.push(getPersonalizedContent('achievementMessages', "You made positive choices today — keep up the amazing work! 🌟💫"));
+    }
+    
+    if (parts.length === 0) {
+      parts.push(getPersonalizedContent('achievementMessages', "Every day you show up is a win — keep being awesome! ✨🚀"));
+    }
+    
+    return safe(parts.join(" "));
   };
 
   return `
@@ -542,7 +933,6 @@ export const buildHtml = async (context) => {
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <style>
-        /* Enhanced modern styles for better student engagement */
         body {
           margin: 0 !important;
           padding: 0 !important;
@@ -565,38 +955,20 @@ export const buildHtml = async (context) => {
           color: #fff !important;
           padding: 28px 24px !important;
           text-align: center !important;
-          position: relative !important;
-        }
-        .header::before {
-          content: '' !important;
-          position: absolute !important;
-          top: 0 !important;
-          left: 0 !important;
-          right: 0 !important;
-          bottom: 0 !important;
-          background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="stars" patternUnits="userSpaceOnUse" width="100" height="100"><circle cx="20" cy="20" r="1" fill="rgba(255,255,255,0.3)"/><circle cx="80" cy="40" r="1" fill="rgba(255,255,255,0.3)"/><circle cx="40" cy="80" r="1" fill="rgba(255,255,255,0.3)"/></pattern></defs><rect width="100" height="100" fill="url(%23stars)"/></svg>') !important;
-          opacity: 0.1 !important;
         }
         .school-title {
           margin: 0 !important; 
           font-weight: 800 !important; 
           font-size: 28px !important;
-          text-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-          position: relative !important;
-          z-index: 1 !important;
         }
         .date-badge {
           margin-top: 12px !important; 
-          opacity: 0.95 !important; 
           font-size: 14px !important;
           font-weight: 500 !important;
           background: rgba(255,255,255,0.2) !important;
           padding: 8px 16px !important;
           border-radius: 20px !important;
           display: inline-block !important;
-          backdrop-filter: blur(10px) !important;
-          position: relative !important;
-          z-index: 1 !important;
         }
         .content { 
           padding: 32px 24px !important; 
@@ -615,37 +987,11 @@ export const buildHtml = async (context) => {
           color: #fff !important; 
           padding: 16px 20px !important; 
           font-weight: 700 !important; 
-          letter-spacing: 0.5px !important;
           font-size: 16px !important;
-          text-shadow: 0 1px 2px rgba(0,0,0,0.1) !important;
         }
         .section-content { 
           padding: 20px !important; 
           background: #ffffff !important;
-        }
-        .summary-grid { 
-          width: 100% !important; 
-          margin: 24px 0 !important; 
-        }
-        .summary-card { 
-          background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%) !important; 
-          border: none !important; 
-          border-radius: 16px !important; 
-          text-align: center !important; 
-          padding: 20px !important;
-          box-shadow: 0 4px 16px rgba(0,0,0,0.08) !important;
-        }
-        .summary-value { 
-          font-size: 24px !important; 
-          font-weight: 800 !important; 
-          color: #2c3e50 !important;
-        }
-        .summary-label { 
-          font-size: 13px !important; 
-          color: #7f8c8d !important; 
-          text-transform: uppercase !important;
-          font-weight: 600 !important;
-          letter-spacing: 0.5px !important;
         }
         .hero-banner {
           background: linear-gradient(135deg, #1459a9 0%, #0d3d7a 100%) !important;
@@ -655,15 +1001,6 @@ export const buildHtml = async (context) => {
           margin: 0 0 24px 0 !important;
           box-shadow: 0 6px 20px rgba(20, 89, 169, 0.2) !important;
         }
-        .wins-section {
-          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
-          border: 2px solid #1459a9 !important;
-          border-radius: 16px !important;
-          padding: 20px !important;
-          margin: 24px 0 !important;
-          box-shadow: 0 4px 16px rgba(20, 89, 169, 0.15) !important;
-        }
-
         .stars-earned {
           background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%) !important;
           border: 2px solid #ed2024 !important;
@@ -720,14 +1057,6 @@ export const buildHtml = async (context) => {
           margin: 24px 0 !important;
           box-shadow: 0 4px 16px rgba(20, 89, 169, 0.15) !important;
         }
-        .challenge-section {
-          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
-          border: 2px solid #1459a9 !important;
-          border-radius: 16px !important;
-          padding: 20px !important;
-          margin: 24px 0 !important;
-          box-shadow: 0 4px 16px rgba(20, 89, 169, 0.15) !important;
-        }
         .footer {
           margin-top: 32px !important;
           padding-top: 20px !important;
@@ -747,7 +1076,6 @@ export const buildHtml = async (context) => {
           align-items: center !important;
           gap: 8px !important;
         }
-
         ul {
           margin: 12px 0 !important;
           padding-left: 24px !important;
@@ -772,105 +1100,145 @@ export const buildHtml = async (context) => {
       <div class="email-container">
         <div class="header">
           <h2 class="school-title">${safe(schoolName)}</h2>
-          <div class="date-badge">${dayjs(date).format("dddd, MMMM DD, YYYY")}</div>
+          <div class="date-badge">${dayjs(date).format('dddd, MMMM D, YYYY')}</div>
         </div>
 
         <div class="content">
-          <!-- Hero Banner -->
-          <div class="hero-banner">
-            <div style="font-size: 22px; font-weight: 800; color:#ffffff;">🌟 You're absolutely amazing, ${safe(firstName)}! 🌟</div>
-            <div style="font-size: 15px; color:#ffffff; margin-top: 10px;">High-five for being awesome and giving it your all today! 🙌✨</div>
+          <!-- Dynamic Personalized Greeting with Hero Banner Style -->
+          <div style="margin:24px 0; padding:24px; background:linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius:20px; border:3px solid #1459a9; box-shadow:0 6px 20px rgba(20, 89, 169, 0.2);">
+            <h1 style="margin:0 0 12px 0; font-size:24px; color:#1459a9; text-align:center; font-weight:700;">
+              ${getPersonalizedContent('greetings', '🌟 You\'re absolutely amazing, {firstName}! 🌟')}
+            </h1>
+            <p style="margin:0; font-size:16px; color:#34495e; text-align:center; font-weight:500;">
+          ${(() => {
+                // Generate unique sub-message based on student name for variety
+                const messages = [
+                  'High-five for being awesome and giving it your all today! 🙌✨',
+                  'You\'re doing incredible things - keep shining! ⭐',
+                  'Your hard work is making a difference! 🚀',
+                  'You\'re on fire today - amazing job! 🔥',
+                  'You\'re crushing it today! 🎯',
+                  'Keep being the amazing person you are! 💫',
+                  
+                  'Your positive energy is contagious! 🌟',
+                  'You make learning look easy! 📚',
+                  'You are a star! 🌟',
+                  'You are a shining light! 💫',
+                  'You are a shining star! 🌟',
+                 ];
+                // Use student name to deterministically select message
+                const seed = (studentName || firstName || 'student').split('').reduce((a, b) => {
+                  a = ((a << 5) - a) + b.charCodeAt(0);
+                  return a & a;
+                }, 0);
+                const index = Math.abs(seed) % messages.length;
+                return messages[index];
+          })()}
+            </p>
           </div>
 
-          <p style="margin:0 0 16px 0; font-size: 17px; color: #2c3e50;">Hi there, ${safe(firstName)}! 👋</p>
-          <p style="margin:0 0 20px 0; font-size: 16px; color: #34495e;">Here's your incredible daily summary - you're doing fantastic things! Keep that amazing energy flowing! ✨🚀</p>
+          <!-- Additional Personalized Message -->
+          <div style="margin:20px 0; padding:20px; background:linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius:16px; border:2px solid #1459a9;">
+            <p style="margin:0; font-size:16px; color:#1459a9; font-weight:600;">
+              Here's your incredible daily summary - you're doing fantastic things! Keep that amazing energy flowing! ✨🚀
+            </p>
+          </div>
 
-          <!-- Today's Wins -->
-          ${(() => {
-            const wins = [];
-            if (attendanceSummary && attendanceSummary.status === 'Present') wins.push('You showed up ready to conquer the day! ✅');
-            if (Array.isArray(newGrades) && newGrades.length > 0) wins.push(`You earned ${newGrades.length} amazing grade${newGrades.length>1?'s':''}! 🏅🎉`);
-            if (Array.isArray(lessons) && lessons.length > 0) wins.push(`You tackled ${lessons.length} lesson${lessons.length>1?'s':''} like a champion! 📚💪`);
-            if (Array.isArray(assignmentsDueSoon) && assignmentsDueSoon.length > 0) wins.push('You have upcoming work — planning ahead shows real leadership! ⏰📋');
-            if (Array.isArray(behaviorHighlights) && behaviorHighlights.some(b=>b.type === 'Positive')) wins.push('You made incredible choices today! 🌈💫');
-            if (wins.length === 0) return '';
-            return `
-              <div class="wins-section">
-                <div style="font-weight:800; color:#1459a9; margin-bottom:8px; font-size: 18px;">🎉 Today's Amazing Achievements 🎉</div>
-                <ul style="margin:0; padding-left:20px; color:#1459a9;">
-                  ${wins.map(w => `<li>${safe(w)}</li>`).join('')}
-                </ul>
-              </div>`;
-          })()}
-
-
+          <!-- Today's Achievements -->
+          <div style="margin:16px 0; padding:14px; border-radius:10px; background:#fff3cd; border:1px solid #ffeaa7; color:#856404;">
+            <strong>${getPersonalizedContent('achievementSectionHeaders', '🎉 Today\'s Amazing Achievements 🎉')}</strong><br>
+            ${encouragementBlock()}
+          </div>
 
           <!-- Stars Earned -->
-          ${(() => {
-            let stars = 0;
-            if (overallGrade != null) stars += overallGrade >= 90 ? 3 : overallGrade >= 80 ? 2 : overallGrade >= 70 ? 1 : 0;
-            if (attendanceSummary && attendanceSummary.status === 'Present') stars += 1;
-            if (Array.isArray(behaviorHighlights) && behaviorHighlights.some(b=>b.type === 'Positive')) stars += 1;
-            if (stars === 0) return '';
-            const starRow = '⭐'.repeat(Math.min(stars, 5));
-            return `
               <div class="stars-earned">
-                <div style="color:#ed2024; font-weight:700; font-size: 16px; text-align: center;">
-                  🎊 ${starRow} Incredible! You earned ${stars} star${stars>1?'s':''} today! ${starRow}
+            <div style="text-align:center; font-size:18px; font-weight:700; color:#ed2024;">
+              ${getPersonalizedContent('starMessages', `🎊 ⭐⭐⭐ Incredible! You earned ${averageForBar >= 90 ? '3' : averageForBar >= 80 ? '2' : '1'} stars today! ⭐⭐⭐`)}
                 </div>
-              </div>`;
-          })()}
+          </div>
 
+          <!-- Learning Progress -->
+          <div style="margin:16px 0;">
+            <div style="font-weight:800; color:${theme.primary}; margin-bottom:8px;">${getPersonalizedContent('progressHeaders', '📈 Learning Progress')}</div>
           ${progressMeter()}
-          ${achievementBadges()}
-          ${focusTip()}
-          ${motivation()}
+          </div>
 
+        
+
+          <!-- Motivation & Challenge Section -->
+          <div class="section" style="border-color:#c8e6c9; background:#f1f8f2;">
+            <div class="section-title" style="background:#2e7d32;">🌟 Character Trait of the Month</div>
+            <div class="section-content" style="color:#1b5e20;">
+              ${await motivation()}
+              ${await todaysChallenge()}
+            </div>
+          </div>
+
+          <!-- Achievement Badges -->
+          <div style="margin:16px 0;">
+            <div style="font-weight:800; color:#1459a9; margin-bottom:8px;">${getPersonalizedContent('badgeHeaders', '🏅 Achievement Badges')}</div>
+            ${achievementBadges()}
+          </div>
+
+          <!-- Grades Section -->
+          ${contentFilter.shouldIncludeSection('subjectGrades', ctx) ? `
           <div class="grades-section">
-            <div class="section-header">📊 Your Amazing Grades</div>
+            <div class="section-header">${getPersonalizedContent('gradeSectionHeaders', '📊 Your Amazing Grades')}</div>
             ${gradesSummary()}
-          </div>
-
-          <div class="lessons-section">
-            <div class="section-header">🏆 New Grades Today</div>
-            ${formatGrades(newGrades)}
-          </div>
-
-          ${lessons && lessons.length > 0 ? `
-          <div class="lessons-section">
-            <div class="section-header">📚 Today's Learning Adventures</div>
-            ${formatList(lessons, (l) => `<li>${safe(l.title || "Lesson")} ${l.subject ? `- <em>${safe(l.subject)}</em>` : ""} ${l.duration ? `(${l.duration} min)` : ""}</li>`)}
           </div>` : ""}
 
-          <div class="assignments-section">
-            <div class="section-header">⏰ Assignments Coming Up</div>
-            <div class="section-content">${formatAssignmentsDueSoon(assignmentsDueSoon)}</div>
-          </div>
+          <!-- New Grades Today -->
+          ${contentFilter.shouldIncludeSection('grades', ctx) && newGrades && newGrades.length > 0 ? `
+          <div class="grades-section">
+            <div class="section-header">${getPersonalizedContent('gradeSectionHeaders', '🏆 New Grades Today')}</div>
+            ${formatGrades(newGrades)}
+          </div>` : ""}
 
-          ${attendanceSummary ? `
+          <!-- Today's Activities -->
+          ${contentFilter.shouldIncludeSection('assignments', ctx) && assignments && assignments.length > 0 ? `
+          <div class="assignments-section">
+            <div class="section-header">${getPersonalizedContent('assignmentSectionHeaders', '📝 Today\'s Activities')}</div>
+            ${formatAssignments(assignments)}
+          </div>` : ""}
+
+          <!-- Assignments Coming Up -->
+          ${contentFilter.shouldIncludeSection('upcoming', ctx) && assignmentsDueSoon && assignmentsDueSoon.length > 0 ? `
+          <div class="assignments-section">
+            <div class="section-header">${getPersonalizedContent('assignmentSectionHeaders', '⏰ Assignments Coming Up')}</div>
+            ${formatAssignments(assignmentsDueSoon)}
+          </div>` : ""}
+
+          <!-- Lessons Section -->
+          ${contentFilter.shouldIncludeSection('lessons', ctx) && lessons && lessons.length > 0 ? `
+          <div class="lessons-section">
+            <div class="section-header">${getPersonalizedContent('lessonSectionHeaders', '📚 Today\'s Learning Adventures')}</div>
+            ${formatLessons(lessons, getPersonalizedContent, studentName, firstName)}
+          </div>` : ""}
+
+          <!-- Attendance Section -->
+          ${contentFilter.shouldIncludeSection('attendance', ctx) && attendanceSummary ? `
           <div class="attendance-section">
-            <div class="section-header">📅 Your Attendance</div>
+            <div class="section-header">${getPersonalizedContent('attendanceHeaders', '📅 Your Attendance')}</div>
             ${formatAttendance(attendanceSummary)}
           </div>` : ""}
 
-          ${behaviorHighlights ? `
+          <!-- Behavior Section -->
+          ${contentFilter.shouldIncludeSection('behavior', ctx) && behaviorHighlights ? `
           <div class="behavior-section">
-            <div class="section-header">🧠 Your Choices Today</div>
+            <div class="section-header">${getPersonalizedContent('behaviorSectionHeaders', '🧠 Your Choices Today')}</div>
             ${formatBehavior(behaviorHighlights)}
           </div>` : ""}
 
-          ${encouragementBlock()}
 
-          <!-- Today's Challenge -->
-          ${await todaysChallenge()}
 
+          <!-- Reminders Section -->
           ${reminders ? `
           <div class="reminders-section">
-            <div class="section-header">🔔 Important Reminders</div>
+            <div class="section-header">${getPersonalizedContent('reminderHeaders', '🔔 Important Reminders')}</div>
             ${formatReminders(reminders)}
           </div>` : ""}
 
-          <div class="footer" style="margin-top:32px; border-top:1px solid #e1e4e8; padding-top:18px; color:#7f8c8d; font-size:14px;">
+          <div class="footer">
             <div style="font-weight:600; color:#1459a9; margin-bottom:4px;">
               Best,<br>
               ${safe(teacherName)}<br>
@@ -887,22 +1255,124 @@ export const buildText = (context) => {
   const ctx = normalizeContext(context);
   const {
     firstName,
-    newGrades,
-    lessons,
+    studentName,
+    date,
+    schoolName,
+    teacherName,
     assignmentsDueSoon,
+    newGrades,
+    attendanceSummary,
+    behaviorHighlights,
+    reminders,
+    lessons,
+    subjectGrades,
+    overallGrade,
   } = ctx;
 
-  return `Hi ${firstName},\n\nHere’s your daily summary.\n\n- New grades today: ${newGrades?.length || 0}\n- Lessons today: ${lessons?.length || 0}\n- Due soon: ${assignmentsDueSoon?.length || 0}\n\nKeep going!`;
+  const formatList = (items, mapper) => {
+    if (!items || items.length === 0) return 'Nothing for now.';
+    return items.map(mapper).join('\n');
+  };
+
+  const formatAttendance = (attendance) => {
+    if (!attendance) return 'No attendance data.';
+    return `${attendance.status || 'Not Recorded'}\n${attendance.notes || 'Attendance not yet recorded for today'}`;
+  };
+
+  const formatBehavior = (behavior) => {
+    if (!behavior || behavior.length === 0) {
+      return 'No behavior incidents. Great job!';
+    }
+    return formatList(behavior, (b) => `${b.type || 'Incident'}: ${b.description || 'No description'}`);
+  };
+
+  const formatReminders = (reminders) => {
+    if (!reminders || reminders.length === 0) {
+      return 'No reminders.';
+    }
+    return formatList(reminders, (r) => r);
+  };
+
+  const formatAssignments = (assignments) => {
+    if (!assignments || assignments.length === 0) {
+      return 'No assignments due soon.';
+    }
+    return formatList(assignments, (a) => `${a.name || 'Assignment'} (Due ${dayjs(a.dueDate).format('MMM DD')})`);
+  };
+
+  const formatGrades = (grades) => {
+    if (!grades || grades.length === 0) {
+      return 'No new grades today.';
+    }
+    return formatList(grades, (g) => `${g.assignmentName || 'Assignment'}: ${g.score}/${g.points} (${Math.round((g.score/g.points)*100)}%)`);
+  };
+
+  const gradesSummary = () => {
+    const entries = Object.entries(subjectGrades || {});
+    if (entries.length === 0 && overallGrade == null) {
+      return 'No grades yet.';
+    }
+    const parts = [];
+    if (entries.length) {
+      parts.push(entries.map(([subj, g]) => `${subj}: ${g}%`).join('\n'));
+    }
+    if (overallGrade != null) {
+      parts.push(`Overall: ${overallGrade}%`);
+    }
+    return parts.join('\n');
+  };
+
+  const encouragementBlock = () => {
+    const parts = [];
+    if (assignmentsDueSoon && assignmentsDueSoon.length > 0) {
+      parts.push("You have upcoming work — planning ahead shows real leadership!");
+    }
+    if (newGrades && newGrades.length > 0) {
+      parts.push("You earned new grades today — your hard work is paying off!");
+    }
+    if (attendanceSummary && attendanceSummary.status === 'Present') {
+      parts.push("Perfect attendance today — you're building great habits!");
+    }
+    if (behaviorHighlights && behaviorHighlights.some(b => b.type === 'Positive')) {
+      parts.push("You made positive choices today — keep up the amazing work!");
+    }
+    
+    if (parts.length === 0) {
+      parts.push("Every day you show up is a win — keep being awesome!");
+    }
+    
+    return `Today's Amazing Achievements:\n${parts.join(' ')}`;
+  };
+
+  return `
+${schoolName} - Your Daily Spark, ${firstName}! (${dayjs(date).format("MMM DD")})
+
+🌟 You're absolutely amazing, ${firstName}! 🌟
+High-five for being awesome and giving it your all today!
+
+${encouragementBlock()}
+
+🎊 ⭐⭐⭐ Incredible! You earned ${overallGrade >= 90 ? '3' : overallGrade >= 80 ? '2' : '1'} stars today! ⭐⭐⭐
+
+📊 Your Amazing Grades:
+${gradesSummary()}
+
+${newGrades && newGrades.length > 0 ? `🏆 New Grades Today:\n${formatGrades(newGrades)}\n` : ''}
+
+${assignmentsDueSoon && assignmentsDueSoon.length > 0 ? `⏰ Assignments Coming Up:\n${formatAssignments(assignmentsDueSoon)}\n` : ''}
+
+${lessons && lessons.length > 0 ? `📚 Today's Learning Adventures:\n${formatList(lessons, (l) => `${l.title || "Lesson"} ${l.subject ? `- ${l.subject}` : ""} ${l.duration ? `(${l.duration} min)` : ""}`)}\n` : ''}
+
+${attendanceSummary ? `📅 Your Attendance:\n${formatAttendance(attendanceSummary)}\n` : ''}
+
+${behaviorHighlights ? `🧠 Your Choices Today:\n${formatBehavior(behaviorHighlights)}\n` : ''}
+
+🌟 Today's Challenge:
+Do one thing today that makes you wonder about the world
+
+${reminders ? `🔔 Important Reminders:\n${formatReminders(reminders)}\n` : ''}
+
+Best,
+${teacherName}
+${schoolName}`;
 };
-
-// ------------------------------
-// Backward-compatible wrapper used by existing callers
-// ------------------------------
-export const buildStudentDailyEmailTemplate = async (data) => {
-  const subject = buildSubject(data);
-  const html = await buildHtml(data);
-  const text = buildText(data);
-  return { subject, html, text };
-};
-
-

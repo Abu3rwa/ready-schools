@@ -1,61 +1,9 @@
 import { buildDailyUpdateTemplate } from "../templates/dailyUpdateEmail.js";
-import { buildStudentDailyEmailTemplate } from "../templates/studentDailyUpdateEmail.js";
+import { buildSubject as buildStudentSubject, buildHtml as buildStudentHtml, buildText as buildStudentText } from "../templates/studentDailyUpdateEmail.js";
 import { requireAuth } from "../middleware/auth.js";
 import { HttpsError } from "firebase-functions/v2/https";
-
-
-// Student-specific: preview student daily email (admin/teacher)
-export const studentPreviewDailyEmail = async (req, res) => {
-  try {
-    const authed = await requireAuth(req).catch(() => null);
-    if (!authed) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
-    if (!req.is("application/json")) return res.status(415).json({ error: "Unsupported Media Type" });
-
-    const { data } = req.body || {};
-    if (!data || !data.studentName || !data.date) {
-      return res.status(400).json({ error: "Missing data.studentName or data.date" });
-    }
-    const tpl = buildStudentDailyEmailTemplate(data);
-    return res.json({ success: true, subject: tpl.subject, html: tpl.html, text: tpl.text });
-  } catch (error) {
-    console.error("studentPreviewDailyEmail error", error);
-    return res.status(500).json({ error: error.message });
-  }
-};
-
-// Student-specific: queue/send now to one or more students
-export const studentQueueDailyEmail = async (req, res) => {
-  try {
-    const authed = await requireAuth(req).catch(() => null);
-    if (!authed) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-    if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
-    if (!req.is("application/json")) return res.status(415).json({ error: "Unsupported Media Type" });
-
-    const { recipients, data } = req.body || {};
-    if (!Array.isArray(recipients) || recipients.length === 0) {
-      return res.status(400).json({ error: "Missing recipients[]" });
-    }
-    
-    // Add userId to data for character traits integration
-    const templateData = {
-      ...data,
-      userId: req.user?.uid
-    };
-    
-    const tpl = await buildStudentDailyEmailTemplate(templateData);
-    const emailService = (await import("../services/emailService.js")).default;
-    const result = await emailService.sendEmail({ to: recipients, subject: tpl.subject, html: tpl.html, text: tpl.text }, req.user?.uid);
-    return res.json({ success: true, messageId: result?.messageId, sentTo: recipients });
-  } catch (error) {
-    console.error("studentQueueDailyEmail error", error);
-    return res.status(500).json({ error: error.message });
-  }
-};
+import { createEmailContentFilter, checkContentAvailability } from "../services/EmailContentFilter.js";
+import { validateEmailPreferences } from "../constants/emailSections.js";
 
 // Send a single email
 export const sendEmail = async (req, res) => {
@@ -73,25 +21,6 @@ export const sendEmail = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
-
-// Send batch emails
-export const sendBatchEmails = async (req, res) => {
-  if (req.method !== "POST") return res.status(405).json({ error: "Method Not Allowed" });
-  try {
-    const { emails, userId } = req.body || {};
-    if (!Array.isArray(emails)) {
-      return res.status(400).json({ error: "Missing emails array" });
-    }
-    const emailService = (await import("../services/emailService.js")).default;
-    const result = await emailService.sendBatchEmails(emails, userId);
-    return res.json({ success: true, result });
-  } catch (error) {
-    console.error("sendBatchEmails error", error);
-    return res.status(500).json({ error: error.message });
-  }
-};
-
-// (Removed test/diagnostic helpers: , verifyEmailConfig)
 
 // Send daily updates to all parents (callable v2 handler)
 export const sendDailyUpdates = async (data, context) => {
@@ -116,6 +45,22 @@ export const sendDailyUpdates = async (data, context) => {
       throw new Error("Missing dataSources");
     }
 
+    // Validate data sources
+    const dataSourcesValidation = (await import("../constants/emailSections.js")).validateDataSources(dataSources);
+    if (!dataSourcesValidation.isValid) {
+      console.error("Invalid data sources:", dataSourcesValidation.errors);
+      throw new HttpsError('invalid-argument', 'Invalid data sources provided');
+    }
+    
+    // Validate email preferences if present
+    if (dataSources.emailPreferences) {
+      const validation = validateEmailPreferences(dataSources.emailPreferences);
+      if (!validation.isValid) {
+        console.warn("Invalid email preferences:", validation.errors);
+        // Continue with defaults rather than failing
+      }
+    }
+
     console.log("sendDailyUpdates: Starting daily update process...");
     console.log("sendDailyUpdates: Date:", date);
     console.log("sendDailyUpdates: Data sources:", {
@@ -123,7 +68,8 @@ export const sendDailyUpdates = async (data, context) => {
       attendance: dataSources.attendance?.length || 0,
       behavior: dataSources.behavior?.length || 0,
       schoolName: dataSources.schoolName,
-      teacher: dataSources.teacher
+      teacher: dataSources.teacher,
+      hasEmailPreferences: !!dataSources.emailPreferences
     });
 
     const { DailyUpdateService } = await import("../services/dailyUpdateService.js");
@@ -143,11 +89,35 @@ export const sendDailyUpdates = async (data, context) => {
         console.log(`sendDailyUpdates: Found ${update.parentEmails.length} parent emails for ${update.studentName}`);
         
         try {
+          // Check if parent emails are enabled and have content
+          const parentFilter = createEmailContentFilter(update.emailPreferences, 'parent');
+          const parentEnabled = update.emailPreferences?.parent?.enabled;
+          const parentHasContent = parentFilter.hasAnyContent(update);
+
+          if (!parentEnabled) {
+            console.log(`sendDailyUpdates: Parent emails disabled for ${update.studentName}`);
+            continue;
+          }
+
+          if (!parentHasContent) {
+            console.log(`sendDailyUpdates: No content to include in parent email for ${update.studentName} - skipping due to all sections disabled`);
+            continue;
+          }
+
+          // Log filtering summary for debugging
+          const filteringSummary = parentFilter.getFilteringSummary(update);
+          console.log(`sendDailyUpdates: Parent email filtering for ${update.studentName}:`, {
+            includedSections: filteringSummary.includedSections,
+            excludedSections: filteringSummary.excludedSections
+          });
+
           const emailContent = buildDailyUpdateTemplate({
             ...update,
             schoolName: dataSources.schoolName || "School",
             teacherName: dataSources.teacher?.name || "Teacher",
             teacherEmail: dataSources.teacher?.email || "",
+            emailContentLibrary: dataSources.emailContentLibrary || {},
+            emailPreferences: update.emailPreferences || dataSources.emailPreferences || {},
           });
 
           console.log(`sendDailyUpdates: Email content generated for ${update.studentName}:`, {
@@ -188,16 +158,35 @@ export const sendDailyUpdates = async (data, context) => {
 
               emailsSent++;
               
-              savedEmails.push({
-                id: `email-${Date.now()}-${update.studentId}-${parentEmail}`,
+              // Save email record to Firestore
+              const emailRecord = {
                 studentId: update.studentId,
                 studentName: update.studentName,
                 subject: emailContent.subject,
                 recipients: [parentEmail],
                 date: new Date().toISOString(),
                 sentStatus: "sent",
+                recipientType: "parent",
+                userId: authUid,
                 messageId: result?.messageId,
-                method: result?.method
+                method: result?.method || "gmail",
+                metadata: {
+                  createdAt: new Date().toISOString(),
+                  sentAt: new Date().toISOString(),
+                  teacherName: dataSources.teacher?.name || "Teacher",
+                  schoolName: dataSources.schoolName || "School",
+                  includedSections: filteringSummary.includedSections,
+                }
+              };
+              
+              // Save to Firestore - Parent emails in dailyUpdateEmails collection
+              const { getFirestore } = await import("firebase-admin/firestore");
+              const adminDb = getFirestore();
+              await adminDb.collection("dailyUpdateEmails").add(emailRecord);
+              
+              savedEmails.push({
+                id: `email-${Date.now()}-${update.studentId}-${parentEmail}`,
+                ...emailRecord,
               });
 
             } catch (emailError) {
@@ -236,7 +225,27 @@ export const sendDailyUpdates = async (data, context) => {
       stack: error.stack,
       code: error.code
     });
-    throw new Error(error.message);
+    
+    // Provide more specific error handling
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    
+    // Convert specific errors to more meaningful HttpsErrors
+    if (error.message.includes('Authentication')) {
+      throw new HttpsError('unauthenticated', error.message);
+    }
+    
+    if (error.message.includes('Missing') || error.message.includes('Invalid')) {
+      throw new HttpsError('invalid-argument', error.message);
+    }
+    
+    if (error.message.includes('Permission') || error.message.includes('Access')) {
+      throw new HttpsError('permission-denied', error.message);
+    }
+    
+    // Default to internal error with more context
+    throw new HttpsError('internal', `Daily update sending failed: ${error.message}`);
   }
 };
 
@@ -253,23 +262,62 @@ export const sendStudentDailyUpdate = async (req, res) => {
     if (!studentId || !dataSources) {
       return res.status(400).json({ error: "Missing studentId or dataSources" });
     }
+
+    // Validate data sources
+    const dataSourcesValidation = (await import("../constants/emailSections.js")).validateDataSources(dataSources);
+    if (!dataSourcesValidation.isValid) {
+      console.error("Invalid data sources:", dataSourcesValidation.errors);
+      return res.status(400).json({ error: "Invalid data sources" });
+    }
+    
+    // Validate email preferences if present
+    if (dataSources.emailPreferences) {
+      const validation = validateEmailPreferences(dataSources.emailPreferences);
+      if (!validation.isValid) {
+        console.warn("Invalid email preferences:", validation.errors);
+      }
+    }
+
     const { DailyUpdateService } = await import("../services/dailyUpdateService.js");
     const dailyUpdateService = new DailyUpdateService();
     dailyUpdateService.setDataSources(dataSources);
     const dailyUpdate = dailyUpdateService.generateDailyUpdate(studentId, new Date(date));
+    
     if (!dailyUpdate || !dailyUpdate.parentEmails || dailyUpdate.parentEmails.length === 0) {
       return res.status(400).json({
         error: "No parent emails found for student"
       });
     }
+
+    // Check if parent emails are enabled and have content
+    const parentFilter = createEmailContentFilter(dailyUpdate.emailPreferences, 'parent');
+    const parentEnabled = dailyUpdate.emailPreferences?.parent?.enabled;
+    const parentHasContent = parentFilter.hasAnyContent(dailyUpdate);
+
+    if (!parentEnabled) {
+      return res.status(400).json({
+        error: "Parent emails are disabled in preferences"
+      });
+    }
+
+    if (!parentHasContent) {
+      return res.status(400).json({
+        error: "No content to include in parent email based on current preferences"
+      });
+    }
+
     const emailContent = buildDailyUpdateTemplate({
       ...dailyUpdate,
       schoolName: dataSources.schoolName || "School",
       teacherName: dataSources.teacher?.name || "Teacher",
       teacherEmail: dataSources.teacher?.email || "",
+      emailContentLibrary: dataSources.emailContentLibrary || {},
+      emailPreferences: dailyUpdate.emailPreferences || dataSources.emailPreferences || {},
     });
+
     const results = [];
     const emailService = (await import("../services/emailService.js")).default;
+    
     // normalize and deduplicate recipients
     const uniqueRecipients = Array.from(
       new Set(
@@ -279,6 +327,7 @@ export const sendStudentDailyUpdate = async (req, res) => {
           .filter((e) => typeof e === "string" && e.length > 0)
       )
     );
+
     for (const parentEmail of uniqueRecipients) {
       try {
         const result = await emailService.sendEmail({
@@ -292,6 +341,7 @@ export const sendStudentDailyUpdate = async (req, res) => {
         results.push({ email: parentEmail, success: false, error: emailError.message });
       }
     }
+
     return res.json({
       success: true,
       message: `Daily update sent to ${results.filter(r => r.success).length} parents.`,
@@ -317,6 +367,14 @@ export const getDailyUpdateData = async (data, context) => {
     // Basic validation
     if (!dataSources) {
       throw new Error("Missing dataSources");
+    }
+
+    // Validate email preferences if present
+    if (dataSources.emailPreferences) {
+      const validation = validateEmailPreferences(dataSources.emailPreferences);
+      if (!validation.isValid) {
+        console.warn("Invalid email preferences in getDailyUpdateData:", validation.errors);
+      }
     }
     
     const { DailyUpdateService } = await import("../services/dailyUpdateService.js");
@@ -345,7 +403,23 @@ export const getDailyUpdateData = async (data, context) => {
     }
   } catch (error) {
     console.error("getDailyUpdateData error", error);
-    throw new Error(error.message);
+    
+    // Provide more specific error handling
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+    
+    // Convert specific errors to more meaningful HttpsErrors
+    if (error.message.includes('Authentication')) {
+      throw new HttpsError('unauthenticated', error.message);
+    }
+    
+    if (error.message.includes('Missing') || error.message.includes('Invalid')) {
+      throw new HttpsError('invalid-argument', error.message);
+    }
+    
+    // Default to internal error with more context
+    throw new HttpsError('internal', `Failed to get daily update data: ${error.message}`);
   }
 };
 
@@ -365,10 +439,26 @@ export const sendStudentEmailsCallable = async (data, context) => {
       throw new HttpsError("invalid-argument", "Missing dataSources");
     }
 
+    // Validate data sources
+    const dataSourcesValidation = (await import("../constants/emailSections.js")).validateDataSources(dataSources);
+    if (!dataSourcesValidation.isValid) {
+      console.error("sendStudentEmailsCallable: Invalid data sources:", dataSourcesValidation.errors);
+      throw new HttpsError("invalid-argument", "Invalid dataSources");
+    }
+    
+    // Validate email preferences if present
+    if (dataSources.emailPreferences) {
+      const validation = validateEmailPreferences(dataSources.emailPreferences);
+      if (!validation.isValid) {
+        console.warn("sendStudentEmailsCallable: Invalid email preferences:", validation.errors);
+      }
+    }
+
     console.log("sendStudentEmailsCallable: payload summary:", {
       hasDate: !!date,
       students: Array.isArray(dataSources.students) ? dataSources.students.length : 0,
       attendance: Array.isArray(dataSources.attendance) ? dataSources.attendance.length : 0,
+      hasEmailPreferences: !!dataSources.emailPreferences,
     });
 
     const { DailyUpdateService } = await import("../services/dailyUpdateService.js");
@@ -407,34 +497,96 @@ export const sendStudentEmailsCallable = async (data, context) => {
           continue;
         }
 
+        // Check if student emails are enabled and have content
+        const studentFilter = createEmailContentFilter(update.emailPreferences, 'student');
+        const studentEnabled = update.emailPreferences?.student?.enabled;
+        const studentHasContent = studentFilter.hasAnyContent(update);
+
+        if (!studentEnabled) {
+          console.log(`Skipping student ${update.studentName} - student emails disabled`);
+          continue;
+        }
+
+        if (!studentHasContent) {
+          console.log(`Skipping student ${update.studentName} - no content to include due to all sections disabled`);
+          continue;
+        }
+
+        // Log filtering summary for debugging
+        const filteringSummary = studentFilter.getFilteringSummary(update);
+        console.log(`Student email filtering for ${update.studentName}:`, {
+          includedSections: filteringSummary.includedSections,
+          excludedSections: filteringSummary.excludedSections
+        });
+
         console.log(`Sending email to student: ${update.studentName} at ${studentEmail}`);
 
-        const emailContent = await buildStudentDailyEmailTemplate({
+        const emailContext = {
           ...update,
           schoolName: dataSources.schoolName || "School",
           teacherName: dataSources.teacher?.name || "Teacher",
           teacherEmail: dataSources.teacher?.email || "",
-        });
+          userId: authUid,
+          emailContentLibrary: dataSources.emailContentLibrary || {},
+          emailPreferences: update.emailPreferences || dataSources.emailPreferences || {},
+        };
+
+        // Normalize date to a Date object for templates that expect Date APIs
+        try {
+          if (emailContext?.date && typeof emailContext.date === 'string') {
+            const parsed = new Date(emailContext.date);
+            if (!isNaN(parsed.getTime())) {
+              emailContext.date = parsed;
+            }
+          }
+        } catch (_) {}
+
+        const subject = buildStudentSubject(emailContext);
+        const html = await buildStudentHtml(emailContext);
+        const text = buildStudentText(emailContext);
 
         const result = await emailService.sendEmail(
           {
             to: studentEmail,
-            subject: emailContent.subject,
-            html: emailContent.html,
-            text: emailContent.text,
+            subject: subject,
+            html: html,
+            text: text,
           },
           authUid
         );
         emailsSent++;
-        savedEmails.push({
-          id: `student-email-${Date.now()}-${update.studentId}`,
+        
+        // Save email record to Firestore
+        const emailRecord = {
           studentId: update.studentId,
           studentName: update.studentName,
-          subject: emailContent.subject,
+          subject: subject,
           recipients: [studentEmail],
           date: new Date().toISOString(),
           sentStatus: "sent",
           recipientType: "student",
+          userId: authUid,
+          messageId: result?.messageId,
+          method: result?.method || "gmail",
+          content: html,
+          text: text,
+          metadata: {
+            createdAt: new Date().toISOString(),
+            sentAt: new Date().toISOString(),
+            teacherName: dataSources.teacher?.name || "Teacher",
+            schoolName: dataSources.schoolName || "School",
+            includedSections: filteringSummary.includedSections,
+          }
+        };
+        
+        // Save to Firestore
+        const { getFirestore } = await import("firebase-admin/firestore");
+        const adminDb = getFirestore();
+        await adminDb.collection("dailyUpdateEmails").add(emailRecord);
+        
+        savedEmails.push({
+          id: `student-email-${Date.now()}-${update.studentId}`,
+          ...emailRecord,
         });
       } catch (emailError) {
         console.error(
@@ -473,6 +625,21 @@ export const sendStudentEmailCallable = async (data, context) => {
       throw new HttpsError("invalid-argument", "Missing studentId or dataSources");
     }
 
+    // Validate data sources
+    const dataSourcesValidation = (await import("../constants/emailSections.js")).validateDataSources(dataSources);
+    if (!dataSourcesValidation.isValid) {
+      console.error("sendStudentEmailCallable: Invalid data sources:", dataSourcesValidation.errors);
+      throw new HttpsError("invalid-argument", "Invalid dataSources");
+    }
+    
+    // Validate email preferences if present
+    if (dataSources.emailPreferences) {
+      const validation = validateEmailPreferences(dataSources.emailPreferences);
+      if (!validation.isValid) {
+        console.warn("sendStudentEmailCallable: Invalid email preferences:", validation.errors);
+      }
+    }
+
     const { DailyUpdateService } = await import("../services/dailyUpdateService.js");
     const dailyUpdateService = new DailyUpdateService();
     dailyUpdateService.setDataSources(dataSources);
@@ -493,23 +660,80 @@ export const sendStudentEmailCallable = async (data, context) => {
       throw new HttpsError("failed-precondition", "No student email found");
     }
 
-    const emailContent = buildStudentDailyEmailTemplate({
+    // Check if student emails are enabled and have content
+    const studentFilter = createEmailContentFilter(dailyUpdate.emailPreferences, 'student');
+    const studentEnabled = dailyUpdate.emailPreferences?.student?.enabled;
+    const studentHasContent = studentFilter.hasAnyContent(dailyUpdate);
+
+    if (!studentEnabled) {
+      throw new HttpsError("failed-precondition", "Student emails are disabled in preferences");
+    }
+
+    if (!studentHasContent) {
+      throw new HttpsError("failed-precondition", "No content to include in student email based on current preferences");
+    }
+
+    const emailContext = {
       ...dailyUpdate,
       schoolName: dataSources.schoolName || "School",
       teacherName: dataSources.teacher?.name || "Teacher",
       teacherEmail: dataSources.teacher?.email || "",
-    });
+      userId: authUid,
+      emailContentLibrary: dataSources.emailContentLibrary || {},
+      emailPreferences: dailyUpdate.emailPreferences || dataSources.emailPreferences || {},
+    };
+
+    // Normalize date to a Date object for templates that expect Date APIs
+    try {
+      if (emailContext?.date && typeof emailContext.date === 'string') {
+        const parsed = new Date(emailContext.date);
+        if (!isNaN(parsed.getTime())) {
+          emailContext.date = parsed;
+        }
+      }
+    } catch (_) {}
+
+    const subject = buildStudentSubject(emailContext);
+    const html = await buildStudentHtml(emailContext);
+    const text = buildStudentText(emailContext);
 
     const emailService = (await import("../services/emailService.js")).default;
     const result = await emailService.sendEmail(
       {
         to: studentEmail,
-        subject: emailContent.subject,
-        html: emailContent.html,
-        text: emailContent.text,
+        subject: subject,
+        html: html,
+        text: text,
       },
       authUid
     );
+
+    // Save email record to Firestore
+    const emailRecord = {
+      studentId: dailyUpdate.studentId,
+      studentName: dailyUpdate.studentName,
+      subject: subject,
+      recipients: [studentEmail],
+      date: new Date().toISOString(),
+      sentStatus: "sent",
+      recipientType: "student",
+      userId: authUid,
+      messageId: result?.messageId,
+      method: result?.method || "gmail",
+      content: html,
+      text: text,
+      metadata: {
+        createdAt: new Date().toISOString(),
+        sentAt: new Date().toISOString(),
+        teacherName: dataSources.teacher?.name || "Teacher",
+        schoolName: dataSources.schoolName || "School",
+      }
+    };
+    
+    // Save to Firestore - Student emails in separate collection
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const adminDb = getFirestore();
+    await adminDb.collection("studentDailyEmails").add(emailRecord);
 
     return {
       success: true,
@@ -517,6 +741,10 @@ export const sendStudentEmailCallable = async (data, context) => {
       studentName: dailyUpdate.studentName,
       studentEmail,
       messageId: result?.messageId,
+      emailRecord: {
+        id: `student-email-${Date.now()}-${dailyUpdate.studentId}`,
+        ...emailRecord,
+      },
     };
   } catch (error) {
     console.error("sendStudentEmailCallable error", error);
@@ -524,10 +752,6 @@ export const sendStudentEmailCallable = async (data, context) => {
     throw new HttpsError("internal", error?.message || "Unknown error");
   }
 };
-
-// (Removed testGmailDelivery)
-
-// (Removed getGmailQuotas)
 
 // Get Gmail API status for a user
 export const getGmailStatus = async (req, res) => {
@@ -555,8 +779,6 @@ export const getGmailStatus = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
-
-// (Removed fixGmailConfig)
 
 // Handle Gmail OAuth callback (backend)
 export const handleGmailOAuthCallback = async (req, res) => {
@@ -734,7 +956,3 @@ export const refreshGmailTokens = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
-
-// (Removed fixSpecificUser)
-
-// (Removed resetGmailConfiguration)

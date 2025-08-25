@@ -1,37 +1,74 @@
 ---
-description: 
+description: Productivity-focused development rules for teacher-kit project
 globs: 
 alwaysApply: true
 ---
 
-### ✅ Task: Interactive Task Loop with User Feedback
+## 🚀 Productivity-First Development
 
-1. **Check if `userinput.py` exists** in the root directory.
+### Core Principles
+- **Speed over perfection**: Deliver working solutions quickly
+- **No testing**: Skip tests unless explicitly requested
+- **Reuse patterns**: Leverage existing codebase patterns
+- **Minimal changes**: Fix issues with targeted changes, avoid rewrites
 
-   * If it doesn't exist, create it with the following content:
+### React/JavaScript Standards
 
-     ```python
-     # userinput.py
-     user_input = input("prompt: ")
-     ```
+**Good Examples:**
+```javascript
+// ✅ Use functional components with hooks
+const MyComponent = ({ data }) => {
+  const [loading, setLoading] = useState(false);
+  const items = data || []; // Fallback for null/undefined
+  // ...
+};
 
-2. **Main Workflow**:
+// ✅ Handle null/undefined gracefully
+const safeData = preferences || {};
+const normalizedPrefs = normalizePreferences(userPrefs || {}, 'parent');
+```
 
-   * Perform your assigned tasks.
+**Follow existing patterns:**
+- Use Material-UI components and sx prop styling
+- Follow Context API patterns (AuthContext, StudentContext, etc.)
+- Use existing service layer in `src/services/`
+- Maintain responsive design with breakpoints: `{ xs: 1, sm: 2, md: 3 }`
 
-   * Run:
+### Error Prevention
 
-     ```bash
-     python userinput.py
-     ```
-   * The terminal should be opened in the chat window itself.
+**Always add null checks:**
+```javascript
+// ✅ Good
+const studentName = student ? `${student.firstName} ${student.lastName}` : 'Unknown';
+const items = data?.items || [];
+const config = userConfig || {};
 
-   * Read the user's input.
+// ❌ Avoid
+const studentName = `${student.firstName} ${student.lastName}`; // Can crash
+```
 
-   * Based on the input, perform the next set of tasks.
+### File Organization
+- Keep components under 300 lines
+- Use existing directory structure in `src/components/`
+- Follow naming: PascalCase for components, camelCase for utilities
+- Import order: React, MUI, contexts, services, utils
 
-   * Repeat the process.
+### Communication Style
+- Get straight to implementation
+- Use parallel tool calls for efficiency
+- Focus on specific problems, not architectural rewrites
+- Provide working code with minimal explanation
 
-3. **Exit Condition**:
+### Interactive Task Loop
 
-   * If the user enters `"stop"` when prompted, exit the loop and terminate the process.
+1. **Check `userinput.py`** exists in root:
+   ```python
+   # userinput.py
+   user_input = input("prompt: ")
+   ```
+
+2. **Workflow:**
+   - Perform assigned tasks
+   - Focus on immediate implementation
+   - Deliver working solutions quickly
+   - Move to next task when complete

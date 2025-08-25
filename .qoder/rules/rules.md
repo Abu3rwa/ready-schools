@@ -1,0 +1,75 @@
+---
+description: Productivity-focused development rules for teacher-kit project
+globs: 
+alwaysApply: true
+---
+
+## 🚀 Productivity-First Development
+
+### Core Principles
+- **Speed over perfection**: Deliver working solutions quickly
+- **No testing**: Skip tests unless explicitly requested
+- **Reuse patterns**: Leverage existing codebase patterns
+- **Minimal changes**: Fix issues with targeted changes, avoid rewrites
+
+### React/JavaScript Standards
+
+**Good Examples:**
+```javascript
+// ✅ Use functional components with hooks
+const MyComponent = ({ data }) => {
+  const [loading, setLoading] = useState(false);
+  const items = data || []; // Fallback for null/undefined
+  // ...
+};
+
+// ✅ Handle null/undefined gracefully
+const safeData = preferences || {};
+const normalizedPrefs = normalizePreferences(userPrefs || {}, 'parent');
+```
+
+**Follow existing patterns:**
+- Use Material-UI components and sx prop styling
+- Follow Context API patterns (AuthContext, StudentContext, etc.)
+- Use existing service layer in `src/services/`
+- Maintain responsive design with breakpoints: `{ xs: 1, sm: 2, md: 3 }`
+
+### Error Prevention
+
+**Always add null checks:**
+```javascript
+// ✅ Good
+const studentName = student ? `${student.firstName} ${student.lastName}` : 'Unknown';
+const items = data?.items || [];
+const config = userConfig || {};
+
+// ❌ Avoid
+const studentName = `${student.firstName} ${student.lastName}`; // Can crash
+```
+
+### File Organization
+- Keep components under 300 lines
+- Use existing directory structure in `src/components/`
+- Follow naming: PascalCase for components, camelCase for utilities
+- Import order: React, MUI, contexts, services, utils
+
+### Communication Style
+- Get straight to implementation
+- Use parallel tool calls for efficiency
+- Focus on specific problems, not architectural rewrites
+- Provide working code with minimal explanation
+
+### Interactive Task Loop
+
+1. **Check `userinput.py`** exists in root:
+   ```python
+   # userinput.py
+   user_input = input("prompt: ")
+   ```
+
+2. **Workflow:**
+   - Perform assigned tasks
+   - Run: `python userinput.py`
+   - Read user input
+   - Continue based on input
+   - Stop when user enters "stop"

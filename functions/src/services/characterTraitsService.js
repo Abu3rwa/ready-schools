@@ -1,7 +1,5 @@
 import { getFirestore } from "firebase-admin/firestore";
 
-const db = getFirestore();
-
 /**
  * Get the character trait for the current month from a user's profile
  * @param {string} userId - The user ID to fetch traits from
@@ -12,6 +10,7 @@ export const getCurrentMonthTrait = async (userId, date = new Date()) => {
   try {
     if (!userId) return null;
     
+    const db = getFirestore();
     const currentMonth = date.getMonth() + 1; // getMonth() returns 0-11
     
     // Get user document
