@@ -97,7 +97,7 @@ const Layout = ({ children }) => {
         }}
       >
         {!isFullScreenPage && <Toolbar />} {/* This creates space for the AppBar */}
-        {!isFullScreenPage && <BreadcrumbNav />}
+        {/* {!isFullScreenPage && <BreadcrumbNav />} */}
         {children}
       </Box>
 

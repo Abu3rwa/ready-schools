@@ -60,6 +60,7 @@ class EmailContentService {
           behaviorSectionHeaders: [],
           lessonSectionHeaders: [],
           motivationalQuotes: [],
+          dailyChallenges: [],
           visualThemes: [],
           achievementBadges: []
         };
@@ -181,6 +182,7 @@ class EmailContentService {
       behaviorSectionHeaders: [],
       lessonSectionHeaders: [],
       motivationalQuotes: [],
+      dailyChallenges: [],
       visualThemes: [],
       achievementBadges: []
     };

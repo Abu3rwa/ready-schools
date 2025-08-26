@@ -148,21 +148,83 @@ export const GradeBookProvider = ({ children }) => {
   // Delete a grade book
   const deleteGradeBook = async (gradeBookId) => {
     try {
+      // Get the gradebook details before deletion
+      const gradeBookToDelete = gradeBooks.find((gb) => gb.id === gradeBookId);
+      if (!gradeBookToDelete) {
+        throw new Error("Grade book not found");
+      }
+
+      console.log('Deleting gradebook and related assignments:', {
+        gradeBookId,
+        gradeBookSubject: gradeBookToDelete.subject,
+        gradeBookName: gradeBookToDelete.name
+      });
+
+      // Find and delete all related assignments
+      const relatedAssignments = assignments.filter(
+        (assignment) => 
+          assignment.gradebookId === gradeBookId || 
+          (assignment.subject === gradeBookToDelete.subject && !assignment.gradebookId)
+      );
+
+      console.log(`Found ${relatedAssignments.length} assignments to delete:`, 
+        relatedAssignments.map(a => ({ id: a.id, name: a.name, gradebookId: a.gradebookId, subject: a.subject }))
+      );
+
+      // Delete assignments using the API service directly
+      const { deleteAssignment: deleteAssignmentAPI } = await import('../services/apiService');
+      const deletePromises = relatedAssignments.map(async (assignment) => {
+        try {
+          console.log(`Deleting assignment: ${assignment.name} (${assignment.id})`);
+          const result = await deleteAssignmentAPI(assignment.id);
+          
+          // Emit event to notify other contexts
+          eventEmitter.emit('assignmentDeleted', {
+            assignmentId: assignment.id,
+            subject: assignment.subject,
+            assignment: assignment
+          });
+          
+          return { success: true, assignmentId: assignment.id };
+        } catch (error) {
+          console.error(`Failed to delete assignment ${assignment.id}:`, error);
+          return { success: false, assignmentId: assignment.id, error };
+        }
+      });
+
+      const deleteResults = await Promise.allSettled(deletePromises);
+      const successfulDeletions = deleteResults.filter(result => 
+        result.status === 'fulfilled' && result.value.success
+      ).length;
+      const failedDeletions = deleteResults.length - successfulDeletions;
+
+      console.log(`Assignment deletion results: ${successfulDeletions} successful, ${failedDeletions} failed`);
+
       // Check if it's a virtual gradebook (which doesn't have a real Firestore doc to delete)
       const isVirtual = gradeBookId.startsWith("gradebook-");
 
       if (!isVirtual) {
-        // First, delete from Firestore
+        // Delete the gradebook from Firestore
         const gradeBookRef = doc(db, "gradebooks", gradeBookId);
         await deleteDoc(gradeBookRef);
+        console.log('Gradebook deleted from Firestore');
       }
 
-      // Then, update the local state
+      // Update the local state
       setGradeBooks((prev) => prev.filter((gb) => gb.id !== gradeBookId));
 
       if (currentGradeBook?.id === gradeBookId) {
         setCurrentGradeBook(null);
       }
+
+      console.log('Gradebook deletion completed successfully');
+      
+      return {
+        success: true,
+        deletedAssignments: successfulDeletions,
+        failedAssignments: failedDeletions,
+        totalAssignments: relatedAssignments.length
+      };
     } catch (err) {
       console.error("Error deleting grade book:", err);
       throw err;

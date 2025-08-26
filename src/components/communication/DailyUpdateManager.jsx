@@ -206,12 +206,51 @@ const DailyUpdateManager = ({
   const contexts = React.useMemo(() => {
     if (!emailPreferences) return null;
 
+    // Filter data to only include current teacher's data
+    const currentUserId = currentUser?.uid;
+    if (!currentUserId) {
+      console.warn('No current user ID found for filtering data');
+      return null;
+    }
+
+    // Filter grades to only include those created by current teacher
+    const filteredGrades = (grades || []).filter(grade => 
+      grade.userId === currentUserId || grade.teacherId === currentUserId
+    );
+
+    // Filter assignments to only include those created by current teacher  
+    const filteredAssignments = (assignments || []).filter(assignment =>
+      assignment.userId === currentUserId || assignment.teacherId === currentUserId
+    );
+
+    // Filter behavior to only include those created by current teacher
+    const filteredBehavior = (behavior || []).filter(incident =>
+      incident.userId === currentUserId || incident.teacherId === currentUserId
+    );
+
+    // Filter attendance to only include current teacher's records
+    const filteredAttendanceForContext = filteredAttendance.filter(record =>
+      record.userId === currentUserId || record.teacherId === currentUserId
+    );
+
+    console.log('Data filtering summary:', {
+      originalGrades: (grades || []).length,
+      filteredGrades: filteredGrades.length,
+      originalAssignments: (assignments || []).length, 
+      filteredAssignments: filteredAssignments.length,
+      originalBehavior: (behavior || []).length,
+      filteredBehavior: filteredBehavior.length,
+      originalAttendance: filteredAttendance.length,
+      filteredAttendanceForContext: filteredAttendanceForContext.length,
+      currentUserId
+    });
+
     return {
     students: students || [],
-    attendance: filteredAttendance,
-    assignments: assignments || [],
-    grades: grades || [],
-    behavior: behavior || [],
+    attendance: filteredAttendanceForContext,
+    assignments: filteredAssignments,
+    grades: filteredGrades,
+    behavior: filteredBehavior,
     lessons: lessons || [],
     schoolName: schoolNamePref || undefined,
       teacher: currentUser ? {
@@ -583,6 +622,9 @@ const DailyUpdateManager = ({
                                     )}
                                   </span>
                                 }
+                                secondaryTypographyProps={{
+                                  component: "div"
+                                }}
                               />
                               <Box>
                                 <Tooltip title="Preview Update">

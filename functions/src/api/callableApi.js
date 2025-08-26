@@ -37,7 +37,7 @@ export const sendDailyUpdates = async (data, context) => {
 
     const dailyUpdateService = new DailyUpdateService();
     dailyUpdateService.setDataSources(dataSources);
-    const dailyUpdates = await dailyUpdateService.generateAllDailyUpdates(new Date(date));
+    const dailyUpdates = await dailyUpdateService.generateAllDailyUpdates(new Date(date), auth.uid);
     
     let emailsSent = 0;
     const savedEmails = [];
@@ -67,10 +67,16 @@ export const sendDailyUpdates = async (data, context) => {
             studentName: update.studentName,
             subject: emailContent.subject,
             recipients: update.parentEmails,
-            date: new Date().toISOString(),
+            date: new Date().toISOString().split('T')[0], // Store as YYYY-MM-DD format
             sentStatus: "sent",
             recipientType: "parent",
             userId: auth.uid,
+            html: emailContent.html,
+            text: emailContent.text,
+            // Add character trait fields for easy access
+            characterTraitQuote: update.characterTraitQuote || null,
+            characterTraitChallenge: update.characterTraitChallenge || null,
+            characterTrait: update.characterTrait || null,
             metadata: {
               createdAt: new Date().toISOString(),
               sentAt: new Date().toISOString(),
@@ -119,7 +125,7 @@ export const sendStudentDailyUpdate = async (data, context) => {
 
     const dailyUpdateService = new DailyUpdateService();
     dailyUpdateService.setDataSources(dataSources);
-    const dailyUpdate = dailyUpdateService.generateDailyUpdate(studentId, new Date(date));
+    const dailyUpdate = await dailyUpdateService.generateDailyUpdate(studentId, new Date(date), auth.uid);
     
     if (!dailyUpdate || !dailyUpdate.parentEmails || dailyUpdate.parentEmails.length === 0) {
       throw new HttpsError("failed-precondition", "No parent emails found for student");
@@ -150,7 +156,7 @@ export const sendStudentDailyUpdate = async (data, context) => {
           studentName: dailyUpdate.studentName,
           subject: emailContent.subject,
           recipients: [parentEmail],
-          date: new Date().toISOString(),
+          date: new Date().toISOString().split('T')[0], // Store as YYYY-MM-DD format
           sentStatus: "sent",
           recipientType: "parent",
           userId: auth.uid,

@@ -199,6 +199,33 @@ service cloud.firestore {
       allow delete: if isOwner(userId);
     }
     
+    // Character trait assessments collection rules
+    match /characterTraitAssessments/{assessmentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // Monthly leaderboards collection rules
+    match /monthlyLeaderboards/{leaderboardId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isOwner(resource.data.userId);
+    }
+
+    // Menu configuration collection rules
+    match /menuConfig/{menuId} {
+      // Allow all authenticated users to read menu configuration
+      allow read: if isAuthenticated();
+      // Only allow admin users to modify menu configuration
+      allow create, update, delete: if isAuthenticated() && (
+        request.auth.token.admin == true ||
+        // Fallback: check if user document has admin flag (for compatibility)
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.admin == true
+      );
+    }
+    
     // Your existing rules for other collections
     match /{document=**} {
       allow read, write: if false;  // Deny access to all other collections by default

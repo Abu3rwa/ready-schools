@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import {
+  CONTENT_TYPES
+} from '../../constants/contentTypes';
+import {
   Box,
   Card,
   Typography,
@@ -23,16 +26,6 @@ import ContentSharingRequests from './ContentSharingRequests';
 
 import emailContentService from '../../services/emailContentService';
 
-const CONTENT_TYPES = [
-  { value: 'greetings', label: 'Greetings' },
-  { value: 'gradeSectionHeaders', label: 'Grade Headers' },
-  { value: 'assignmentSectionHeaders', label: 'Assignment Headers' },
-  { value: 'behaviorSectionHeaders', label: 'Behavior Headers' },
-  { value: 'lessonSectionHeaders', label: 'Lesson Headers' },
-  { value: 'motivationalQuotes', label: 'Motivational Quotes' },
-  { value: 'visualThemes', label: 'Visual Themes' },
-  { value: 'achievementBadges', label: 'Achievement Badges' }
-];
 
 const EmailContentManager = () => {
   const { currentUser } = useAuth();

@@ -75,7 +75,7 @@ export const sendDailyUpdates = async (data, context) => {
     const { DailyUpdateService } = await import("../services/dailyUpdateService.js");
     const dailyUpdateService = new DailyUpdateService();
     dailyUpdateService.setDataSources(dataSources);
-    const dailyUpdates = dailyUpdateService.generateAllDailyUpdates(new Date(date));
+    const dailyUpdates = await dailyUpdateService.generateAllDailyUpdates(new Date(date), authUid);
     
     console.log(`sendDailyUpdates: Generated ${dailyUpdates.length} daily updates`);
 
@@ -164,12 +164,18 @@ export const sendDailyUpdates = async (data, context) => {
                 studentName: update.studentName,
                 subject: emailContent.subject,
                 recipients: [parentEmail],
-                date: new Date().toISOString(),
+                date: new Date().toISOString().split('T')[0], // Store as YYYY-MM-DD format
                 sentStatus: "sent",
                 recipientType: "parent",
                 userId: authUid,
                 messageId: result?.messageId,
                 method: result?.method || "gmail",
+                html: emailContent.html,
+                text: emailContent.text,
+                // Add character trait fields for easy access
+                characterTraitQuote: update.characterTraitQuote || null,
+                characterTraitChallenge: update.characterTraitChallenge || null,
+                characterTrait: update.characterTrait || null,
                 metadata: {
                   createdAt: new Date().toISOString(),
                   sentAt: new Date().toISOString(),
@@ -281,7 +287,7 @@ export const sendStudentDailyUpdate = async (req, res) => {
     const { DailyUpdateService } = await import("../services/dailyUpdateService.js");
     const dailyUpdateService = new DailyUpdateService();
     dailyUpdateService.setDataSources(dataSources);
-    const dailyUpdate = dailyUpdateService.generateDailyUpdate(studentId, new Date(date));
+    const dailyUpdate = await dailyUpdateService.generateDailyUpdate(studentId, new Date(date), req.user?.uid);
     
     if (!dailyUpdate || !dailyUpdate.parentEmails || dailyUpdate.parentEmails.length === 0) {
       return res.status(400).json({
@@ -358,6 +364,12 @@ export const sendStudentDailyUpdate = async (req, res) => {
 // Get daily update data without sending emails (callable function)
 export const getDailyUpdateData = async (data, context) => {
   try {
+    // Validate authentication
+    const authUid = context?.auth?.uid;
+    if (!authUid) {
+      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    }
+
     // Normalize payload shape: accept either direct or nested under data (defensive for various callers)
     const actualData = (data && typeof data === "object" && "data" in data) ? data.data : data;
     const studentId = actualData?.studentId;
@@ -382,14 +394,14 @@ export const getDailyUpdateData = async (data, context) => {
     dailyUpdateService.setDataSources(dataSources);
     
     if (studentId) {
-      const dailyUpdate = dailyUpdateService.generateDailyUpdate(studentId, new Date(date));
+      const dailyUpdate = await dailyUpdateService.generateDailyUpdate(studentId, new Date(date), authUid);
       return {
         success: true,
         data: dailyUpdate,
         message: `Retrieved daily update data for ${dailyUpdate.studentName}`
       };
     } else {
-      const dailyUpdates = dailyUpdateService.generateAllDailyUpdates(new Date(date));
+      const dailyUpdates = await dailyUpdateService.generateAllDailyUpdates(new Date(date), authUid);
       const classSummary = dailyUpdateService.getClassSummary(new Date(date));
       return {
         success: true,
@@ -464,7 +476,7 @@ export const sendStudentEmailsCallable = async (data, context) => {
     const { DailyUpdateService } = await import("../services/dailyUpdateService.js");
     const dailyUpdateService = new DailyUpdateService();
     dailyUpdateService.setDataSources(dataSources);
-    const dailyUpdates = dailyUpdateService.generateAllDailyUpdates(new Date(date));
+    const dailyUpdates = await dailyUpdateService.generateAllDailyUpdates(new Date(date), authUid);
 
     const emailService = (await import("../services/emailService.js")).default;
 
@@ -529,6 +541,7 @@ export const sendStudentEmailsCallable = async (data, context) => {
           userId: authUid,
           emailContentLibrary: dataSources.emailContentLibrary || {},
           emailPreferences: update.emailPreferences || dataSources.emailPreferences || {},
+          overrides: dataSources.overrides?.[update.studentId] || null,
         };
 
         // Normalize date to a Date object for templates that expect Date APIs
@@ -562,7 +575,7 @@ export const sendStudentEmailsCallable = async (data, context) => {
           studentName: update.studentName,
           subject: subject,
           recipients: [studentEmail],
-          date: new Date().toISOString(),
+          date: new Date().toISOString().split('T')[0], // Store as YYYY-MM-DD format
           sentStatus: "sent",
           recipientType: "student",
           userId: authUid,
@@ -681,6 +694,7 @@ export const sendStudentEmailCallable = async (data, context) => {
       userId: authUid,
       emailContentLibrary: dataSources.emailContentLibrary || {},
       emailPreferences: dailyUpdate.emailPreferences || dataSources.emailPreferences || {},
+      overrides: dataSources.overrides?.[dailyUpdate.studentId] || null,
     };
 
     // Normalize date to a Date object for templates that expect Date APIs
@@ -714,14 +728,18 @@ export const sendStudentEmailCallable = async (data, context) => {
       studentName: dailyUpdate.studentName,
       subject: subject,
       recipients: [studentEmail],
-      date: new Date().toISOString(),
+      date: new Date().toISOString().split('T')[0], // Store as YYYY-MM-DD format
       sentStatus: "sent",
       recipientType: "student",
       userId: authUid,
       messageId: result?.messageId,
       method: result?.method || "gmail",
-      content: html,
+      html: html,
       text: text,
+      // Add character trait fields for easy access
+      characterTraitQuote: dailyUpdate.characterTraitQuote || null,
+      characterTraitChallenge: dailyUpdate.characterTraitChallenge || null,
+      characterTrait: dailyUpdate.characterTrait || null,
       metadata: {
         createdAt: new Date().toISOString(),
         sentAt: new Date().toISOString(),

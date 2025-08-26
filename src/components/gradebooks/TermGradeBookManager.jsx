@@ -300,13 +300,27 @@ const TermGradeBookManager = ({ open, onClose }) => {
   };
 
   const handleDeleteGradeBook = async (gradeBookId) => {
-    if (window.confirm("Are you sure you want to delete this grade book? This action cannot be undone.")) {
+    const gradeBookToDelete = gradeBooks.find(gb => gb.id === gradeBookId);
+    
+    if (window.confirm(
+      `Are you sure you want to delete "${gradeBookToDelete?.name}"? ` +
+      `This action cannot be undone and will also delete all related assignments.`
+    )) {
       try {
-        await deleteGradeBook(gradeBookId);
+        const result = await deleteGradeBook(gradeBookId);
+        
+        let message = "Grade book deleted successfully!";
+        if (result && result.totalAssignments > 0) {
+          message += ` ${result.deletedAssignments} of ${result.totalAssignments} related assignments were also deleted.`;
+          if (result.failedAssignments > 0) {
+            message += ` Warning: ${result.failedAssignments} assignments could not be deleted.`;
+          }
+        }
+        
         setSnackbar({
           open: true,
-          message: "Grade book deleted successfully!",
-          severity: "success"
+          message,
+          severity: result?.failedAssignments > 0 ? "warning" : "success"
         });
       } catch (error) {
         setSnackbar({

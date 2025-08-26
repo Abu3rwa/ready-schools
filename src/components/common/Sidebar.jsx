@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Drawer,
@@ -10,8 +10,15 @@ import {
   Toolbar,
   Box,
   Typography,
+  Chip,
   alpha,
   useTheme,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  IconButton,
 } from "@mui/material";
 import {
   Dashboard as DashboardIcon,
@@ -28,8 +35,32 @@ import {
   Book as BookIcon,
   AccountBox as AccountBoxIcon,
   Code as CodeIcon,
+  EmojiEvents as EmojiEventsIcon,
+  Lock as LockIcon,
+  Upgrade as UpgradeIcon,
+  AccessTime as AccessTimeIcon,
 } from "@mui/icons-material";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useMenuConfig } from "../../contexts/MenuConfigContext";
+import { getStatusBadge } from "../../services/menuConfigService";
+
+// Icon mapping for dynamic menu items
+const iconMap = {
+  'DashboardIcon': <DashboardIcon />,
+  'PeopleIcon': <PeopleIcon />,
+  'AssessmentIcon': <AssessmentIcon />,
+  'AssignmentIcon': <AssignmentIcon />,
+  'BookIcon': <BookIcon />,
+  'EventNoteIcon': <EventNoteIcon />,
+  'PsychologyIcon': <PsychologyIcon />,
+  'EmojiEventsIcon': <EmojiEventsIcon />,
+  'EmailIcon': <EmailIcon />,
+  'SchoolIcon': <SchoolIcon />,
+  'AccountBoxIcon': <AccountBoxIcon />,
+  'CodeIcon': <CodeIcon />,
+  'SettingsIcon': <SettingsIcon />,
+  'AdminIcon': <AdminIcon />,
+};
 
 const drawerWidth = 240;
 
@@ -39,88 +70,64 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
   const navigate = useNavigate();
   const theme = useTheme();
   const location = useLocation();
+  const { visibleMenuItems, loading } = useMenuConfig();
+  const [restrictedDialog, setRestrictedDialog] = useState({ open: false, item: null });
 
-  const menuItems = [
+  // Handle menu item click with access control
+  const handleMenuClick = (item) => {
+    if (item.accessLevel === 'preview') {
+      // Show restriction dialog for preview items
+      setRestrictedDialog({ open: true, item });
+    } else {
+      // Navigate normally for full access items
+      navigate(item.path);
+      if (variant === "temporary") {
+        onClose?.();
+      }
+    }
+  };
+
+  // Close restriction dialog
+  const handleCloseDialog = () => {
+    setRestrictedDialog({ open: false, item: null });
+  };
+
+  // Get restriction message based on feature status
+  const getRestrictionMessage = (item) => {
+    if (item.status === 'coming_soon') {
+      return {
+        title: 'Coming Soon!',
+        message: `The ${t(item.text || item.label)} feature is currently in development and will be available soon. Stay tuned for updates!`,
+        icon: <AccessTimeIcon sx={{ fontSize: 48, color: 'info.main' }} />
+      };
+    } else if (item.status === 'premium') {
+      return {
+        title: 'Premium Feature',
+        message: `The ${t(item.text || item.label)} feature is available for premium users. Upgrade your account to unlock this powerful tool and enhance your teaching experience.`,
+        icon: <UpgradeIcon sx={{ fontSize: 48, color: 'warning.main' }} />
+      };
+    }
+    return {
+      title: 'Access Restricted',
+      message: `You don't have access to the ${t(item.text || item.label)} feature.`,
+      icon: <LockIcon sx={{ fontSize: 48, color: 'error.main' }} />
+    };
+  };
+
+  // Fallback menu items (for when Firebase is unavailable)
+  const fallbackMenuItems = [
     { text: "navigation.dashboard", icon: <DashboardIcon />, path: "/", color: "#3498DB" },
-    {
-      text: "navigation.students",
-      icon: <PeopleIcon />,
-      path: "/students",
-      color: "#2ECC71",
-    },
-    {
-      text: "navigation.gradebooks",
-      icon: <AssessmentIcon />,
-      path: "/gradebooks",
-      color: "#F39C12",
-    },
-    {
-      text: "navigation.assignments",
-      icon: <AssignmentIcon />,
-      path: "/assignments",
-      color: theme.palette.secondary.main, // Using brand red
-    },
-    {
-      text: "navigation.lessons",
-      icon: <BookIcon />,
-      path: "/lessons",
-      color: "#FF6B6B",
-    },
-    {
-      text: "navigation.attendance",
-      icon: <EventNoteIcon />,
-      path: "/attendance",
-      color: "#9B59B6",
-    },
-    {
-      text: "navigation.behavior",
-      icon: <PsychologyIcon />,
-      path: "/behavior",
-      color: "#1ABC9C",
-    },
-    {
-      text: "navigation.communication",
-      icon: <EmailIcon />,
-      path: "/communication",
-      color: "#E67E22",
-    },
-    {
-      text: "navigation.reports",
-      icon: <AssessmentIcon />,
-      path: "/reports",
-      color: theme.palette.secondary.main, // Using brand red
-    },
-    {
-      text: "navigation.standards",
-      icon: <SchoolIcon />,
-      path: "/standards",
-      color: "#B266FF",
-    },
-    {
-      text: "navigation.profile",
-      icon: <AccountBoxIcon />,
-      path: "/profile",
-      color: "#3498DB",
-    },
-    {
-      text: "navigation.developer",
-      icon: <CodeIcon />,
-      path: "/developer",
-      color: "#FF6B35",
-    },
-    {
-      text: "navigation.settings",
-      icon: <SettingsIcon />,
-      path: "/settings",
-      color: "#95A5A6",
-    },
-    {
-      text: "navigation.adminUsers",
-      icon: <AdminIcon />,
-      path: "/admin/users",
-      color: "#2C3E50",
-    },
+    { text: "navigation.students", icon: <PeopleIcon />, path: "/students", color: "#2ECC71" },
+    { text: "navigation.settings", icon: <SettingsIcon />, path: "/settings", color: "#95A5A6" },
   ];
+  
+  // Use dynamic menu items or fallback
+  const menuItems = loading ? fallbackMenuItems : visibleMenuItems.map(item => ({
+    ...item,
+    text: item.label,
+    icon: iconMap[item.icon] || <DashboardIcon />,
+    statusBadge: getStatusBadge(item.status, item.statusDate)
+  }));
 
   // Check if a menu item is active based on the current path
   const isActive = (path) => {
@@ -160,7 +167,39 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
       }}
     >
       <Toolbar /> {/* This creates space for the AppBar */}
-      <Box sx={{ overflow: "auto", position: 'relative' }}>
+      <Box 
+        sx={{ 
+          overflow: "auto", 
+          position: 'relative',
+          direction: 'rtl', // This moves the scrollbar to the left side
+          // Custom scrollbar styling
+          '&::-webkit-scrollbar': {
+            width: '8px',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: 'rgba(255, 255, 255, 0.1)',
+            borderRadius: '12px',
+            margin: '8px',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: `linear-gradient(135deg, ${theme.palette.accent.main} 0%, rgba(255, 255, 255, 0.3) 100%)`,
+            borderRadius: '12px',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            boxShadow: `0 2px 8px rgba(0, 0, 0, 0.3)`,
+            transition: 'all 0.3s ease',
+          },
+          '&::-webkit-scrollbar-thumb:hover': {
+            background: `linear-gradient(135deg, ${theme.palette.accent.main} 0%, rgba(255, 255, 255, 0.5) 100%)`,
+            boxShadow: `0 4px 12px rgba(0, 0, 0, 0.4)`,
+          },
+          '&::-webkit-scrollbar-thumb:active': {
+            background: `linear-gradient(135deg, ${theme.palette.accent.main} 0%, rgba(255, 255, 255, 0.6) 100%)`,
+          },
+          // Firefox scrollbar styling
+          scrollbarWidth: 'thin',
+          scrollbarColor: `${theme.palette.accent.main} rgba(255, 255, 255, 0.1)`,
+        }}
+      >
         {/* Background Pattern */}
         <Box
           sx={{
@@ -175,51 +214,36 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
             pointerEvents: 'none'
           }}
         />
-        <Box sx={{ p: 2, pb: 1, position: 'relative', zIndex: 1 }}>
-          <Typography
-            variant="subtitle2"
-            sx={{
-              color: "primary.contrastText",
-              opacity: 0.7,
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: 1,
-              fontSize: "0.75rem",
-            }}
-          >
-            Main Navigation
-          </Typography>
-        </Box>
+        {/* Content container with restored direction */}
+        <Box sx={{ direction: 'ltr' }}>
+           
         <List sx={{ p: 1, position: 'relative', zIndex: 1 }}>
           {menuItems.map((item) => {
             const active = isActive(item.path);
+            const isRestricted = item.accessLevel === 'preview';
             return (
               <ListItem
                 component="button"
                 key={item.text}
-                onClick={() => {
-                  navigate(item.path);
-                  if (variant === "temporary") {
-                    onClose?.();
-                  }
-                }}
+                onClick={() => handleMenuClick(item)}
                 selected={active}
                 disableRipple
                 sx={{
                   margin: "4px 8px",
                   padding: "10px 16px",
                   borderRadius: "12px",
-                  color: active ? "primary.contrastText" : "rgba(255, 255, 255, 0.7)",
+                  color: active ? "primary.contrastText" : isRestricted ? "rgba(255, 255, 255, 0.5)" : "rgba(255, 255, 255, 0.7)",
                   transition: "all 0.3s ease-in-out",
                   position: "relative",
                   overflow: "hidden",
-                  cursor: "pointer",
+                  cursor: isRestricted ? "not-allowed" : "pointer",
                   backgroundColor: active
                     ? `${theme.palette.background.paper}20`
                     : "transparent",
                   backdropFilter: active ? 'blur(10px)' : 'none',
                   border: active ? `1px solid ${theme.palette.primary.contrastText}30` : '1px solid transparent',
                   borderLeft: active ? `4px solid ${theme.palette.accent.main}` : "4px solid transparent",
+                  opacity: isRestricted ? 0.6 : 1,
                   "&.Mui-selected": {
                     backgroundColor: `${theme.palette.background.paper}20`,
                     backdropFilter: 'blur(10px)',
@@ -228,18 +252,18 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
                     },
                   },
                   "&:hover": {
-                    backgroundColor: `${theme.palette.background.paper}20`,
+                    backgroundColor: isRestricted ? `${theme.palette.background.paper}10` : `${theme.palette.background.paper}20`,
                     backdropFilter: 'blur(10px)',
                     border: `1px solid ${theme.palette.primary.contrastText}20`,
-                    color: "primary.contrastText",
-                    transform: 'translateX(4px)',
+                    color: isRestricted ? "rgba(255, 255, 255, 0.5)" : "primary.contrastText",
+                    transform: isRestricted ? 'none' : 'translateX(4px)',
                   },
                 }}
               >
                 <ListItemIcon
                   sx={{
                     color: active ? "primary.contrastText" : item.color,
-                    opacity: active ? 1 : 0.8,
+                    opacity: active ? 1 : isRestricted ? 0.5 : 0.8,
                     minWidth: "40px",
                     transition: "all 0.3s ease-in-out",
                     "& .MuiSvgIcon-root": {
@@ -253,9 +277,42 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
                   }}
                 >
                   {item.icon}
+                  {isRestricted && (
+                    <LockIcon 
+                      sx={{ 
+                        position: 'absolute', 
+                        top: -2, 
+                        right: -2, 
+                        fontSize: 12, 
+                        color: 'warning.main',
+                        backgroundColor: 'background.paper',
+                        borderRadius: '50%',
+                        padding: '1px'
+                      }} 
+                    />
+                  )}
                 </ListItemIcon>
                 <ListItemText
-                  primary={t(item.text)}
+                  primary={
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <span>{t(item.text)}</span>
+                      {item.statusBadge && (
+                        <Chip
+                          label={item.statusBadge.text}
+                          size="small"
+                          color={item.statusBadge.color}
+                          sx={{
+                            height: 18,
+                            fontSize: '0.65rem',
+                            fontWeight: 600,
+                            '& .MuiChip-label': {
+                              px: 0.8
+                            }
+                          }}
+                        />
+                      )}
+                    </Box>
+                  }
                   primaryTypographyProps={{
                     fontWeight: active ? 600 : 500,
                     letterSpacing: "0.5px",
@@ -266,19 +323,69 @@ const Sidebar = ({ open, variant = "permanent", onClose }) => {
             );
           })}
         </List>
-        <Divider sx={{ backgroundColor: "rgba(255, 255, 255, 0.1)", my: 1 }} />
-        <Box sx={{ p: 2, textAlign: "center", position: 'relative', zIndex: 1 }}>
-          <Typography
-            variant="caption"
-            sx={{
-              color: "rgba(255, 255, 255, 0.5)",
-              fontSize: "0.7rem",
-            }}
-          >
-            Smile3 v1.0
-          </Typography>
+          <Divider sx={{ backgroundColor: "rgba(255, 255, 255, 0.1)", my: 1 }} />
+          <Box sx={{ p: 2, textAlign: "center", position: 'relative', zIndex: 1 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "rgba(255, 255, 255, 0.5)",
+                fontSize: "0.7rem",
+              }}
+            >
+              Ready Teacher v1.0
+            </Typography>
+          </Box>
         </Box>
       </Box>
+      
+      {/* Restriction Dialog */}
+      <Dialog 
+        open={restrictedDialog.open} 
+        onClose={handleCloseDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            textAlign: 'center'
+          }
+        }}
+      >
+        {restrictedDialog.item && (
+          <>
+            <DialogTitle sx={{ pb: 1 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                {getRestrictionMessage(restrictedDialog.item).icon}
+                <Typography variant="h5" component="div">
+                  {getRestrictionMessage(restrictedDialog.item).title}
+                </Typography>
+              </Box>
+            </DialogTitle>
+            <DialogContent>
+              <Typography variant="body1" sx={{ mb: 2 }}>
+                {getRestrictionMessage(restrictedDialog.item).message}
+              </Typography>
+              {restrictedDialog.item.status === 'premium' && (
+                <Box sx={{ mt: 2, p: 2, backgroundColor: 'warning.light', borderRadius: 1 }}>
+                  <Typography variant="body2" color="warning.contrastText">
+                    💎 <strong>Upgrade to Premium</strong> to unlock all features and enhance your teaching experience!
+                  </Typography>
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions sx={{ justifyContent: 'center', pb: 3 }}>
+              <Button onClick={handleCloseDialog} variant="outlined">
+                Got it
+              </Button>
+              {restrictedDialog.item.status === 'premium' && (
+                <Button variant="contained" color="warning" startIcon={<UpgradeIcon />}>
+                  Upgrade Now
+                </Button>
+              )}
+            </DialogActions>
+          </>
+        )}
+      </Dialog>
     </Drawer>
   );
 };

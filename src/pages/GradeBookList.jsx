@@ -186,19 +186,28 @@ const GradeBookList = () => {
     if (!selectedGradeBook) return;
 
     try {
-      // Use archiveGradeBook for a soft delete
-      await archiveGradeBook(selectedGradeBook.id);
+      // Use deleteGradeBook for permanent deletion (which now includes assignment deletion)
+      const result = await deleteGradeBook(selectedGradeBook.id);
+      
+      let message = "Grade book deleted permanently.";
+      if (result && result.totalAssignments > 0) {
+        message += ` ${result.deletedAssignments} of ${result.totalAssignments} related assignments were also deleted.`;
+        if (result.failedAssignments > 0) {
+          message += ` Warning: ${result.failedAssignments} assignments could not be deleted.`;
+        }
+      }
+      
       setSnackbar({
         open: true,
-        message: "Grade book archived successfully",
-        severity: "success",
+        message,
+        severity: result?.failedAssignments > 0 ? "warning" : "success",
       });
       setDeleteDialogOpen(false);
       setSelectedGradeBook(null);
     } catch (error) {
       setSnackbar({
         open: true,
-        message: `Error archiving grade book: ${error.message}`,
+        message: `Error deleting grade book: ${error.message}`,
         severity: "error",
       });
     }
@@ -656,17 +665,55 @@ const GradeBookList = () => {
         open={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
       >
-        <DialogTitle>Archive Grade Book</DialogTitle>
+        <DialogTitle>Delete Grade Book</DialogTitle>
         <DialogContent>
-          <Typography>
-            Are you sure you want to archive "{selectedGradeBook?.name}"? You
-            can reactivate it later from the filters.
+          <Typography gutterBottom>
+            Are you sure you want to permanently delete "{selectedGradeBook?.name}"? 
+            This action cannot be undone.
+          </Typography>
+          <Typography variant="body2" color="warning.main" sx={{ mt: 2 }}>
+            <strong>Warning:</strong> All assignments related to this gradebook 
+            (either directly linked or matching the subject "{selectedGradeBook?.subject}") 
+            will also be permanently deleted.
+          </Typography>
+          {selectedGradeBook && (() => {
+            const relatedAssignments = assignments.filter(
+              (a) => 
+                (a.gradebookId === selectedGradeBook.id) || 
+                (a.subject === selectedGradeBook.subject && !a.gradebookId)
+            );
+            return relatedAssignments.length > 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                This will delete {relatedAssignments.length} assignment(s): {relatedAssignments.map(a => a.name).join(', ')}
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                No assignments will be affected.
+              </Typography>
+            );
+          })()}
+          <Typography variant="body2" color="info.main" sx={{ mt: 2 }}>
+            <strong>Alternative:</strong> Consider archiving instead, which hides the gradebook 
+            but preserves all data and can be undone.
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleDelete} color="warning" variant="contained">
-            Archive
+          <Button 
+            onClick={() => {
+              if (selectedGradeBook) {
+                handleArchive(selectedGradeBook.id);
+                setDeleteDialogOpen(false);
+                setSelectedGradeBook(null);
+              }
+            }} 
+            color="warning" 
+            variant="outlined"
+          >
+            Archive Instead
+          </Button>
+          <Button onClick={handleDelete} color="error" variant="contained">
+            Delete Permanently
           </Button>
         </DialogActions>
       </Dialog>

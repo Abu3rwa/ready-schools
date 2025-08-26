@@ -86,13 +86,22 @@ const GradeBook = () => {
   const handleDeleteGradeBook = async () => {
     if (!currentGradeBook) return;
     try {
-      await deleteGradeBook(currentGradeBook.id);
+      const result = await deleteGradeBook(currentGradeBook.id);
+      setDeleteDialogOpen(false);
+      
+      let message = "Gradebook deleted successfully.";
+      if (result && result.totalAssignments > 0) {
+        message += ` ${result.deletedAssignments} of ${result.totalAssignments} related assignments were also deleted.`;
+        if (result.failedAssignments > 0) {
+          message += ` Warning: ${result.failedAssignments} assignments could not be deleted.`;
+        }
+      }
+      
       setSnackbar({
         open: true,
-        message: "Gradebook deleted.",
-        severity: "success",
+        message,
+        severity: result?.failedAssignments > 0 ? "warning" : "success",
       });
-      setDeleteDialogOpen(false);
       navigate("/gradebooks");
     } catch (error) {
       setSnackbar({
@@ -573,10 +582,31 @@ const GradeBook = () => {
               >
                 <DialogTitle>Delete Gradebook</DialogTitle>
                 <DialogContent>
-                  <Typography>
+                  <Typography gutterBottom>
                     Are you sure you want to permanently delete "
                     {currentGradeBook?.name}"? This action cannot be undone.
                   </Typography>
+                  <Typography variant="body2" color="warning.main" sx={{ mt: 2 }}>
+                    <strong>Warning:</strong> All assignments related to this gradebook 
+                    (either directly linked or matching the subject "{currentGradeBook?.subject}") 
+                    will also be permanently deleted.
+                  </Typography>
+                  {(() => {
+                    const relatedAssignments = assignments.filter(
+                      (a) => 
+                        (a.gradebookId === currentGradeBook?.id) || 
+                        (a.subject === currentGradeBook?.subject && !a.gradebookId)
+                    );
+                    return relatedAssignments.length > 0 ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        This will delete {relatedAssignments.length} assignment(s): {relatedAssignments.map(a => a.name).join(', ')}
+                      </Typography>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        No assignments will be affected.
+                      </Typography>
+                    );
+                  })()}
                 </DialogContent>
                 <DialogActions>
                   <Button onClick={() => setDeleteDialogOpen(false)}>
@@ -587,7 +617,7 @@ const GradeBook = () => {
                     color="error"
                     variant="contained"
                   >
-                    Delete
+                    Delete Gradebook & Assignments
                   </Button>
                 </DialogActions>
               </Dialog>

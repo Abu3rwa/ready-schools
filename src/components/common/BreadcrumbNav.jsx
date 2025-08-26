@@ -19,6 +19,7 @@ import {
   Email as EmailIcon,
   Settings as SettingsIcon,
   AdminPanelSettings as AdminIcon,
+  EmojiEvents as EmojiEventsIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -63,6 +64,10 @@ const BreadcrumbNav = () => {
         case 'behavior':
           label = 'Behavior';
           icon = <PsychologyIcon />;
+          break;
+        case 'character-traits':
+          label = 'Character Traits';
+          icon = <EmojiEventsIcon />;
           break;
         case 'communication':
           label = 'Communication';

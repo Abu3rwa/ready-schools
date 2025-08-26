@@ -189,6 +189,180 @@ export class FrontendDailyUpdateService {
       emailContentLibrary = {}; // Fallback to empty object
     }
 
+    // Enhanced content shuffling system to prevent repetition
+    const computeOverrides = () => {
+      const overridesByStudent = {};
+      try {
+        const currentUser = auth.currentUser;
+        const teacherId = currentUser?.uid || 'teacher';
+        const now = new Date();
+        const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const quotes = Array.isArray(emailContentLibrary?.motivationalQuotes) ? emailContentLibrary.motivationalQuotes : [];
+        const challenges = Array.isArray(emailContentLibrary?.dailyChallenges) ? emailContentLibrary.dailyChallenges : [];
+        const greetings = Array.isArray(emailContentLibrary?.greetings) ? emailContentLibrary.greetings : [];
+        const gradeSectionHeaders = Array.isArray(emailContentLibrary?.gradeSectionHeaders) ? emailContentLibrary.gradeSectionHeaders : [];
+        const assignmentSectionHeaders = Array.isArray(emailContentLibrary?.assignmentSectionHeaders) ? emailContentLibrary.assignmentSectionHeaders : [];
+        const behaviorSectionHeaders = Array.isArray(emailContentLibrary?.behaviorSectionHeaders) ? emailContentLibrary.behaviorSectionHeaders : [];
+        const lessonSectionHeaders = Array.isArray(emailContentLibrary?.lessonSectionHeaders) ? emailContentLibrary.lessonSectionHeaders : [];
+
+        // Enhanced shuffling function that maintains proper rotation
+        const getShuffledContent = (contentArray, contentType, studentId) => {
+          if (!contentArray || contentArray.length === 0) return null;
+          
+          try {
+            // Check if localStorage is available
+            if (typeof localStorage === 'undefined') return null;
+            
+            const shuffleKey = `${teacherId}:${contentType}:${monthKey}:shuffled`;
+            const positionKey = `${teacherId}:${studentId}:${contentType}:${monthKey}:position`;
+            
+            // Get or create shuffled array for this month
+            let shuffledArray;
+            const storedShuffle = localStorage.getItem(shuffleKey);
+            if (storedShuffle) {
+              shuffledArray = JSON.parse(storedShuffle);
+            } else {
+              // Create new shuffled array for this month
+              shuffledArray = [...contentArray];
+              // Fisher-Yates shuffle with seeded randomness for consistency
+              const seed = teacherId.split('').reduce((a, b) => {
+                a = ((a << 5) - a) + b.charCodeAt(0);
+                return a & a;
+              }, 0) + parseInt(monthKey.replace('-', ''), 10);
+              
+              let currentIndex = shuffledArray.length;
+              let randomValue = seed;
+              
+              while (currentIndex !== 0) {
+                // Simple LCG for seeded randomness
+                randomValue = (randomValue * 1664525 + 1013904223) % Math.pow(2, 32);
+                const randomIndex = Math.floor((randomValue / Math.pow(2, 32)) * currentIndex);
+                currentIndex--;
+                [shuffledArray[currentIndex], shuffledArray[randomIndex]] = [shuffledArray[randomIndex], shuffledArray[currentIndex]];
+              }
+              
+              localStorage.setItem(shuffleKey, JSON.stringify(shuffledArray));
+              console.log(`Created new shuffled ${contentType} array for month ${monthKey}:`, shuffledArray);
+            }
+            
+            // Get student's current position and increment
+            const storedPosition = localStorage.getItem(positionKey);
+            const currentPosition = storedPosition ? parseInt(storedPosition, 10) : 0;
+            const nextPosition = (currentPosition + 1) % shuffledArray.length;
+            
+            // If we've completed a full cycle, reshuffle for variety
+            if (nextPosition === 0 && currentPosition > 0) {
+              // Recalculate seed for reshuffle
+              const reshuffleSeed = teacherId.split('').reduce((a, b) => {
+                a = ((a << 5) - a) + b.charCodeAt(0);
+                return a & a;
+              }, 0) + parseInt(monthKey.replace('-', ''), 10);
+              
+              // Create a new shuffle
+              const newShuffledArray = [...contentArray];
+              let currentIndex = newShuffledArray.length;
+              let randomValue = reshuffleSeed + currentPosition; // Add some variance
+              
+              while (currentIndex !== 0) {
+                randomValue = (randomValue * 1664525 + 1013904223) % Math.pow(2, 32);
+                const randomIndex = Math.floor((randomValue / Math.pow(2, 32)) * currentIndex);
+                currentIndex--;
+                [newShuffledArray[currentIndex], newShuffledArray[randomIndex]] = [newShuffledArray[randomIndex], newShuffledArray[currentIndex]];
+              }
+              
+              localStorage.setItem(shuffleKey, JSON.stringify(newShuffledArray));
+              shuffledArray = newShuffledArray;
+              console.log(`Reshuffled ${contentType} array after full cycle for student ${studentId}:`, newShuffledArray);
+            }
+            
+            localStorage.setItem(positionKey, String(nextPosition));
+            
+            const selectedContent = shuffledArray[currentPosition];
+            console.log(`Student ${studentId} gets ${contentType} ${currentPosition}/${shuffledArray.length}: "${selectedContent}"`);
+            
+            return selectedContent;
+          } catch (error) {
+            console.warn(`Error in shuffled content selection for ${contentType}:`, error);
+            return null;
+          }
+        };
+
+        (students || []).forEach((s) => {
+          // Ensure student object is valid
+          if (!s || typeof s !== 'object') return;
+          
+          const studentId = s.id || s.studentId;
+          if (!studentId) return; // Skip students without valid IDs
+          
+          const studentOverride = {};
+          
+          // Get shuffled quote
+          if (quotes.length > 0) {
+            const selectedQuote = getShuffledContent(quotes, 'quotes', studentId);
+            if (selectedQuote) {
+              studentOverride.quote = selectedQuote;
+            }
+          }
+          
+          // Get shuffled challenge
+          if (challenges.length > 0) {
+            const selectedChallenge = getShuffledContent(challenges, 'challenges', studentId);
+            if (selectedChallenge) {
+              studentOverride.challenge = selectedChallenge;
+            }
+          }
+          
+          // Get shuffled greeting
+          if (greetings.length > 0) {
+            const selectedGreeting = getShuffledContent(greetings, 'greetings', studentId);
+            if (selectedGreeting) {
+              studentOverride.greeting = selectedGreeting;
+            }
+          }
+          
+          // Get shuffled grade section headers
+          if (gradeSectionHeaders.length > 0) {
+            const selectedGradeSectionHeader = getShuffledContent(gradeSectionHeaders, 'gradeSectionHeaders', studentId);
+            if (selectedGradeSectionHeader) {
+              studentOverride.gradeSectionHeader = selectedGradeSectionHeader;
+            }
+          }
+          
+          // Get shuffled assignment section headers
+          if (assignmentSectionHeaders.length > 0) {
+            const selectedAssignmentSectionHeader = getShuffledContent(assignmentSectionHeaders, 'assignmentSectionHeaders', studentId);
+            if (selectedAssignmentSectionHeader) {
+              studentOverride.assignmentSectionHeader = selectedAssignmentSectionHeader;
+            }
+          }
+          
+          // Get shuffled behavior section headers
+          if (behaviorSectionHeaders.length > 0) {
+            const selectedBehaviorSectionHeader = getShuffledContent(behaviorSectionHeaders, 'behaviorSectionHeaders', studentId);
+            if (selectedBehaviorSectionHeader) {
+              studentOverride.behaviorSectionHeader = selectedBehaviorSectionHeader;
+            }
+          }
+          
+          // Get shuffled lesson section headers
+          if (lessonSectionHeaders.length > 0) {
+            const selectedLessonSectionHeader = getShuffledContent(lessonSectionHeaders, 'lessonSectionHeaders', studentId);
+            if (selectedLessonSectionHeader) {
+              studentOverride.lessonSectionHeader = selectedLessonSectionHeader;
+            }
+          }
+          
+          if (Object.keys(studentOverride).length > 0) {
+            overridesByStudent[studentId] = studentOverride;
+          }
+        });
+      } catch (e) {
+        console.warn('Frontend: Failed to compute overrides', e);
+      }
+      return overridesByStudent;
+    };
+    const overrides = computeOverrides();
+
     return {
       students: students.map((student) => ({
         id: student.id || student.studentId, // fallback to studentId if id missing
@@ -260,6 +434,8 @@ export class FrontendDailyUpdateService {
       schoolName,
       // Add email content library for backend to use
       emailContentLibrary,
+      // Provide per-student overrides for quote/challenge
+      overrides,
       // Forward unified email preferences so backend respects student.enabled and section toggles
       emailPreferences,
     };
@@ -509,6 +685,65 @@ export class FrontendDailyUpdateService {
           materialsUsed: 0,
           totalActivities: 0
         }
+      };
+    }
+  }
+
+  /**
+   * Reset content shuffling state for all students (useful for testing)
+   * @param {Array} students - Array of students
+   * @returns {Object} Reset result
+   */
+  resetContentShuffling(students = []) {
+    try {
+      if (typeof localStorage === 'undefined') {
+        return { success: false, message: 'localStorage not available' };
+      }
+
+      const currentUser = auth.currentUser;
+      const teacherId = currentUser?.uid || 'teacher';
+      const now = new Date();
+      const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      
+      let resetCount = 0;
+      const contentTypes = ['quotes', 'challenges', 'greetings'];
+      
+      // Reset shuffled arrays
+      contentTypes.forEach(contentType => {
+        const shuffleKey = `${teacherId}:${contentType}:${monthKey}:shuffled`;
+        if (localStorage.getItem(shuffleKey)) {
+          localStorage.removeItem(shuffleKey);
+          resetCount++;
+        }
+      });
+      
+      // Reset student positions
+      students.forEach(student => {
+        const studentId = student.id || student.studentId;
+        if (studentId) {
+          contentTypes.forEach(contentType => {
+            const positionKey = `${teacherId}:${studentId}:${contentType}:${monthKey}:position`;
+            if (localStorage.getItem(positionKey)) {
+              localStorage.removeItem(positionKey);
+              resetCount++;
+            }
+          });
+        }
+      });
+      
+      console.log(`Reset ${resetCount} shuffling state entries for ${students.length} students`);
+      
+      return {
+        success: true,
+        message: `Reset shuffling state for ${students.length} students (${resetCount} entries cleared)`,
+        resetCount,
+        studentCount: students.length
+      };
+    } catch (error) {
+      console.error('Error resetting content shuffling:', error);
+      return {
+        success: false,
+        message: 'Error resetting shuffling state: ' + error.message
       };
     }
   }

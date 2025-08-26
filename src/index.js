@@ -24,6 +24,7 @@ import { SubjectsProvider } from "./contexts/SubjectsContext";
 import { AcademicPeriodsProvider } from "./contexts/AcademicPeriodsContext";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { MenuConfigProvider } from "./contexts/MenuConfigContext";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
@@ -34,7 +35,8 @@ root.render(
       <ErrorBoundary>
         <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
           <AuthProvider>
-            <GoogleSheetsProvider>
+            <MenuConfigProvider>
+              <GoogleSheetsProvider>
               <StudentProvider>
                 <GradeProvider>
                   <AssignmentProvider>
@@ -67,6 +69,7 @@ root.render(
                 </GradeProvider>
               </StudentProvider>
             </GoogleSheetsProvider>
+            </MenuConfigProvider>
           </AuthProvider>
         </GoogleOAuthProvider>
       </ErrorBoundary>

@@ -92,10 +92,14 @@ const EnhancedStudentCard = ({
         <CardContent sx={{ p: 2 }}>
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
             <Avatar
+              src={student.studentImage || student.imagePreview}
               sx={{
                 bgcolor: getAvatarColor(student.id),
                 width: 48,
                 height: 48,
+              }}
+              onError={(e) => {
+                e.target.src = ''; // Clear src to show fallback initials
               }}
             >
               {getInitials(student.firstName, student.lastName)}
@@ -139,11 +143,15 @@ const EnhancedStudentCard = ({
         {/* Header with Avatar and Status */}
         <Box sx={{ display: "flex", alignItems: "flex-start", mb: 2 }}>
           <Avatar
+            src={student.studentImage || student.imagePreview}
             sx={{
               bgcolor: getAvatarColor(student.id),
               width: 64,
               height: 64,
               mr: 2,
+            }}
+            onError={(e) => {
+              e.target.src = ''; // Clear src to show fallback initials
             }}
           >
             {getInitials(student.firstName, student.lastName)}

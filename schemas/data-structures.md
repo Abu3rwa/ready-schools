@@ -25,6 +25,8 @@ This document defines the complete data structure schemas for the Teacher Kit ap
 - `contentSharingRequests` - Content sharing requests between users
 - `developerPageImages` - Developer page image uploads and metadata
 - `developerPageContent` - Developer page text content and settings
+- `characterTraitAssessments` - Character trait daily assessments and star ratings
+- `monthlyLeaderboards` - Monthly character trait leaderboard rankings
 
 ---
 
@@ -793,6 +795,10 @@ This document defines the complete data structure schemas for the Teacher Kit ap
 - Index on `userId` and `section` for developerPageImages collection
 - Index on `uploadedAt` for developerPageImages collection
 - Index on `metadata.isActive` for developerPageImages collection
+- Index on `userId`, `month`, and `studentId` for characterTraitAssessments collection
+- Index on `assessmentDate` and `emailDate` for characterTraitAssessments collection
+- Index on `userId` and `month` for monthlyLeaderboards collection
+- Index on `rankings.rank` and `rankings.totalStars` for monthlyLeaderboards collection
 
 ---
 
@@ -842,6 +848,84 @@ This document defines the complete data structure schemas for the Teacher Kit ap
   // Timestamps
   uploadedAt: "timestamp",         // When image was uploaded
   updatedAt: "timestamp"           // Auto-generated on updates
+}
+```
+
+---
+
+## 🌟 Character Trait Assessments Collection
+
+**Collection:** `characterTraitAssessments`
+
+### Document Structure
+```javascript
+{
+  id: "string",                    // Auto-generated document ID
+  userId: "string",                // Teacher's user ID (owner)
+  studentId: "string",             // Student document ID
+  
+  // Assessment Information
+  assessmentDate: "string",        // Date assessment was done (YYYY-MM-DD)
+  emailDate: "string",             // Date of the email being assessed (YYYY-MM-DD)
+  month: "string",                 // YYYY-MM format for leaderboard queries
+  
+  // Content Being Assessed (extracted from yesterday's email)
+  quote: "string",                 // The quote from yesterday's email
+  challenge: "string",             // The challenge from yesterday's email
+  characterTrait: "string",        // Month's character trait
+  
+  // Assessment Scores
+  quoteScore: number,              // 1-5 stars for quote understanding
+  challengeScore: number,          // 1-5 stars for challenge completion
+  totalScore: number,              // quoteScore + challengeScore (max 10)
+  
+  // Assessment Details
+  quoteNotes: "string",            // Teacher notes on quote understanding
+  challengeEvidence: "string",     // Student's response/evidence for challenge
+  challengeNotes: "string",        // Teacher notes on challenge completion
+  
+  // Metadata
+  assessedBy: "string",            // Teacher who did the assessment
+  createdAt: "timestamp",
+  updatedAt: "timestamp"
+}
+```
+
+---
+
+## 🏆 Monthly Leaderboards Collection
+
+**Collection:** `monthlyLeaderboards`
+
+### Document Structure
+```javascript
+{
+  id: "string",                    // Auto-generated document ID
+  userId: "string",                // Teacher's user ID (owner)
+  month: "string",                 // YYYY-MM format
+  
+  // Leaderboard Data (updated in real-time)
+  rankings: [{
+    studentId: "string",
+    studentName: "string",
+    studentImage: "string",         // Profile image URL
+    totalStars: number,             // Total stars for the month
+    quoteStars: number,             // Total quote stars
+    challengeStars: number,         // Total challenge stars
+    assessmentCount: number,        // Number of assessments completed
+    averageScore: number,           // Average daily score
+    rank: number,                   // Current ranking (1st, 2nd, etc.)
+    previousRank: number            // Previous ranking for animations
+  }],
+  
+  // Summary Statistics
+  totalAssessments: number,
+  averageClassScore: number,
+  topPerformer: "string",          // Student ID of #1
+  
+  // Metadata
+  lastUpdated: "timestamp",
+  createdAt: "timestamp"
 }
 ```
 

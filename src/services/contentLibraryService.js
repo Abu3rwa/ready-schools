@@ -32,6 +32,16 @@ const DEFAULT_CONTENT = {
     "🔍 Classroom Highlights",
     "📖 Lessons Explored"
   ],
+  motivationalQuotes: [
+    "Every expert was once a beginner! 🌟",
+    "Progress, not perfection! 💪",
+    "You're doing amazing things! 🎯"
+  ],
+  dailyChallenges: [
+    "Try something new today that makes you curious! 🔍",
+    "Be kind to someone who needs encouragement! 💝",
+    "Take on a challenge that helps you grow! 🌱"
+  ],
   visualThemes: [
     {
       name: "Ocean Blue",
@@ -695,6 +705,16 @@ export const populateWithTeacherContent = async (teacherId) => {
         "You are capable of amazing things! ⭐",
         "Today's challenges are tomorrow's strengths. 💪",
         "Believe in yourself and anything is possible! ✨"
+      ],
+      dailyChallenges: [
+        "Try something new today that makes you curious! 🔍",
+        "Be kind to someone who needs encouragement! 💝",
+        "Take on a challenge that helps you grow! 🌱",
+        "Show perseverance by not giving up on a difficult task today! 💪",
+        "Demonstrate respect by listening carefully to others! 👂",
+        "Take responsibility by admitting a mistake and working to fix it! 🎆",
+        "Display courage by standing up for what is right! 🦁",
+        "Practice gratitude by thanking someone who has helped you! 🙏"
       ],
       achievementBadges: [
         {

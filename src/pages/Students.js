@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTheme } from "@mui/material/styles";
 import {
   Box,
   Typography,
@@ -36,12 +37,11 @@ import {
   Phone as PhoneIcon,
   MedicalServices as MedicalIcon,
   School as SchoolIcon,
-  ViewList as ViewListIcon,
-  GridView as GridViewIcon,
   ArrowBack as ArrowBackIcon,
   Contacts as ContactsIcon,
   Event as EventIcon,
   Psychology as PsychologyIcon,
+  Analytics as AnalyticsIcon,
 } from "@mui/icons-material";
 import { useStudents } from "../contexts/StudentContext";
 import { useGrades } from "../contexts/GradeContext";
@@ -54,6 +54,7 @@ import AdvancedStudentSearch from "../components/students/AdvancedStudentSearch"
 import StudentAnalytics from "../components/students/StudentAnalytics";
 
 const Students = () => {
+  const theme = useTheme();
   // Use real context functions
   const { students, loading, error, addStudent, updateStudent, deleteStudent } =
     useStudents();
@@ -82,7 +83,6 @@ const Students = () => {
     message: "",
     severity: "success",
   });
-  const [viewMode, setViewMode] = useState("list"); // 'list' or 'grid'
   const [filters, setFilters] = useState({});
   const [showAnalytics, setShowAnalytics] = useState(false);
 
@@ -357,56 +357,49 @@ const Students = () => {
           justifyContent: "space-between",
           alignItems: { xs: "stretch", sm: "center" },
           gap: { xs: 2, sm: 0 },
-          mb: 3,
+          mb: 4,
           px: { xs: 2, sm: 0 },
+          py: 2,
+          background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+          borderRadius: 2,
+          color: 'white',
+          boxShadow: 3
         }}
       >
-        <Typography 
-          variant="h4" 
-          sx={{ 
-            fontSize: { xs: "1.5rem", sm: "2rem", md: "2.125rem" },
-            textAlign: { xs: "center", sm: "left" }
-          }}
-        >
-          Student Management
-        </Typography>
-        <Box 
-          sx={{ 
-            display: "flex", 
-            gap: 1,
-            width: { xs: "100%", sm: "auto" }
-          }}
-        >
-          <Button
-            variant={viewMode === "list" ? "contained" : "outlined"}
-          size="small"
-            onClick={() => setViewMode("list")}
-            startIcon={<ViewListIcon />}
-            fullWidth
-            sx={{ 
-              display: "flex",
-              justifyContent: "center",
-              minWidth: { xs: 0, sm: 100 }
-            }}
-          >
-            <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>List</Box>
-            <ViewListIcon sx={{ display: { xs: "inline", sm: "none" } }} />
-          </Button>
-          <Button
-            variant={viewMode === "grid" ? "contained" : "outlined"}
-            size="small"
-            onClick={() => setViewMode("grid")}
-            startIcon={<GridViewIcon />}
-            fullWidth
-            sx={{ 
-              display: "flex",
-              justifyContent: "center",
-              minWidth: { xs: 0, sm: 100 }
-            }}
-          >
-            <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>Grid</Box>
-            <GridViewIcon sx={{ display: { xs: "inline", sm: "none" } }} />
-          </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <SchoolIcon sx={{ fontSize: { xs: '2rem', sm: '2.5rem' } }} />
+          <Box>
+            <Typography 
+              variant="h4" 
+              sx={{ 
+                fontSize: { xs: "1.5rem", sm: "2rem", md: "2.125rem" },
+                fontWeight: 600,
+                textShadow: '0 2px 4px rgba(0,0,0,0.3)'
+              }}
+            >
+              Student Management
+            </Typography>
+            <Typography 
+              variant="subtitle1" 
+              sx={{ 
+                opacity: 0.9,
+                fontSize: { xs: '0.875rem', sm: '1rem' }
+              }}
+            >
+              Manage your students and view their progress
+            </Typography>
+          </Box>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="h6" sx={{ 
+            background: 'rgba(255,255,255,0.2)', 
+            px: 2, 
+            py: 1, 
+            borderRadius: 1,
+            fontSize: { xs: '0.875rem', sm: '1rem' }
+          }}>
+            {filteredStudents.length} Students
+          </Typography>
         </Box>
       </Box>
 
@@ -422,16 +415,29 @@ const Students = () => {
       <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 3 }}>
         <Button
           variant="contained"
-          color="primary"
           startIcon={<AddIcon />}
           onClick={handleOpenAddDialog}
+          sx={{
+            background: `linear-gradient(135deg, ${theme.palette.secondary.main} 0%, ${theme.palette.accent.main} 100%)`,
+            color: 'white',
+            fontWeight: 600,
+            px: 3,
+            py: 1.5,
+            borderRadius: 2,
+            boxShadow: 3,
+            textTransform: 'none',
+            fontSize: '1rem',
+            '&:hover': {
+              boxShadow: 6,
+              transform: 'translateY(-1px)'
+            }
+          }}
         >
           Add Student
         </Button>
       </Box>
 
       {/* Student List and Details */}
-      {viewMode === "list" ? (
       <Grid container spacing={{ xs: 2, sm: 3 }}>
         {/* Student List */}
         <Grid 
@@ -459,23 +465,30 @@ const Students = () => {
                 variant="h6"
                 sx={{ 
                   p: 2, 
-                  bgcolor: "primary.main", 
+                  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.accent.main} 100%)`,
                   color: "white",
                   fontSize: { xs: '1rem', sm: '1.25rem' },
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between'
+                  justifyContent: 'space-between',
+                  fontWeight: 600,
+                  textShadow: '0 1px 2px rgba(0,0,0,0.2)'
                 }}
               >
-                <span>Student Roster ({filteredStudents.length})</span>
-                <Box sx={{ display: { xs: 'flex', md: 'none' }, gap: 1 }}>
-                  <IconButton 
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <ContactsIcon fontSize="small" />
+                  <span>Student Roster ({filteredStudents.length})</span>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Chip 
+                    label="Active" 
                     size="small" 
-                    sx={{ color: 'white' }}
-                    onClick={() => setViewMode("grid")}
-                  >
-                    <GridViewIcon fontSize="small" />
-                  </IconButton>
+                    sx={{ 
+                      bgcolor: 'rgba(255,255,255,0.2)', 
+                      color: 'white',
+                      fontWeight: 500
+                    }} 
+                  />
                 </Box>
               </Typography>
                 <List
@@ -498,16 +511,42 @@ const Students = () => {
                         }
                         onClick={() => setSelectedStudent(student)}
                         sx={{
-                          py: { xs: 2, sm: 1 }, // Taller touch targets on mobile
-                          px: { xs: 2, sm: 2 }
+                          py: { xs: 2, sm: 2 },
+                          px: { xs: 2, sm: 2 },
+                          transition: 'all 0.2s ease-in-out',
+                          borderRadius: 1,
+                          mx: 1,
+                          mb: 0.5,
+                          '&:hover': {
+                            backgroundColor: 'rgba(20, 89, 169, 0.08)',
+                            transform: 'translateX(4px)',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                          },
+                          '&.Mui-selected': {
+                            backgroundColor: `${theme.palette.primary.main}15`,
+                            borderLeft: `4px solid ${theme.palette.primary.main}`,
+                            '&:hover': {
+                              backgroundColor: `${theme.palette.primary.main}20`,
+                            }
+                          }
                         }}
                       >
                         <ListItemAvatar>
                             <Avatar
+                            src={student.studentImage || student.imagePreview}
                             sx={{ 
                               bgcolor: getAvatarColor(student.id),
-                              width: { xs: 40, sm: 40 },
-                              height: { xs: 40, sm: 40 }
+                              width: { xs: 48, sm: 48 },
+                              height: { xs: 48, sm: 48 },
+                              border: `2px solid ${theme.palette.background.paper}`,
+                              boxShadow: 2,
+                              transition: 'transform 0.2s ease-in-out',
+                              '&:hover': {
+                                transform: 'scale(1.05)'
+                              }
+                            }}
+                            onError={(e) => {
+                              e.target.src = ''; // Clear src to show fallback initials
                             }}
                             >
                             {getInitials(student.firstName, student.lastName)}
@@ -551,7 +590,12 @@ const Students = () => {
                             handleOpenEditDialog(student);
                           }}
                             sx={{ 
-                              p: { xs: 1, sm: 1 }
+                              p: { xs: 1, sm: 1 },
+                              color: theme.palette.primary.main,
+                              '&:hover': {
+                                backgroundColor: `${theme.palette.primary.main}15`,
+                                transform: 'scale(1.1)'
+                              }
                           }}
                         >
                             <EditIcon fontSize="small" />
@@ -564,7 +608,12 @@ const Students = () => {
                             handleOpenDeleteDialog(student);
                           }}
                             sx={{ 
-                              p: { xs: 1, sm: 1 }
+                              p: { xs: 1, sm: 1 },
+                              color: theme.palette.secondary.main,
+                              '&:hover': {
+                                backgroundColor: `${theme.palette.secondary.main}15`,
+                                transform: 'scale(1.1)'
+                              }
                           }}
                         >
                             <DeleteIcon fontSize="small" />
@@ -620,10 +669,13 @@ const Students = () => {
                   />
                 ) : (
             <Card 
-              elevation={2}
+              elevation={3}
               sx={{ 
-                borderRadius: { xs: 0, sm: 1 },
-                mx: { xs: -2, sm: 0 } // Negative margin on mobile to extend to edges
+                borderRadius: { xs: 0, sm: 2 },
+                mx: { xs: -2, sm: 0 },
+                overflow: 'hidden',
+                background: `linear-gradient(135deg, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+                border: `1px solid ${theme.palette.primary.main}20`
               }}
             >
               <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
@@ -655,10 +707,20 @@ const Students = () => {
                         </Box>
                         
                   <Avatar
+                    src={selectedStudent.studentImage || selectedStudent.imagePreview}
                     sx={{
                       bgcolor: getAvatarColor(selectedStudent.id),
-                            width: { xs: 80, sm: 64 },
-                            height: { xs: 80, sm: 64 },
+                      width: { xs: 80, sm: 80 },
+                      height: { xs: 80, sm: 80 },
+                      border: `4px solid ${theme.palette.background.paper}`,
+                      boxShadow: `0 4px 12px ${theme.palette.primary.main}40`,
+                      transition: 'transform 0.3s ease-in-out',
+                      '&:hover': {
+                        transform: 'scale(1.05)'
+                      }
+                    }}
+                    onError={(e) => {
+                      e.target.src = ''; // Clear src to show fallback initials
                     }}
                   >
                     {getInitials(
@@ -694,10 +756,19 @@ const Students = () => {
                     </Typography>
                   </Box>
                         <Button
-                          variant="outlined"
+                          variant="contained"
+                          startIcon={<AnalyticsIcon />}
                           onClick={() => setShowAnalytics(!showAnalytics)}
                           sx={{
-                            minWidth: { xs: '100%', sm: 'auto' }
+                            minWidth: { xs: '100%', sm: 'auto' },
+                            background: `linear-gradient(135deg, ${theme.palette.accent.main} 0%, ${theme.palette.secondary.main} 100%)`,
+                            color: 'white',
+                            fontWeight: 600,
+                            textTransform: 'none',
+                            '&:hover': {
+                              boxShadow: 4,
+                              transform: 'translateY(-1px)'
+                            }
                           }}
                         >
                           {showAnalytics ? "Hide Analytics" : "Show Analytics"}
@@ -1287,43 +1358,61 @@ const Students = () => {
                     justifyContent: { xs: "center", sm: "flex-end" },
                     mt: 3,
                     pt: 3,
-                    borderTop: 1,
-                    borderColor: 'divider',
+                    borderTop: `1px solid ${theme.palette.primary.main}20`,
                     gap: { xs: 1, sm: 2 },
-                    flexWrap: 'wrap'
+                    flexWrap: 'wrap',
+                    background: `linear-gradient(135deg, ${theme.palette.background.default} 0%, ${theme.palette.background.paper} 100%)`
                   }}
                 >
                   <Button
                     variant="outlined"
-                    color="primary"
                     startIcon={<EditIcon />}
                     onClick={() => handleOpenEditDialog(selectedStudent)}
                     sx={{ 
                       flex: { xs: '1 1 auto', sm: '0 1 auto' },
-                      minWidth: { xs: 0, sm: 120 }
+                      minWidth: { xs: 0, sm: 120 },
+                      borderColor: theme.palette.primary.main,
+                      color: theme.palette.primary.main,
+                      '&:hover': {
+                        backgroundColor: `${theme.palette.primary.main}10`,
+                        borderColor: theme.palette.primary.main,
+                        transform: 'translateY(-1px)'
+                      }
                     }}
                   >
                     Edit
                   </Button>
                   <Button
                     variant="outlined"
-                    color="error"
                     startIcon={<DeleteIcon />}
                     onClick={() => handleOpenDeleteDialog(selectedStudent)}
                     sx={{ 
                       flex: { xs: '1 1 auto', sm: '0 1 auto' },
-                      minWidth: { xs: 0, sm: 120 }
+                      minWidth: { xs: 0, sm: 120 },
+                      borderColor: theme.palette.secondary.main,
+                      color: theme.palette.secondary.main,
+                      '&:hover': {
+                        backgroundColor: `${theme.palette.secondary.main}10`,
+                        borderColor: theme.palette.secondary.main,
+                        transform: 'translateY(-1px)'
+                      }
                     }}
                   >
                     Delete
                   </Button>
                   <Button
                     variant="contained"
-                    color="info"
                     startIcon={<EmailIcon />}
                     sx={{ 
                       flex: { xs: '1 1 auto', sm: '0 1 auto' },
-                      minWidth: { xs: 0, sm: 120 }
+                      minWidth: { xs: 0, sm: 120 },
+                      background: `linear-gradient(135deg, ${theme.palette.accent.main} 0%, ${theme.palette.primary.main} 100%)`,
+                      color: 'white',
+                      fontWeight: 600,
+                      '&:hover': {
+                        boxShadow: 4,
+                        transform: 'translateY(-1px)'
+                      }
                     }}
                   >
                     Contact
@@ -1335,100 +1424,37 @@ const Students = () => {
               </Box>
           ) : (
             <Card
-              elevation={2}
+              elevation={3}
               sx={{
                 height: "100%",
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
+                background: `linear-gradient(135deg, ${theme.palette.background.paper} 0%, ${theme.palette.background.default} 100%)`,
+                border: `2px dashed ${theme.palette.primary.main}40`,
+                borderRadius: 2
               }}
             >
-              <CardContent>
-                <Typography variant="h6" color="textSecondary" align="center">
+              <CardContent sx={{ textAlign: 'center', p: 4 }}>
+                <ContactsIcon 
+                  sx={{ 
+                    fontSize: { xs: '4rem', sm: '5rem' }, 
+                    color: theme.palette.primary.main,
+                    opacity: 0.5,
+                    mb: 2
+                  }} 
+                />
+                <Typography variant="h5" color="textSecondary" sx={{ mb: 1, fontWeight: 500 }}>
                   Select a student to view details
+                </Typography>
+                <Typography variant="body1" color="textSecondary" sx={{ opacity: 0.7 }}>
+                  Choose a student from the list to see their information and progress
                 </Typography>
               </CardContent>
             </Card>
           )}
         </Grid>
       </Grid>
-      ) : (
-        <Box 
-          sx={{ 
-            mx: { xs: -2, sm: 0 } // Negative margin on mobile to extend to edges
-          }}
-        >
-          <Grid 
-            container 
-            spacing={{ xs: 0, sm: 2 }}
-            sx={{
-              mt: { xs: 0, sm: 2 }
-            }}
-          >
-          {filteredStudents.length > 0 ? (
-            filteredStudents.map((student) => (
-                <Grid 
-                  item 
-                  xs={12} 
-                  sm={6} 
-                  md={4} 
-                  lg={3} 
-                  key={student.id}
-                  sx={{
-                    borderBottom: { xs: 1, sm: 0 },
-                    borderColor: { xs: 'divider', sm: 'transparent' }
-                  }}
-                >
-                <EnhancedStudentCard
-                  student={student}
-                  onEdit={handleOpenEditDialog}
-                  onDelete={handleOpenDeleteDialog}
-                  onContact={(student) => {
-                    // Handle contact action
-                    console.log("Contact student:", student);
-                  }}
-                  onViewDetails={(student) => setSelectedStudent(student)}
-                  showAnalytics={false}
-                  compact={true}
-                    sx={{
-                      borderRadius: { xs: 0, sm: 1 },
-                      boxShadow: { xs: 0, sm: 1 },
-                      height: '100%',
-                      '& .MuiCardContent-root': {
-                        p: { xs: 2, sm: 3 }
-                      },
-                      '& .MuiCardActions-root': {
-                        p: { xs: 2, sm: 2 },
-                        gap: 1
-                      }
-                    }}
-              />
-            </Grid>
-            ))
-          ) : (
-            <Grid item xs={12}>
-                <Box
-                  sx={{
-                    p: 4,
-                    textAlign: 'center',
-                    bgcolor: 'background.paper'
-                  }}
-                >
-                  <Typography 
-                    variant="h6" 
-                    color="textSecondary"
-                    sx={{
-                      fontSize: { xs: '1rem', sm: '1.25rem' }
-                    }}
-                  >
-                    No students found
-                  </Typography>
-                </Box>
-            </Grid>
-          )}
-            </Grid>
-        </Box>
-      )}
 
       {/* Enhanced Student Forms */}
       <EnhancedStudentForm

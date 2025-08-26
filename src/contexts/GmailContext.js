@@ -288,6 +288,7 @@ export const GmailProvider = ({ children }) => {
   const value = {
     // Status
     status,
+    setStatus,
     isConfigured,
     shouldPrompt,
     loading,

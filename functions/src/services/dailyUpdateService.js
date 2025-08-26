@@ -5,6 +5,8 @@ import {
   createUnifiedEmailPreferences,
   validateEmailPreferences 
 } from "../constants/emailSections.js";
+// Import character traits service
+import { getCurrentMonthTrait, getDailyQuote, getDailyChallenge } from "./characterTraitsService.js";
 
 export class DailyUpdateService {
   constructor() {
@@ -59,8 +61,43 @@ export class DailyUpdateService {
     console.log("Processed email preferences:", this.emailPreferences);
   }
 
+  // Generate character trait content for a student
+  async generateCharacterTraitContent(studentId, userId, date = new Date()) {
+    try {
+      // Get the current month's character trait
+      const currentTrait = await getCurrentMonthTrait(userId, date);
+      
+      if (!currentTrait) {
+        // Return fallback content if no trait is configured
+        return {
+          characterTrait: 'Character Development',
+          characterTraitQuote: 'Every day is a new opportunity to grow and learn! 🌟',
+          characterTraitChallenge: 'Try something new today that makes you curious! 🔍'
+        };
+      }
+
+      // Generate personalized quote and challenge for this student
+      const quote = getDailyQuote(currentTrait, studentId, date);
+      const challenge = getDailyChallenge(currentTrait, studentId, date);
+
+      return {
+        characterTrait: currentTrait.name || 'Character Development',
+        characterTraitQuote: quote,
+        characterTraitChallenge: challenge
+      };
+    } catch (error) {
+      console.error('Error generating character trait content:', error);
+      // Return fallback content on error
+      return {
+        characterTrait: 'Character Development',
+        characterTraitQuote: 'Every day is a new opportunity to grow and learn! 🌟',
+        characterTraitChallenge: 'Try something new today that makes you curious! 🔍'
+      };
+    }
+  }
+
   // Generate daily update data for a specific student
-  generateDailyUpdate(studentId, date = new Date()) {
+  async generateDailyUpdate(studentId, date = new Date(), userId = null) {
     const dateString = dayjs(date).format("YYYY-MM-DD");
     const student = this.getStudent(studentId);
 
@@ -84,6 +121,9 @@ export class DailyUpdateService {
     // Get parent contact info
     const parentEmails = this.getParentEmails(student);
     const parentName = this.getParentName(student);
+
+    // Generate character trait content
+    const characterTraitContent = await this.generateCharacterTraitContent(studentId, userId, date);
 
     // Debug logging for gender data
     console.log("Student gender data:", {
@@ -118,6 +158,8 @@ export class DailyUpdateService {
       emailContentLibrary: this.dataSources.emailContentLibrary || {},
       // Pass unified email preferences instead of normalized legacy formats
       emailPreferences: this.emailPreferences,
+      // Include character trait fields
+      ...characterTraitContent,
     };
 
     // Create content filters for both parent and student emails
@@ -145,7 +187,7 @@ export class DailyUpdateService {
   }
 
   // Generate daily updates for all students
-  generateAllDailyUpdates(date = new Date()) {
+  async generateAllDailyUpdates(date = new Date(), userId = null) {
     console.log("Generating daily updates for date:", date);
     console.log("Data sources:", {
       studentsCount: (this.dataSources.students || []).length,
@@ -164,11 +206,12 @@ export class DailyUpdateService {
     for (const student of this.dataSources.students || []) {
       try {
         console.log("Generating update for student:", student.id);
-        const update = this.generateDailyUpdate(student.id, date);
+        const update = await this.generateDailyUpdate(student.id, date, userId);
         console.log("Generated update:", {
           studentId: update.studentId,
           studentName: update.studentName,
           hasParentEmails: update.parentEmails?.length > 0,
+          hasCharacterTrait: !!update.characterTrait,
         });
         updates.push(update);
       } catch (error) {

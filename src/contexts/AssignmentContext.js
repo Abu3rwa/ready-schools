@@ -503,6 +503,48 @@ export const AssignmentProvider = ({ children }) => {
     return result;
   };
 
+  // Function to delete all assignments related to a gradebook
+  const deleteAssignmentsByGradebook = async (gradeBookId, gradeBookSubject) => {
+    try {
+      // Find assignments related to the gradebook
+      const relatedAssignments = assignments.filter(
+        (assignment) => 
+          assignment.gradebookId === gradeBookId || 
+          (assignment.subject === gradeBookSubject && !assignment.gradebookId)
+      );
+
+      console.log(`Found ${relatedAssignments.length} assignments to delete for gradebook:`, {
+        gradeBookId,
+        gradeBookSubject,
+        assignmentIds: relatedAssignments.map(a => a.id)
+      });
+
+      // Delete all related assignments
+      const deletePromises = relatedAssignments.map(assignment => deleteAssignment(assignment.id));
+      const results = await Promise.allSettled(deletePromises);
+
+      // Count successful deletions
+      const successfulDeletions = results.filter(result => result.status === 'fulfilled').length;
+      const failedDeletions = results.filter(result => result.status === 'rejected').length;
+
+      console.log(`Assignment deletion results:`, {
+        total: relatedAssignments.length,
+        successful: successfulDeletions,
+        failed: failedDeletions
+      });
+
+      return {
+        success: true,
+        deletedCount: successfulDeletions,
+        failedCount: failedDeletions,
+        totalCount: relatedAssignments.length
+      };
+    } catch (error) {
+      console.error('Error deleting assignments by gradebook:', error);
+      throw error;
+    }
+  };
+
   // Function to select an assignment
   const selectAssignment = (id) => {
     const assignment = assignments.find((a) => a.id === id);
@@ -658,6 +700,7 @@ export const AssignmentProvider = ({ children }) => {
     addAssignment,
     updateAssignment,
     deleteAssignment,
+    deleteAssignmentsByGradebook,
     selectAssignment,
     clearSelectedAssignment,
     getAssignmentAnalytics,

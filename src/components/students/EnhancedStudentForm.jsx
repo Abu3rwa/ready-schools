@@ -18,6 +18,7 @@ import {
   Typography,
   Divider,
   Avatar,
+  CircularProgress,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -26,6 +27,7 @@ import {
   Save as SaveIcon,
   Cancel as CancelIcon,
 } from "@mui/icons-material";
+import { uploadStudentImage } from "../../services/studentImageService";
 
 const EnhancedStudentForm = ({
   open,
@@ -44,6 +46,8 @@ const EnhancedStudentForm = ({
     studentId: "",
     gradeLevel: "",
     enrollmentDate: null,
+    studentImage: null, // Student photo
+    imagePreview: null, // For displaying selected image
 
     // Contact Information
     parentEmail1: "",
@@ -51,6 +55,7 @@ const EnhancedStudentForm = ({
     parentPhone1: "",
     parentPhone2: "",
     studentEmail: "", // Student's own email address
+    motherName: "", // Mother's name field
 
     // Academic Information
     academicYear: "",
@@ -72,6 +77,8 @@ const EnhancedStudentForm = ({
   const [newAllergy, setNewAllergy] = useState("");
   const [newMedication, setNewMedication] = useState("");
   const [newSpecialNeed, setNewSpecialNeed] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [imageUploading, setImageUploading] = useState(false);
 
   // Predefined options
   const genderOptions = ["Male", "Female", "Other", "Prefer not to say"];
@@ -122,11 +129,14 @@ const EnhancedStudentForm = ({
         studentId: student.studentId || "",
         gradeLevel: student.gradeLevel || "",
         enrollmentDate: student.enrollmentDate || "",
+        studentImage: student.studentImage || null,
+        imagePreview: student.studentImage || null,
         parentEmail1: student.parentEmail1 || "",
         parentEmail2: student.parentEmail2 || "",
         parentPhone1: student.phone || "",
         parentPhone2: student.parentPhone2 || "",
         studentEmail: student.studentEmail || student.email || "", // Support both field names for backward compatibility
+        motherName: student.motherName || "",
         academicYear: student.academicYear || "",
         learningStyle: student.learningStyle || "",
         specialNeeds: student.specialNeeds || [],
@@ -147,11 +157,14 @@ const EnhancedStudentForm = ({
         studentId: "",
         gradeLevel: "",
         enrollmentDate: "",
+        studentImage: null,
+        imagePreview: null,
         parentEmail1: "",
         parentEmail2: "",
         parentPhone1: "",
         parentPhone2: "",
         studentEmail: "",
+        motherName: "",
         academicYear: new Date().getFullYear().toString(),
         learningStyle: "",
         specialNeeds: [],
@@ -164,6 +177,12 @@ const EnhancedStudentForm = ({
       });
     }
     setErrors({});
+    setImageFile(null);
+    
+    // Clear any submission errors when opening the form
+    if (open) {
+      setErrors({});
+    }
   }, [student, isEdit, open]);
 
   const handleInputChange = (field, value) => {
@@ -226,10 +245,47 @@ const EnhancedStudentForm = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (validateForm()) {
-      console.log('Form data being submitted:', formData);
-      onSubmit(formData);
+      try {
+        let finalFormData = { ...formData };
+        
+        // Handle image upload if there's a new image file
+        if (imageFile && formData.studentImage instanceof File) {
+          setImageUploading(true);
+          try {
+            // Generate a temporary student ID if it's a new student
+            const studentIdForUpload = finalFormData.studentId || `temp_${Date.now()}`;
+            const imageUrl = await uploadStudentImage(studentIdForUpload, imageFile);
+            finalFormData.studentImage = imageUrl;
+            finalFormData.imagePreview = imageUrl;
+            console.log('✅ Image uploaded successfully:', imageUrl);
+          } catch (imageError) {
+            console.error('❌ Image upload failed:', imageError);
+            setErrors(prev => ({
+              ...prev,
+              studentImage: `Image upload failed: ${imageError.message}`
+            }));
+            return;
+          } finally {
+            setImageUploading(false);
+          }
+        }
+        
+        // Remove File objects from form data before submitting
+        if (finalFormData.studentImage instanceof File) {
+          delete finalFormData.studentImage;
+        }
+        
+        console.log('Form data being submitted:', finalFormData);
+        onSubmit(finalFormData);
+      } catch (error) {
+        console.error('Form submission error:', error);
+        setErrors(prev => ({
+          ...prev,
+          submit: `Submission failed: ${error.message}`
+        }));
+      }
     }
   };
 
@@ -299,14 +355,91 @@ const EnhancedStudentForm = ({
     }));
   };
 
+  const handleImageChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      // Validate file type
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+      if (!validTypes.includes(file.type)) {
+        setErrors(prev => ({
+          ...prev,
+          studentImage: 'Please select a valid image file (JPEG, PNG, or GIF)'
+        }));
+        return;
+      }
+
+      // Validate file size (5MB limit)
+      if (file.size > 5 * 1024 * 1024) {
+        setErrors(prev => ({
+          ...prev,
+          studentImage: 'Image size must be less than 5MB'
+        }));
+        return;
+      }
+
+      setImageFile(file);
+      
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setFormData(prev => ({
+          ...prev,
+          imagePreview: e.target.result,
+          studentImage: file // Store the file object temporarily
+        }));
+      };
+      reader.readAsDataURL(file);
+
+      // Clear any previous errors
+      if (errors.studentImage) {
+        setErrors(prev => ({
+          ...prev,
+          studentImage: undefined
+        }));
+      }
+    }
+  };
+
+  const removeImage = () => {
+    setFormData(prev => ({
+      ...prev,
+      studentImage: null,
+      imagePreview: null
+    }));
+    setImageFile(null);
+    
+    // Clear file input
+    const fileInput = document.getElementById('student-image-input');
+    if (fileInput) {
+      fileInput.value = '';
+    }
+    
+    // Clear any image-related errors
+    if (errors.studentImage) {
+      setErrors(prev => ({
+        ...prev,
+        studentImage: undefined
+      }));
+    }
+  };
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <Avatar sx={{ bgcolor: "primary.main" }}>
-            {formData.firstName?.charAt(0) ||
+          <Avatar 
+            sx={{ 
+              bgcolor: "primary.main",
+              width: 56,
+              height: 56
+            }}
+            src={formData.imagePreview}
+          >
+            {!formData.imagePreview && (
+              formData.firstName?.charAt(0) ||
               formData.lastName?.charAt(0) ||
-              "S"}
+              "S"
+            )}
           </Avatar>
           <Typography variant="h6">
             {isEdit ? "Edit Student" : "Add New Student"}
@@ -347,6 +480,68 @@ const EnhancedStudentForm = ({
               required
             />
           </Grid>
+
+          {/* Student Image Upload */}
+          <Grid item xs={12}>
+            <Typography variant="subtitle1" gutterBottom>
+              Student Photo
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <Avatar
+                sx={{ width: 80, height: 80 }}
+                src={formData.imagePreview}
+              >
+                {!formData.imagePreview && (
+                  formData.firstName?.charAt(0) ||
+                  formData.lastName?.charAt(0) ||
+                  "S"
+                )}
+              </Avatar>
+              <Box>
+                <input
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  id="student-image-input"
+                  type="file"
+                  onChange={handleImageChange}
+                />
+                <label htmlFor="student-image-input">
+                  <Button
+                    variant="outlined"
+                    component="span"
+                    startIcon={<PhotoCameraIcon />}
+                    sx={{ mr: 1 }}
+                  >
+                    Upload Photo
+                  </Button>
+                </label>
+                {formData.imagePreview && (
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    onClick={removeImage}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </Box>
+            </Box>
+            {errors.studentImage && (
+              <Typography color="error" variant="caption" sx={{ display: 'block', mt: 1 }}>
+                {errors.studentImage}
+              </Typography>
+            )}
+          </Grid>
+
+          {/* Display general submission errors */}
+          {errors.submit && (
+            <Grid item xs={12}>
+              <Typography color="error" variant="body2" sx={{ p: 2, bgcolor: 'error.light', borderRadius: 1 }}>
+                {errors.submit}
+              </Typography>
+            </Grid>
+          )}
 
           <Grid item xs={12} sm={6}>
             <TextField
@@ -488,6 +683,18 @@ const EnhancedStudentForm = ({
               error={!!errors.studentEmail}
               helperText={errors.studentEmail}
               placeholder="student@school.edu"
+            />
+          </Grid>
+
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              label="Mother's Name"
+              value={formData.motherName}
+              onChange={(e) =>
+                handleInputChange("motherName", e.target.value)
+              }
+              placeholder="Enter mother's full name"
             />
           </Grid>
 
@@ -724,10 +931,10 @@ const EnhancedStudentForm = ({
         <Button
           onClick={handleSubmit}
           variant="contained"
-          startIcon={<SaveIcon />}
-          disabled={loading}
+          startIcon={imageUploading ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+          disabled={loading || imageUploading}
         >
-          {loading ? "Saving..." : isEdit ? "Update Student" : "Add Student"}
+          {imageUploading ? "Uploading Image..." : loading ? "Saving..." : isEdit ? "Update Student" : "Add Student"}
         </Button>
       </DialogActions>
     </Dialog>

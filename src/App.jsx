@@ -20,6 +20,7 @@ import Lessons from "./pages/Lessons";
 import UserProfile from "./pages/UserProfile";
 import DeveloperPage from "./pages/DeveloperPage.js";
 import AdminDeveloperImageDashboard from "./components/admin/AdminDeveloperImageDashboard";
+import CharacterTraits from "./pages/CharacterTraits";
 
 // Components
 import Layout from "./components/common/Layout";
@@ -92,6 +93,10 @@ const AppRoutes = () => {
       <Route
         path="/profile"
         element={currentUser ? <UserProfile /> : <Navigate to="/login" />}
+      />
+      <Route
+        path="/character-traits"
+        element={currentUser ? <CharacterTraits /> : <Navigate to="/login" />}
       />
       <Route
         path="/admin/users"

@@ -96,6 +96,8 @@ const normalizeContext = (input) => {
     contentFilter,
     // Email content library for personalization
     emailContentLibrary: data.emailContentLibrary || {},
+    // Optional frontend overrides for quote/challenge to enforce rotation
+    overrides: data.overrides || null,
   };
 };
 
@@ -319,7 +321,34 @@ const getGradeColor = (percentage) => {
 //   }
 // };
 
-const getBuiltInQuotes = (weekday, isWeekend, studentId = null) => {
+// Simple seeded PRNG and shuffle to ensure per-student, per-send variety
+const mulberry32 = (seed) => {
+  let t = seed >>> 0;
+  return () => {
+    t += 0x6D2B79F5;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+const seededShuffle = (array, seed) => {
+  const result = array.slice();
+  const rand = mulberry32(seed);
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+};
+
+const getTimeSalt = (date) => {
+  // Change selection each send window; per-minute salt keeps variety across rapid sends
+  const d = dayjs(date || new Date());
+  return d.year() * 1000000 + (d.dayOfYear() * 1440) + (d.hour() * 60) + d.minute();
+};
+
+const getBuiltInQuotes = (weekday, isWeekend, studentId = null, date = new Date()) => {
   // Week structure: Sunday(0) -> Monday(1) -> Tuesday(2) -> Wednesday(3) -> Thursday(4) -> Friday(5) -> Saturday(6)
   // Weekends: Friday(5) and Saturday(6)
   const generalQuotes = [
@@ -361,24 +390,18 @@ const getBuiltInQuotes = (weekday, isWeekend, studentId = null) => {
     pool = pool.concat(weekendQuotes);
   }
 
-  // Use student ID for unique selection if available
-  if (studentId) {
-    const seed = `${studentId}-${weekday}-${isWeekend ? 'weekend' : 'weekday'}`;
-    const hash = seed.split('').reduce((a, b) => {
-      a = ((a << 5) - a) + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-    const index = Math.abs(hash) % pool.length;
-    return pool[index];
-  }
-
-  // Fallback: use day-of-year for deterministic selection when no student ID
-  const doy = dayjs(new Date()).dayOfYear();
-  const index = doy % pool.length;
-  return pool[index];
+  // Seeded shuffle for per-student, per-send deterministic variety
+  const salt = getTimeSalt(date); // varies every minute
+  const baseSeedStr = `${studentId || 'student'}-${weekday}-${isWeekend ? 'weekend' : 'weekday'}-${salt}`;
+  const seed = baseSeedStr.split('').reduce((a, b) => {
+    a = ((a << 5) - a) + b.charCodeAt(0);
+    return a & a;
+  }, 0);
+  const shuffled = seededShuffle(pool, Math.abs(seed));
+  return shuffled[0];
 };
 
-const getBuiltInChallenges = (weekday, traitName = null, studentId = null) => {
+const getBuiltInChallenges = (weekday, traitName = null, studentId = null, date = new Date()) => {
   // Week structure: Sunday(0) -> Monday(1) -> Tuesday(2) -> Wednesday(3) -> Thursday(4) -> Friday(5) -> Saturday(6)
   // Weekends: Friday(5) and Saturday(6)
   const generalChallenges = [
@@ -425,21 +448,15 @@ const getBuiltInChallenges = (weekday, traitName = null, studentId = null) => {
     pool.push('Do one thing today that makes you wonder about the world 🔍');
   }
 
-  // Use student ID for unique selection if available
-  if (studentId) {
-    const seed = `${studentId}-${weekday}-${traitName || 'general'}`;
-    const hash = seed.split('').reduce((a, b) => {
-      a = ((a << 5) - a) + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-    const index = Math.abs(hash) % pool.length;
-    return pool[index];
-  }
-
-  // Fallback: use day-of-year for deterministic selection when no student ID
-  const doy = dayjs(new Date()).dayOfYear();
-  const index = doy % pool.length;
-  return pool[index];
+  // Seeded shuffle for per-student, per-send deterministic variety
+  const salt = getTimeSalt(date);
+  const baseSeedStr = `${studentId || 'student'}-${weekday}-${traitName || 'general'}-${salt}`;
+  const seed = baseSeedStr.split('').reduce((a, b) => {
+    a = ((a << 5) - a) + b.charCodeAt(0);
+    return a & a;
+  }, 0);
+  const shuffled = seededShuffle(pool, Math.abs(seed));
+  return shuffled[0];
 };
 
 // ------------------------------
@@ -528,7 +545,7 @@ export const buildHtml = async (context) => {
   // Get email content library from passed context
   let emailContentLibrary = ctx.emailContentLibrary || {};
 
-  // Helper function to get personalized content with deterministic daily rotation
+  // Helper function to get personalized content with enhanced shuffling system
   const getPersonalizedContent = (contentType, fallback) => {
     try {
       console.log(`getPersonalizedContent called for ${contentType}:`, {
@@ -537,12 +554,40 @@ export const buildHtml = async (context) => {
         contentType,
         templatesCount: (emailContentLibrary[contentType] || []).length,
         firstName,
-        studentName
+        studentName,
+        hasOverrides: !!ctx.overrides
       });
+      
+      // Check if we have an override from the enhanced shuffling system
+      const overrideMap = {
+        'greetings': 'greeting',
+        'motivationalQuotes': 'quote',
+        'dailyChallenges': 'challenge',
+        'gradeSectionHeaders': 'gradeSectionHeader',
+        'assignmentSectionHeaders': 'assignmentSectionHeader',
+        'behaviorSectionHeaders': 'behaviorSectionHeader',
+        'lessonSectionHeaders': 'lessonSectionHeader'
+      };
+      
+      const overrideKey = overrideMap[contentType];
+      if (overrideKey && ctx.overrides && ctx.overrides[overrideKey]) {
+        const overrideContent = ctx.overrides[overrideKey];
+        console.log(`Using shuffled override for ${contentType}:`, overrideContent);
+        
+        // Replace placeholders in the override content
+        const personalizedContent = overrideContent
+          .replace(/{firstName}/g, firstName || 'Student')
+          .replace(/{studentName}/g, studentName || 'Student')
+          .replace(/{schoolName}/g, schoolName || 'School')
+          .replace(/{teacherName}/g, teacherName || 'Your Teacher');
+        
+        return safe(personalizedContent);
+      }
       
       const templates = emailContentLibrary[contentType] || [];
       if (templates.length > 0) {
-        // ROTATION SYSTEM: Each student gets a different header each day
+        // FALLBACK ROTATION SYSTEM: Each student gets a different header each day
+        // This is used when the enhanced shuffling system doesn't provide overrides
         // - Uses day-of-year (1-365) to ensure daily variety
         // - Each student has a unique seed to stagger their rotation
         // - With 33-40 content items, students will cycle through in ~1-2 months
@@ -569,14 +614,14 @@ export const buildHtml = async (context) => {
             .replace(/{schoolName}/g, schoolName || 'School')
             .replace(/{teacherName}/g, teacherName || 'Your Teacher');
           
-          console.log(`Personalized content for ${contentType}:`, {
+          console.log(`Personalized content for ${contentType} (fallback):`, {
             original: selected,
             personalized: personalizedContent,
             firstName,
             studentName
           });
           
-          return safe(personalizedContent); // Apply safe here
+          return safe(personalizedContent);
         }
       }
     } catch (error) {
@@ -748,6 +793,10 @@ export const buildHtml = async (context) => {
   // Today's Challenge function
   const todaysChallenge = async () => {
     try {
+      if (ctx.overrides?.challenge) {
+        return `
+            <div style=\"margin:16px 0;\">\n              <div style=\"font-weight:600; color:#2e7d32; margin-bottom:8px;\">🎯 Today's Challenge</div>\n              <div style=\"color:#1b5e20; padding:12px; background:rgba(255,255,255,0.7); border-radius:8px; border-left:4px solid #2e7d32;\">\n                ${safe(ctx.overrides.challenge)}\n              </div>\n            </div>`;
+      }
       // Try to get character trait-based challenge first
       if (userId) {
         const currentTrait = await getCurrentMonthTrait(userId, date);
@@ -771,7 +820,7 @@ export const buildHtml = async (context) => {
     // Fallback to built-in challenges with student-specific selection
     const weekday = dayjs(date).day();
     const studentId = studentName || firstName || "student";
-    const challenge = getBuiltInChallenges(weekday, null, studentId);
+    const challenge = getBuiltInChallenges(weekday, null, studentId, date);
     return `
       <div style="margin:16px 0;">
         <div style="font-weight:600; color:#2e7d32; margin-bottom:8px;">🎯 Today's Challenge</div>
@@ -784,6 +833,15 @@ export const buildHtml = async (context) => {
   // Rotation motivation quote using content library
   const motivation = async () => {
     try {
+      if (ctx.overrides?.quote) {
+        return `
+            <div style="margin:16px 0;">
+              <div style="font-weight:600; color:#2e7d32; margin-bottom:8px;">💫 Today's Quote</div>
+              <div style="font-style:italic; color:#1b5e20; padding:12px; background:rgba(255,255,255,0.7); border-radius:8px; border-left:4px solid #2e7d32;">
+                "${safe(ctx.overrides.quote)}"
+              </div>
+            </div>`;
+      }
       // Try to get character trait-based quote first
       if (userId) {
         const currentTrait = await getCurrentMonthTrait(userId, date);

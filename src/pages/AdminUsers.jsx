@@ -16,17 +16,21 @@ import {
   Snackbar,
   Alert,
   Button,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import {
   AdminPanelSettings as AdminIcon,
   Refresh as RefreshIcon,
   Security as SecurityIcon,
   Email as EmailIcon,
+  Menu as MenuIcon,
 } from "@mui/icons-material";
 import { collection, doc, getDoc, getDocs, updateDoc } from "firebase/firestore";
 import { db, functions } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { httpsCallable } from "firebase/functions";
+import AdminMenuConfig from "../components/admin/AdminMenuConfig";
 
 const AdminUsers = () => {
   const { currentUser } = useAuth();
@@ -36,6 +40,7 @@ const AdminUsers = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
   const [updatingUserId, setUpdatingUserId] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -124,6 +129,10 @@ const AdminUsers = () => {
     }
   };
 
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
+  };
+
   if (!currentUser) {
     return (
       <Box sx={{ p: 2 }}>
@@ -155,7 +164,7 @@ const AdminUsers = () => {
   return (
     <Box sx={{ p: 2 }}>
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
-        <Typography variant="h5">Admin Users</Typography>
+        <Typography variant="h5">Admin Panel</Typography>
         <Box sx={{ display: "flex", gap: 1 }}>
           <Button startIcon={<RefreshIcon />} onClick={loadUsers} variant="outlined" size="small">
             Refresh
@@ -169,96 +178,123 @@ const AdminUsers = () => {
         </Alert>
       )}
 
-      <Paper>
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Admin</TableCell>
-                <TableCell>Gmail</TableCell>
-                <TableCell>Banned</TableCell>
-                <TableCell>Created</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {users.map((u) => (
-                <TableRow key={u.id} hover>
-                  <TableCell>{u.displayName || "—"}</TableCell>
-                  <TableCell>{u.email}</TableCell>
-                  <TableCell>
-                    <Chip
-                      icon={<SecurityIcon />}
-                      label={u.admin ? "Admin" : "User"}
-                      color={u.admin ? "success" : "default"}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      icon={<EmailIcon />}
-                      label={u.gmail_configured ? "Configured" : "Not Configured"}
-                      color={u.gmail_configured ? "primary" : "default"}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={u.banned ? "Banned" : "Active"}
-                      color={u.banned ? "error" : "success"}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {u.createdAt?.toDate ? u.createdAt.toDate().toLocaleString() : (u.createdAt || "—")}
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip title={u.admin ? "Revoke admin" : "Make admin"}>
-                      <span>
-                        <IconButton
-                          onClick={() => handleToggleAdmin(u)}
-                          color={u.admin ? "warning" : "success"}
-                          size="small"
-                          disabled={updatingUserId === u.id}
-                        >
-                          <AdminIcon />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title={u.banned ? "Unban user" : "Ban user"}>
-                      <span>
-                        <IconButton
-                          onClick={() => handleBanToggle(u)}
-                          color={u.banned ? "success" : "error"}
-                          size="small"
-                          disabled={updatingUserId === u.id}
-                        >
-                          <SecurityIcon />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title="Delete user">
-                      <span>
-                        <IconButton
-                          onClick={() => handleDeleteUser(u)}
-                          color="error"
-                          size="small"
-                          disabled={updatingUserId === u.id}
-                        >
-                          {/* Reuse AdminIcon for delete or create a Trash icon if available */}
-                          <AdminIcon />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+      <Paper sx={{ mb: 2 }}>
+        <Tabs 
+          value={activeTab} 
+          onChange={handleTabChange}
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab 
+            icon={<SecurityIcon />} 
+            label="User Management" 
+            iconPosition="start"
+          />
+          <Tab 
+            icon={<MenuIcon />} 
+            label="Menu Configuration" 
+            iconPosition="start"
+          />
+        </Tabs>
       </Paper>
+
+      {/* Tab Content */}
+      {activeTab === 0 && (
+        <Paper>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Email</TableCell>
+                  <TableCell>Admin</TableCell>
+                  <TableCell>Gmail</TableCell>
+                  <TableCell>Banned</TableCell>
+                  <TableCell>Created</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {users.map((u) => (
+                  <TableRow key={u.id} hover>
+                    <TableCell>{u.displayName || "—"}</TableCell>
+                    <TableCell>{u.email}</TableCell>
+                    <TableCell>
+                      <Chip
+                        icon={<SecurityIcon />}
+                        label={u.admin ? "Admin" : "User"}
+                        color={u.admin ? "success" : "default"}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        icon={<EmailIcon />}
+                        label={u.gmail_configured ? "Configured" : "Not Configured"}
+                        color={u.gmail_configured ? "primary" : "default"}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={u.banned ? "Banned" : "Active"}
+                        color={u.banned ? "error" : "success"}
+                        size="small"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {u.createdAt?.toDate ? u.createdAt.toDate().toLocaleString() : (u.createdAt || "—")}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Tooltip title={u.admin ? "Revoke admin" : "Make admin"}>
+                        <span>
+                          <IconButton
+                            onClick={() => handleToggleAdmin(u)}
+                            color={u.admin ? "warning" : "success"}
+                            size="small"
+                            disabled={updatingUserId === u.id}
+                          >
+                            <AdminIcon />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title={u.banned ? "Unban user" : "Ban user"}>
+                        <span>
+                          <IconButton
+                            onClick={() => handleBanToggle(u)}
+                            color={u.banned ? "success" : "error"}
+                            size="small"
+                            disabled={updatingUserId === u.id}
+                          >
+                            <SecurityIcon />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="Delete user">
+                        <span>
+                          <IconButton
+                            onClick={() => handleDeleteUser(u)}
+                            color="error"
+                            size="small"
+                            disabled={updatingUserId === u.id}
+                          >
+                            {/* Reuse AdminIcon for delete or create a Trash icon if available */}
+                            <AdminIcon />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Paper>
+      )}
+
+      {/* Menu Configuration Tab */}
+      {activeTab === 1 && (
+        <AdminMenuConfig />
+      )}
 
       <Snackbar
         open={snackbar.open}
